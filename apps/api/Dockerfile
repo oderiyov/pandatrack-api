@@ -1,33 +1,38 @@
+# PandaTrack API Dockerfile
 FROM node:18-alpine
 
-# Встановлення базових залежностей
-RUN apk add --no-cache \
-    dumb-init \
-    && addgroup -g 1001 -S nodejs \
-    && adduser -S nextjs -u 1001
-
-# Робоча директорія
+# Встановлюємо робочу директорію
 WORKDIR /app
 
-# Копіюємо package.json та package-lock.json
+# Копіюємо package файли для кешування залежностей
 COPY package*.json ./
 
 # Встановлюємо залежності
 RUN npm ci --only=production && npm cache clean --force
 
-# Копіюємо вихідний код
-COPY . .
+# Створюємо non-root користувача для безпеки
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S pandatrack -u 1001
 
-# Створюємо не-root користувача
-USER nextjs
+# Копіюємо вихідний код
+COPY --chown=pandatrack:nodejs src/ ./src/
+
+# Встановлюємо права доступу
+RUN chown -R pandatrack:nodejs /app && \
+    chmod -R 755 /app
+
+# Перемикаємося на non-root користувача
+USER pandatrack
 
 # Відкриваємо порт
 EXPOSE 3001
 
-# Healthcheck
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:3001/health || exit 1
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD node -e "require('http').get('http://localhost:3001/health', (res) => { \
+        if (res.statusCode === 200) process.exit(0); \
+        else process.exit(1); \
+    }).on('error', () => process.exit(1));"
 
-# Запуск з dumb-init для правильної обробки сигналів
-ENTRYPOINT ["dumb-init", "--"]
-CMD ["node", "src/index.js"]
+# Запускаємо додаток
+CMD ["npm", "start"]
