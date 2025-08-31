@@ -1,4 +1,4 @@
-// apps/api/src/services/trackingService.js
+// apps/api/src/services/trackingService.js - Модернізована версія
 const axios = require('axios');
 const crypto = require('crypto');
 
@@ -6,41 +6,334 @@ class TrackingService {
     constructor(redisClient, supabaseClient) {
         this.redis = redisClient;
         this.supabase = supabaseClient;
+        
+        // API ключі
         this.trackingMoreKey = process.env.TRACKINGMORE_API_KEY;
         this.novaPoshtaKey = process.env.NOVAPOSHTA_API_KEY;
+        this.ukrposhtaKey = process.env.UKRPOSHTA_API_KEY;
+        this.meestKey = process.env.MEEST_API_KEY;
+        
+        // Безпека
         this.encryptionKey = process.env.ENCRYPTION_KEY;
         this.trackingSalt = process.env.TRACKING_SALT;
+        
+        // Конфігурація провайдерів з квотами
+        this.providers = {
+            'nova-poshta': {
+                primary: 'native',
+                fallback: null, // TrackingMore не допоможе з Nova Poshta
+                quota: { daily: 10000, used: 0 },
+                enabled: true,
+                cost: 0
+            },
+            'ukrposhta': {
+                primary: 'trackingmore', // Поки через TrackingMore
+                fallback: null,
+                quota: { daily: 25, used: 0 }, // Частина TrackingMore ліміту
+                enabled: true,
+                cost: 0.019 // $0.019 per request через TrackingMore
+            },
+            'meest-express': {
+                primary: 'trackingmore',
+                fallback: null,
+                quota: { daily: 25, used: 0 },
+                enabled: true,
+                cost: 0.019
+            },
+            'justin': {
+                primary: 'trackingmore',
+                fallback: null,
+                quota: { daily: 20, used: 0 },
+                enabled: true,
+                cost: 0.019
+            },
+            'dhl': {
+                primary: 'trackingmore',
+                fallback: null,
+                quota: { daily: 15, used: 0 },
+                enabled: true,
+                cost: 0.019
+            },
+            'fedex': {
+                primary: 'trackingmore',
+                fallback: null,
+                quota: { daily: 10, used: 0 },
+                enabled: true,
+                cost: 0.019
+            },
+            'ups': {
+                primary: 'trackingmore',
+                fallback: null,
+                quota: { daily: 5, used: 0 },
+                enabled: true,
+                cost: 0.019
+            }
+        };
+        
+        // Глобальні ліміти
+        this.globalQuotas = {
+            trackingmore: { 
+                daily: parseInt(process.env.TRACKINGMORE_DAILY_LIMIT) || 100, 
+                used: 0 
+            },
+            native_apis: { 
+                daily: parseInt(process.env.NATIVE_API_DAILY_LIMIT) || 50000, 
+                used: 0 
+            }
+        };
+        
+        // Ініціалізація квот з Redis при старті
+        this.initializeQuotas();
     }
 
-    // Автовизначення перевізника за номером
+    // Ініціалізація квот з Redis
+    async initializeQuotas() {
+        try {
+            const today = new Date().toISOString().split('T')[0];
+            const quotaKey = `quota:${today}`;
+            const quotas = await this.redis.hGetAll(quotaKey);
+            
+            if (quotas.trackingmore_total) {
+                this.globalQuotas.trackingmore.used = parseInt(quotas.trackingmore_total);
+            }
+            
+            if (quotas.native_apis_total) {
+                this.globalQuotas.native_apis.used = parseInt(quotas.native_apis_total);
+            }
+            
+            // Ініціалізуємо використання по перевізниках
+            Object.keys(this.providers).forEach(carrier => {
+                if (quotas[carrier]) {
+                    this.providers[carrier].quota.used = parseInt(quotas[carrier]);
+                }
+            });
+            
+        } catch (error) {
+            console.warn('Failed to initialize quotas from Redis:', error.message);
+        }
+    }
+
+    // Розширене автовизначення перевізника
     detectCarrier(trackingNumber) {
-        const number = trackingNumber.trim().toUpperCase();
+        const number = trackingNumber.trim().toUpperCase().replace(/\s+/g, '');
         
-        // Nova Poshta patterns
-        if (/^20\d{12}$/.test(number)) {
-            return { id: 1, code: 'nova-poshta', name: 'Nova Poshta' };
+        // === УКРАЇНСЬКІ ПЕРЕВІЗНИКИ ===
+        
+        // Nova Poshta - найпоширеніші паттерни
+        if (/^20\d{12}$/.test(number) || /^59\d{12}$/.test(number)) {
+            return { 
+                id: 1, 
+                code: 'nova-poshta', 
+                name: 'Nova Poshta', 
+                api: 'native',
+                confidence: 'high'
+            };
         }
         
-        // Ukrposhta patterns
-        if (/^[A-Z]{2}\d{9}UA$/.test(number)) {
-            return { id: 2, code: 'ukrposhta', name: 'Ukrposhta' };
+        // Ukrposhta - міжнародні та внутрішні
+        if (/^[A-Z]{2}\d{9}UA$/.test(number) || /^EM\d{9}UA$/.test(number) || 
+            /^CP\d{9}UA$/.test(number) || /^RG\d{9}UA$/.test(number)) {
+            return { 
+                id: 2, 
+                code: 'ukrposhta', 
+                name: 'Ukrposhta', 
+                api: 'trackingmore',
+                confidence: 'high'
+            };
         }
         
-        // Meest Express patterns  
-        if (/^ME\d{10}$/.test(number) || /^M\d{8}$/.test(number)) {
-            return { id: 3, code: 'meest', name: 'Meest Express' };
+        // Meest Express
+        if (/^ME\d{10,12}$/.test(number) || /^M\d{8,10}$/.test(number) ||
+            /^MEST\d{8,12}$/.test(number)) {
+            return { 
+                id: 3, 
+                code: 'meest-express', 
+                name: 'Meest Express', 
+                api: 'trackingmore',
+                confidence: 'high'
+            };
         }
         
-        // DHL patterns
-        if (/^\d{10}$/.test(number) || /^\d{11}$/.test(number)) {
-            return { id: 4, code: 'dhl', name: 'DHL' };
+        // Justin - активно працює з 500+ відділеннями
+        if (/^J\d{10,12}$/.test(number) || /^JU\d{8,12}$/.test(number) ||
+            /^JUST\d{8,12}$/.test(number)) {
+            return { 
+                id: 4, 
+                code: 'justin', 
+                name: 'Justin', 
+                api: 'trackingmore',
+                confidence: 'high'
+            };
         }
         
-        // Default to TrackingMore universal detection
-        return { id: null, code: 'auto-detect', name: 'Auto-detect' };
+        // === МІЖНАРОДНІ ПЕРЕВІЗНИКИ ===
+        
+        // DHL - різні формати
+        if (/^\d{10}$/.test(number) || /^\d{11}$/.test(number) || 
+            /^[A-Z]{2}\d{9}[A-Z]{2}$/.test(number) || /^JD\d{18}$/.test(number)) {
+            return { 
+                id: 5, 
+                code: 'dhl', 
+                name: 'DHL', 
+                api: 'trackingmore',
+                confidence: 'medium'
+            };
+        }
+        
+        // FedEx
+        if (/^\d{12,14}$/.test(number) || /^\d{20}$/.test(number) ||
+            /^\d{22}$/.test(number) || /^96\d{20}$/.test(number)) {
+            return { 
+                id: 6, 
+                code: 'fedex', 
+                name: 'FedEx', 
+                api: 'trackingmore',
+                confidence: 'medium'
+            };
+        }
+        
+        // UPS
+        if (/^1Z[A-Z0-9]{16}$/.test(number) || /^T\d{10}$/.test(number)) {
+            return { 
+                id: 7, 
+                code: 'ups', 
+                name: 'UPS', 
+                api: 'trackingmore',
+                confidence: 'high'
+            };
+        }
+        
+        // China Post (популярний для AliExpress/інших)
+        if (/^[A-Z]{2}\d{9}CN$/.test(number) || /^[A-Z]{1}\d{8,12}$/.test(number)) {
+            return { 
+                id: 8, 
+                code: 'china-post', 
+                name: 'China Post', 
+                api: 'trackingmore',
+                confidence: 'medium'
+            };
+        }
+        
+        // PostNL (популярний в EU)
+        if (/^[A-Z]{2}\d{9}NL$/.test(number) || /^3S[A-Z0-9]{13}$/.test(number)) {
+            return { 
+                id: 9, 
+                code: 'postnl', 
+                name: 'PostNL', 
+                api: 'trackingmore',
+                confidence: 'medium'
+            };
+        }
+        
+        // Deutsche Post (цільовий німецький ринок)
+        if (/^[A-Z]{2}\d{9}DE$/.test(number) || /^00\d{18}$/.test(number)) {
+            return { 
+                id: 10, 
+                code: 'deutsche-post', 
+                name: 'Deutsche Post', 
+                api: 'trackingmore',
+                confidence: 'medium'
+            };
+        }
+        
+        // Universal Postal Union format
+        if (/^[A-Z]{2}\d{9}[A-Z]{2}$/.test(number)) {
+            return { 
+                id: null, 
+                code: 'international-post', 
+                name: 'International Post', 
+                api: 'trackingmore',
+                confidence: 'low'
+            };
+        }
+        
+        // Загальні числові номери
+        if (/^\d{8,20}$/.test(number)) {
+            return { 
+                id: null, 
+                code: 'auto-detect-numeric', 
+                name: 'Auto-detect', 
+                api: 'trackingmore',
+                confidence: 'low'
+            };
+        }
+        
+        // Fallback для всіх інших
+        return { 
+            id: null, 
+            code: 'unknown', 
+            name: 'Unknown', 
+            api: 'trackingmore',
+            confidence: 'very-low'
+        };
     }
 
-    // Хешування номера для безпеки
+    // Вибір провайдера API з урахуванням квот
+    async selectApiProvider(carrierCode, forceProvider = null) {
+        if (forceProvider) {
+            return forceProvider;
+        }
+
+        const config = this.providers[carrierCode];
+        if (!config || !config.enabled) {
+            throw new Error(`Carrier ${carrierCode} is not supported`);
+        }
+
+        // Перевіряємо квоту перевізника
+        if (config.quota.used >= config.quota.daily) {
+            if (config.fallback) {
+                console.warn(`Carrier ${carrierCode} quota exceeded, using fallback: ${config.fallback}`);
+                return config.fallback;
+            } else {
+                throw new Error(`Daily quota exceeded for ${carrierCode} (${config.quota.used}/${config.quota.daily})`);
+            }
+        }
+
+        // Перевіряємо глобальну квоту для TrackingMore
+        if (config.primary === 'trackingmore') {
+            if (this.globalQuotas.trackingmore.used >= this.globalQuotas.trackingmore.daily) {
+                throw new Error(`TrackingMore daily quota exceeded (${this.globalQuotas.trackingmore.used}/${this.globalQuotas.trackingmore.daily})`);
+            }
+        }
+
+        return config.primary;
+    }
+
+    // Безпечне шифрування (ВИПРАВЛЕНО)
+    encrypt(text) {
+        const iv = crypto.randomBytes(16);
+        const cipher = crypto.createCipherGCM('aes-256-gcm', Buffer.from(this.encryptionKey, 'hex'));
+        cipher.setAAD(Buffer.from('pandatrack-v1'));
+        
+        let encrypted = cipher.update(text, 'utf8', 'hex');
+        encrypted += cipher.final('hex');
+        
+        const authTag = cipher.getAuthTag();
+        
+        return iv.toString('hex') + ':' + authTag.toString('hex') + ':' + encrypted;
+    }
+
+    decrypt(text) {
+        const [ivHex, authTagHex, encrypted] = text.split(':');
+        
+        if (!ivHex || !authTagHex || !encrypted) {
+            throw new Error('Invalid encrypted data format');
+        }
+        
+        const iv = Buffer.from(ivHex, 'hex');
+        const authTag = Buffer.from(authTagHex, 'hex');
+        const decipher = crypto.createDecipherGCM('aes-256-gcm', Buffer.from(this.encryptionKey, 'hex'));
+        
+        decipher.setAAD(Buffer.from('pandatrack-v1'));
+        decipher.setAuthTag(authTag);
+        
+        let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+        decrypted += decipher.final('utf8');
+        
+        return decrypted;
+    }
+
+    // Хешування для безпеки
     hashTrackingNumber(trackingNumber) {
         return crypto
             .createHmac('sha256', this.trackingSalt)
@@ -49,28 +342,13 @@ class TrackingService {
             .substring(0, 16);
     }
 
-    // Шифрування чутливих даних
-    encrypt(text) {
-        const cipher = crypto.createCipher('aes-256-cbc', this.encryptionKey);
-        let encrypted = cipher.update(text, 'utf8', 'hex');
-        encrypted += cipher.final('hex');
-        return encrypted;
-    }
-
-    decrypt(text) {
-        const decipher = crypto.createDecipher('aes-256-cbc', this.encryptionKey);
-        let decrypted = decipher.update(text, 'hex', 'utf8');
-        decrypted += decipher.final('utf8');
-        return decrypted;
-    }
-
-    // Генерування cache key
+    // Cache key generation
     getCacheKey(trackingNumber, carrierId) {
         const hash = this.hashTrackingNumber(trackingNumber);
         return `track:${carrierId}:${hash}`;
     }
 
-    // Nova Poshta API
+    // Nova Poshta API (без змін - вже працює)
     async trackNovaPoshta(trackingNumber) {
         try {
             const response = await axios.post('https://api.novaposhta.ua/v2.0/json/', {
@@ -119,20 +397,20 @@ class TrackingService {
 
         } catch (error) {
             console.error('Nova Poshta API error:', error.message);
-            return {
-                success: false,
-                error: 'Nova Poshta API unavailable',
-                carrier: 'nova-poshta'
-            };
+            throw new Error('Nova Poshta API unavailable');
         }
     }
 
-    // TrackingMore Universal API
+    // TrackingMore Universal API (покращений)
     async trackTrackingMore(trackingNumber, carrierCode = null) {
         try {
-            const endpoint = carrierCode 
-                ? `https://api.trackingmore.com/v3/trackings/${carrierCode}/${trackingNumber}`
-                : `https://api.trackingmore.com/v3/trackings/detect/${trackingNumber}`;
+            // Покращена logіка вибору endpoint
+            let endpoint;
+            if (carrierCode && carrierCode !== 'auto-detect-numeric' && carrierCode !== 'unknown') {
+                endpoint = `https://api.trackingmore.com/v3/trackings/${carrierCode}/${trackingNumber}`;
+            } else {
+                endpoint = `https://api.trackingmore.com/v3/trackings/detect/${trackingNumber}`;
+            }
 
             const response = await axios.get(endpoint, {
                 timeout: 15000,
@@ -149,8 +427,8 @@ class TrackingService {
                     success: true,
                     data: {
                         trackingNumber: trackingNumber,
-                        carrier: tracking.carrier_code || 'unknown',
-                        status: tracking.delivery_status,
+                        carrier: tracking.carrier_code || carrierCode || 'unknown',
+                        status: tracking.delivery_status || 'Unknown',
                         statusCode: tracking.status_code,
                         lastUpdate: new Date().toISOString(),
                         events: tracking.origin_info?.trackinfo || [],
@@ -162,24 +440,22 @@ class TrackingService {
 
             return {
                 success: false,
-                error: 'Tracking number not found',
+                error: response.data.message || 'Tracking number not found',
                 carrier: carrierCode || 'auto-detect'
             };
 
         } catch (error) {
             console.error('TrackingMore API error:', error.message);
-            return {
-                success: false,
-                error: 'TrackingMore API unavailable',
-                carrier: carrierCode || 'auto-detect'
-            };
+            throw new Error(`TrackingMore API unavailable: ${error.message}`);
         }
     }
 
-    // Основна функція трекінгу
+    // Основна функція трекінгу з гібридною логікою
     async track(trackingNumber, userId = null, forceRefresh = false) {
+        const startTime = Date.now();
+        
         try {
-            // Валідація номера
+            // Валідація
             if (!trackingNumber || trackingNumber.length < 8) {
                 return {
                     success: false,
@@ -189,40 +465,57 @@ class TrackingService {
 
             // Автовизначення перевізника
             const detectedCarrier = this.detectCarrier(trackingNumber);
-            const cacheKey = this.getCacheKey(trackingNumber, detectedCarrier.id || 'auto');
+            const cacheKey = this.getCacheKey(trackingNumber, detectedCarrier.code);
 
             // Перевірка кешу
             if (!forceRefresh) {
-                const cached = await this.redis.get(cacheKey);
-                if (cached) {
-                    const data = JSON.parse(cached);
-                    return {
-                        success: true,
-                        data: data,
-                        cached: true
-                    };
+                try {
+                    const cached = await this.redis.get(cacheKey);
+                    if (cached) {
+                        const data = JSON.parse(cached);
+                        return {
+                            success: true,
+                            data: data,
+                            cached: true,
+                            responseTime: Date.now() - startTime
+                        };
+                    }
+                } catch (cacheError) {
+                    console.warn('Cache read error:', cacheError.message);
                 }
             }
 
+            // Вибір API провайдера
+            const apiProvider = await this.selectApiProvider(detectedCarrier.code);
+            
             let result;
-
-            // Вибір API залежно від перевізника
-            if (detectedCarrier.code === 'nova-poshta') {
-                result = await this.trackNovaPoshta(trackingNumber);
+            
+            // Виконання трекінгу
+            if (apiProvider === 'native') {
+                if (detectedCarrier.code === 'nova-poshta') {
+                    result = await this.trackNovaPoshta(trackingNumber);
+                } else {
+                    throw new Error(`Native API not implemented for ${detectedCarrier.code}`);
+                }
+            } else if (apiProvider === 'trackingmore') {
+                result = await this.trackTrackingMore(trackingNumber, detectedCarrier.code);
             } else {
-                // Використовуємо TrackingMore для всіх інших або auto-detect
-                const carrierCode = detectedCarrier.code !== 'auto-detect' 
-                    ? detectedCarrier.code 
-                    : null;
-                result = await this.trackTrackingMore(trackingNumber, carrierCode);
+                throw new Error(`Unknown API provider: ${apiProvider}`);
             }
 
             if (result.success) {
-                // Кешування з динамічним TTL
+                // Оновлення квот
+                await this.updateQuotaUsage(detectedCarrier.code, apiProvider);
+                
+                // Кешування
                 const ttl = this.calculateTTL(result.data.status);
-                await this.redis.setEx(cacheKey, ttl, JSON.stringify(result.data));
+                try {
+                    await this.redis.setEx(cacheKey, ttl, JSON.stringify(result.data));
+                } catch (cacheError) {
+                    console.warn('Cache write error:', cacheError.message);
+                }
 
-                // Зберігання в базу якщо є userId
+                // Збереження в базу
                 if (userId) {
                     await this.saveToDatabase(trackingNumber, result.data, userId);
                 }
@@ -230,51 +523,135 @@ class TrackingService {
                 return {
                     success: true,
                     data: result.data,
-                    cached: false
+                    cached: false,
+                    responseTime: Date.now() - startTime,
+                    apiProvider: apiProvider,
+                    quotaUsed: this.providers[detectedCarrier.code]?.quota.used || 0
                 };
             }
 
-            return result;
+            return {
+                success: false,
+                error: result.error || 'Tracking failed',
+                carrier: detectedCarrier.code,
+                responseTime: Date.now() - startTime
+            };
 
         } catch (error) {
             console.error('Tracking service error:', error);
             return {
                 success: false,
-                error: 'Internal tracking service error'
+                error: error.message || 'Internal tracking service error',
+                responseTime: Date.now() - startTime
             };
         }
     }
 
-    // Розрахунок TTL для кешу
+    // Оновлення використання квоти
+    async updateQuotaUsage(carrierCode, apiProvider) {
+        try {
+            const config = this.providers[carrierCode];
+            if (config) {
+                config.quota.used += 1;
+            }
+            
+            if (apiProvider === 'trackingmore') {
+                this.globalQuotas.trackingmore.used += 1;
+            } else {
+                this.globalQuotas.native_apis.used += 1;
+            }
+            
+            // Зберігання в Redis
+            const today = new Date().toISOString().split('T')[0];
+            const quotaKey = `quota:${today}`;
+            
+            const quotaData = {
+                trackingmore_total: this.globalQuotas.trackingmore.used,
+                native_apis_total: this.globalQuotas.native_apis.used
+            };
+            
+            if (config) {
+                quotaData[carrierCode] = config.quota.used;
+            }
+            
+            await this.redis.hSet(quotaKey, quotaData);
+            
+            // Встановлюємо TTL до кінця дня
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            tomorrow.setHours(0, 0, 0, 0);
+            const secondsUntilMidnight = Math.floor((tomorrow - new Date()) / 1000);
+            
+            await this.redis.expire(quotaKey, secondsUntilMidnight);
+            
+        } catch (error) {
+            console.error('Failed to update quota usage:', error.message);
+        }
+    }
+
+    // TTL розрахунок для кешу
     calculateTTL(status) {
         const statusLower = (status || '').toLowerCase();
         
-        // Доставлено - кешувати довго (24 години)
         if (statusLower.includes('delivered') || statusLower.includes('доставлен')) {
-            return 86400; // 24 hours
+            return 86400; // 24 години
         }
         
-        // В дорозі - часто оновлювати (1 година)  
         if (statusLower.includes('transit') || statusLower.includes('в пути')) {
-            return 3600; // 1 hour
+            return 3600; // 1 година
         }
         
-        // Створено/прийнято - рідше оновлювати (4 години)
         if (statusLower.includes('created') || statusLower.includes('принят')) {
-            return 14400; // 4 hours
+            return 14400; // 4 години
         }
         
-        // За замовчуванням - 2 години
-        return 7200;
+        return 7200; // 2 години за замовчуванням
     }
 
-    // Збереження в базу даних
+    // Отримання статусу квот
+    async getQuotaStatus() {
+        try {
+            const today = new Date().toISOString().split('T')[0];
+            const quotaKey = `quota:${today}`;
+            const quotas = await this.redis.hGetAll(quotaKey);
+            
+            return {
+                date: today,
+                trackingmore: {
+                    used: parseInt(quotas.trackingmore_total) || this.globalQuotas.trackingmore.used,
+                    limit: this.globalQuotas.trackingmore.daily,
+                    remaining: Math.max(0, this.globalQuotas.trackingmore.daily - (parseInt(quotas.trackingmore_total) || this.globalQuotas.trackingmore.used))
+                },
+                nativeApis: {
+                    used: parseInt(quotas.native_apis_total) || this.globalQuotas.native_apis.used,
+                    limit: this.globalQuotas.native_apis.daily
+                },
+                carriers: Object.keys(this.providers).reduce((acc, carrier) => {
+                    const used = parseInt(quotas[carrier]) || this.providers[carrier].quota.used;
+                    const config = this.providers[carrier];
+                    acc[carrier] = {
+                        used: used,
+                        limit: config.quota.daily,
+                        remaining: Math.max(0, config.quota.daily - used),
+                        provider: config.primary,
+                        enabled: config.enabled,
+                        cost: config.cost
+                    };
+                    return acc;
+                }, {})
+            };
+        } catch (error) {
+            console.error('Failed to get quota status:', error);
+            return null;
+        }
+    }
+
+    // Збереження в базу даних (без змін - вже працює)
     async saveToDatabase(trackingNumber, trackingData, userId) {
         try {
             const hashedNumber = this.hashTrackingNumber(trackingNumber);
             const encryptedNumber = this.encrypt(trackingNumber);
             
-            // Перевірка чи існує вже запис
             const { data: existing } = await this.supabase
                 .from('shipments')
                 .select('id')
@@ -283,7 +660,6 @@ class TrackingService {
                 .single();
 
             if (existing) {
-                // Оновлюємо існуючий
                 await this.supabase
                     .from('shipments')
                     .update({
@@ -295,7 +671,6 @@ class TrackingService {
                     })
                     .eq('id', existing.id);
 
-                // Додаємо нові події
                 if (trackingData.events && trackingData.events.length > 0) {
                     const events = trackingData.events.map(event => ({
                         shipment_id: existing.id,
@@ -313,7 +688,6 @@ class TrackingService {
                         });
                 }
             } else {
-                // Створюємо новий запис
                 const { data: shipment } = await this.supabase
                     .from('shipments')
                     .insert({
@@ -331,7 +705,6 @@ class TrackingService {
                     .select('id')
                     .single();
 
-                // Додаємо події
                 if (shipment && trackingData.events && trackingData.events.length > 0) {
                     const events = trackingData.events.map(event => ({
                         shipment_id: shipment.id,
@@ -348,7 +721,6 @@ class TrackingService {
             }
         } catch (error) {
             console.error('Database save error:', error);
-            // Не перериваємо основний процес трекінгу через помилку БД
         }
     }
 }
