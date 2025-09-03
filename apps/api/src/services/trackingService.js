@@ -1,4 +1,4 @@
-// apps/api/src/services/trackingService.js - Модернізована версія
+// apps/api/src/services/trackingService.js - Повна версія з усіма провайдерами
 const axios = require('axios');
 const crypto = require('crypto');
 
@@ -7,31 +7,36 @@ class TrackingService {
         this.redis = redisClient;
         this.supabase = supabaseClient;
         
-        // API ключі
+        // API ключі - всі провайдери
         this.trackingMoreKey = process.env.TRACKINGMORE_API_KEY;
         this.novaPoshtaKey = process.env.NOVAPOSHTA_API_KEY;
         this.ukrposhtaKey = process.env.UKRPOSHTA_API_KEY;
         this.meestKey = process.env.MEEST_API_KEY;
+        this.dhlApiKey = process.env.DHL_API_KEY;
+        this.dhlApiSecret = process.env.DHL_API_SECRET;
+        this.deliveryAutoPublicKey = process.env.DELIVERY_AUTO_PUBLIC_KEY;
+        this.deliveryAutoSecretKey = process.env.DELIVERY_AUTO_SECRET_KEY;
+        this.satApiKey = process.env.SAT_API_KEY;
         
         // Безпека
         this.encryptionKey = process.env.ENCRYPTION_KEY;
         this.trackingSalt = process.env.TRACKING_SALT;
         
-        // Конфігурація провайдерів з квотами
+        // Конфігурація провайдерів з усіма новими API
         this.providers = {
             'nova-poshta': {
                 primary: 'native',
-                fallback: null, // TrackingMore не допоможе з Nova Poshta
+                fallback: null,
                 quota: { daily: 10000, used: 0 },
                 enabled: true,
                 cost: 0
             },
             'ukrposhta': {
-                primary: 'trackingmore', // Поки через TrackingMore
+                primary: 'trackingmore',
                 fallback: null,
-                quota: { daily: 25, used: 0 }, // Частина TrackingMore ліміту
+                quota: { daily: 25, used: 0 },
                 enabled: true,
-                cost: 0.019 // $0.019 per request через TrackingMore
+                cost: 0.019
             },
             'meest-express': {
                 primary: 'trackingmore',
@@ -40,17 +45,31 @@ class TrackingService {
                 enabled: true,
                 cost: 0.019
             },
+            'dhl': {
+                primary: 'native', // Нативний DHL API
+                fallback: 'trackingmore',
+                quota: { daily: 250, used: 0 }, // DHL дає 250/день
+                enabled: true,
+                cost: 0
+            },
+            'delivery-auto': {
+                primary: 'native', // Нативний Delivery Auto API
+                fallback: 'trackingmore',
+                quota: { daily: 1000, used: 0 },
+                enabled: true,
+                cost: 0
+            },
+            'sat': {
+                primary: 'native', // Нативний SAT API
+                fallback: null,
+                quota: { daily: 500, used: 0 },
+                enabled: true,
+                cost: 0
+            },
             'justin': {
                 primary: 'trackingmore',
                 fallback: null,
                 quota: { daily: 20, used: 0 },
-                enabled: true,
-                cost: 0.019
-            },
-            'dhl': {
-                primary: 'trackingmore',
-                fallback: null,
-                quota: { daily: 15, used: 0 },
                 enabled: true,
                 cost: 0.019
             },
@@ -65,6 +84,13 @@ class TrackingService {
                 primary: 'trackingmore',
                 fallback: null,
                 quota: { daily: 5, used: 0 },
+                enabled: true,
+                cost: 0.019
+            },
+            'china-post': {
+                primary: 'trackingmore',
+                fallback: null,
+                quota: { daily: 15, used: 0 },
                 enabled: true,
                 cost: 0.019
             }
@@ -82,7 +108,7 @@ class TrackingService {
             }
         };
         
-        // Ініціалізація квот з Redis при старті
+        // Ініціалізація квот з Redis
         this.initializeQuotas();
     }
 
@@ -113,7 +139,7 @@ class TrackingService {
         }
     }
 
-    // Розширене автовизначення перевізника
+    // Розширене автовизначення перевізника з усіма провайдерами
     detectCarrier(trackingNumber) {
         const number = trackingNumber.trim().toUpperCase().replace(/\s+/g, '');
         
@@ -166,25 +192,51 @@ class TrackingService {
             };
         }
         
-        // === МІЖНАРОДНІ ПЕРЕВІЗНИКИ ===
-        
-        // DHL - різні формати
-        if (/^\d{10}$/.test(number) || /^\d{11}$/.test(number) || 
-            /^[A-Z]{2}\d{9}[A-Z]{2}$/.test(number) || /^JD\d{18}$/.test(number)) {
+        // Delivery Auto - українська служба для великогабариту
+        if (/^DA\d{8,12}$/.test(number) || /^\d{8,10}DA$/.test(number) ||
+            /^DELIVERY\d{6,10}$/.test(number) || /^DLV\d{8,12}$/.test(number)) {
             return { 
                 id: 5, 
-                code: 'dhl', 
-                name: 'DHL', 
-                api: 'trackingmore',
-                confidence: 'medium'
+                code: 'delivery-auto', 
+                name: 'Delivery Auto', 
+                api: 'native',
+                confidence: 'high'
             };
         }
         
-        // FedEx
-        if (/^\d{12,14}$/.test(number) || /^\d{20}$/.test(number) ||
-            /^\d{22}$/.test(number) || /^96\d{20}$/.test(number)) {
+        // SAT (Satellite Express) - українська кур'єрська служба
+        if (/^SAT\d{8,12}$/.test(number) || /^ST\d{10,12}$/.test(number) ||
+            /^SATELLITE\d{6,10}$/.test(number)) {
             return { 
                 id: 6, 
+                code: 'sat', 
+                name: 'SAT Satellite Express', 
+                api: 'native',
+                confidence: 'high'
+            };
+        }
+        
+        // === МІЖНАРОДНІ ПЕРЕВІЗНИКИ ===
+        
+        // DHL - багато форматів, найвища пріоритетність для нативного API
+        if (/^\d{10}$/.test(number) || /^\d{11}$/.test(number) || 
+            /^[A-Z]{2}\d{9}[A-Z]{2}$/.test(number) || /^JD\d{18}$/.test(number) ||
+            /^\d{4}\s?\d{4}\s?\d{4}$/.test(number.replace(/\s/g, ''))) {
+            return { 
+                id: 7, 
+                code: 'dhl', 
+                name: 'DHL', 
+                api: 'native',
+                confidence: 'high'
+            };
+        }
+        
+        // FedEx - різні формати
+        if (/^\d{12,14}$/.test(number) || /^\d{20}$/.test(number) ||
+            /^\d{22}$/.test(number) || /^96\d{20}$/.test(number) ||
+            /^[0-9]{4}\s?[0-9]{4}\s?[0-9]{4}$/.test(number.replace(/\s/g, ''))) {
+            return { 
+                id: 8, 
                 code: 'fedex', 
                 name: 'FedEx', 
                 api: 'trackingmore',
@@ -192,10 +244,10 @@ class TrackingService {
             };
         }
         
-        // UPS
+        // UPS - характерний формат
         if (/^1Z[A-Z0-9]{16}$/.test(number) || /^T\d{10}$/.test(number)) {
             return { 
-                id: 7, 
+                id: 9, 
                 code: 'ups', 
                 name: 'UPS', 
                 api: 'trackingmore',
@@ -203,10 +255,11 @@ class TrackingService {
             };
         }
         
-        // China Post (популярний для AliExpress/інших)
-        if (/^[A-Z]{2}\d{9}CN$/.test(number) || /^[A-Z]{1}\d{8,12}$/.test(number)) {
+        // China Post - популярний для AliExpress/інших
+        if (/^[A-Z]{2}\d{9}CN$/.test(number) || /^C[A-Z]\d{9}CN$/.test(number) ||
+            /^L[A-Z]\d{9}CN$/.test(number) || /^R[A-Z]\d{9}CN$/.test(number)) {
             return { 
-                id: 8, 
+                id: 10, 
                 code: 'china-post', 
                 name: 'China Post', 
                 api: 'trackingmore',
@@ -217,7 +270,7 @@ class TrackingService {
         // PostNL (популярний в EU)
         if (/^[A-Z]{2}\d{9}NL$/.test(number) || /^3S[A-Z0-9]{13}$/.test(number)) {
             return { 
-                id: 9, 
+                id: 11, 
                 code: 'postnl', 
                 name: 'PostNL', 
                 api: 'trackingmore',
@@ -228,9 +281,20 @@ class TrackingService {
         // Deutsche Post (цільовий німецький ринок)
         if (/^[A-Z]{2}\d{9}DE$/.test(number) || /^00\d{18}$/.test(number)) {
             return { 
-                id: 10, 
+                id: 12, 
                 code: 'deutsche-post', 
                 name: 'Deutsche Post', 
+                api: 'trackingmore',
+                confidence: 'medium'
+            };
+        }
+        
+        // Royal Mail (Великобританія)
+        if (/^[A-Z]{2}\d{9}GB$/.test(number) || /^[A-Z]{1}\d{8}[A-Z]{2}$/.test(number)) {
+            return { 
+                id: 13, 
+                code: 'royal-mail', 
+                name: 'Royal Mail', 
                 api: 'trackingmore',
                 confidence: 'medium'
             };
@@ -247,12 +311,23 @@ class TrackingService {
             };
         }
         
-        // Загальні числові номери
+        // Загальні числові номери (можуть бути DHL, FedEx або іншими)
         if (/^\d{8,20}$/.test(number)) {
+            // Якщо 10-11 цифр, скоріше за все DHL
+            if (number.length >= 10 && number.length <= 11) {
+                return { 
+                    id: 7, 
+                    code: 'dhl', 
+                    name: 'DHL (Auto-detected)', 
+                    api: 'native',
+                    confidence: 'medium'
+                };
+            }
+            
             return { 
                 id: null, 
                 code: 'auto-detect-numeric', 
-                name: 'Auto-detect', 
+                name: 'Auto-detect Numeric', 
                 api: 'trackingmore',
                 confidence: 'low'
             };
@@ -262,7 +337,7 @@ class TrackingService {
         return { 
             id: null, 
             code: 'unknown', 
-            name: 'Unknown', 
+            name: 'Unknown Carrier', 
             api: 'trackingmore',
             confidence: 'very-low'
         };
@@ -299,7 +374,7 @@ class TrackingService {
         return config.primary;
     }
 
-    // Безпечне шифрування (ВИПРАВЛЕНО)
+    // Безпечне шифрування (виправлено)
     encrypt(text) {
         const iv = crypto.randomBytes(16);
         const cipher = crypto.createCipherGCM('aes-256-gcm', Buffer.from(this.encryptionKey, 'hex'));
@@ -348,7 +423,9 @@ class TrackingService {
         return `track:${carrierId}:${hash}`;
     }
 
-    // Nova Poshta API (без змін - вже працює)
+    // === НАТИВНІ API МЕТОДИ ===
+
+    // Nova Poshta API (без змін - працює)
     async trackNovaPoshta(trackingNumber) {
         try {
             const response = await axios.post('https://api.novaposhta.ua/v2.0/json/', {
@@ -401,10 +478,165 @@ class TrackingService {
         }
     }
 
-    // TrackingMore Universal API (покращений)
+    // DHL MyDHL+ API
+    async trackDHL(trackingNumber) {
+        try {
+            const response = await axios.get(
+                'https://api-eu.dhl.com/track/shipments',
+                {
+                    params: {
+                        trackingNumber: trackingNumber
+                    },
+                    headers: {
+                        'DHL-API-Key': this.dhlApiKey,
+                        'Authorization': `Basic ${Buffer.from(`${this.dhlApiKey}:${this.dhlApiSecret}`).toString('base64')}`,
+                        'Content-Type': 'application/json',
+                        'User-Agent': 'PandaTrack/1.0'
+                    },
+                    timeout: 15000
+                }
+            );
+
+            if (response.data.shipments && response.data.shipments.length > 0) {
+                const shipment = response.data.shipments[0];
+                return {
+                    success: true,
+                    data: {
+                        trackingNumber: trackingNumber,
+                        carrier: 'dhl',
+                        status: shipment.status?.description || 'Unknown',
+                        statusCode: shipment.status?.statusCode,
+                        lastUpdate: shipment.status?.timestamp || new Date().toISOString(),
+                        events: shipment.events?.map(event => ({
+                            date: event.timestamp,
+                            status: event.description,
+                            location: event.location?.address?.addressLocality || ''
+                        })) || [],
+                        estimatedDelivery: shipment.estimatedTimeOfDelivery,
+                        raw: shipment
+                    }
+                };
+            }
+
+            return {
+                success: false,
+                error: 'DHL tracking number not found',
+                carrier: 'dhl'
+            };
+
+        } catch (error) {
+            console.error('DHL API error:', error.message);
+            throw new Error('DHL API unavailable');
+        }
+    }
+
+    // Delivery Auto API
+    async trackDeliveryAuto(trackingNumber) {
+        try {
+            // Delivery Auto використовує POST запит з авторизацією
+            const response = await axios.post(
+                'https://www.delivery-auto.com/api/track',
+                {
+                    public_key: this.deliveryAutoPublicKey,
+                    tracking_number: trackingNumber
+                },
+                {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${this.deliveryAutoSecretKey}`,
+                        'User-Agent': 'PandaTrack/1.0'
+                    },
+                    timeout: 15000
+                }
+            );
+
+            if (response.data.success && response.data.data) {
+                const tracking = response.data.data;
+                return {
+                    success: true,
+                    data: {
+                        trackingNumber: trackingNumber,
+                        carrier: 'delivery-auto',
+                        status: tracking.status || 'Unknown',
+                        statusCode: tracking.status_code,
+                        lastUpdate: tracking.last_update || new Date().toISOString(),
+                        events: tracking.events?.map(event => ({
+                            date: event.date,
+                            status: event.status,
+                            location: event.location || ''
+                        })) || [],
+                        estimatedDelivery: tracking.estimated_delivery,
+                        raw: tracking
+                    }
+                };
+            }
+
+            return {
+                success: false,
+                error: response.data.message || 'Delivery Auto tracking not found',
+                carrier: 'delivery-auto'
+            };
+
+        } catch (error) {
+            console.error('Delivery Auto API error:', error.message);
+            throw new Error('Delivery Auto API unavailable');
+        }
+    }
+
+    // SAT API
+    async trackSAT(trackingNumber) {
+        try {
+            // SAT використовує тестовий URL поки немає доступу до prod
+            const baseUrl = process.env.SAT_BASE_URL_PROD || process.env.SAT_BASE_URL_TEST || 'http://urm.sat.ua/study/hs/api/v1.0';
+            
+            const response = await axios.get(
+                `${baseUrl}/tracking/${trackingNumber}`,
+                {
+                    headers: {
+                        'Authorization': `ApiKey ${this.satApiKey}`,
+                        'Content-Type': 'application/json',
+                        'User-Agent': 'PandaTrack/1.0'
+                    },
+                    timeout: 15000
+                }
+            );
+
+            if (response.data.success !== false && response.data.tracking) {
+                const tracking = response.data.tracking;
+                return {
+                    success: true,
+                    data: {
+                        trackingNumber: trackingNumber,
+                        carrier: 'sat',
+                        status: tracking.status || 'Unknown',
+                        statusCode: tracking.status_code,
+                        lastUpdate: tracking.last_update || new Date().toISOString(),
+                        events: tracking.history?.map(event => ({
+                            date: event.date,
+                            status: event.status,
+                            location: event.office || event.location || ''
+                        })) || [],
+                        estimatedDelivery: tracking.estimated_delivery,
+                        raw: tracking
+                    }
+                };
+            }
+
+            return {
+                success: false,
+                error: 'SAT tracking number not found',
+                carrier: 'sat'
+            };
+
+        } catch (error) {
+            console.error('SAT API error:', error.message);
+            throw new Error('SAT API unavailable');
+        }
+    }
+
+    // TrackingMore Universal API (без змін)
     async trackTrackingMore(trackingNumber, carrierCode = null) {
         try {
-            // Покращена logіка вибору endpoint
             let endpoint;
             if (carrierCode && carrierCode !== 'auto-detect-numeric' && carrierCode !== 'unknown') {
                 endpoint = `https://api.trackingmore.com/v3/trackings/${carrierCode}/${trackingNumber}`;
@@ -450,6 +682,59 @@ class TrackingService {
         }
     }
 
+    // Універсальна функція для нативних API
+    async trackNativeAPI(trackingNumber, carrierCode) {
+        switch (carrierCode) {
+            case 'nova-poshta':
+                return await this.trackNovaPoshta(trackingNumber);
+            
+            case 'dhl':
+                return await this.trackDHL(trackingNumber);
+            
+            case 'delivery-auto':
+                return await this.trackDeliveryAuto(trackingNumber);
+            
+            case 'sat':
+                return await this.trackSAT(trackingNumber);
+            
+            case 'ukrposhta':
+                return await this.trackUkrposhta(trackingNumber);
+            
+            case 'meest-express':
+                return await this.trackMeest(trackingNumber);
+            
+            default:
+                throw new Error(`Native API not implemented for ${carrierCode}`);
+        }
+    }
+
+    // Заглушки для майбутніх інтеграцій
+    async trackUkrposhta(trackingNumber) {
+        // TODO: Додати коли буде API ключ
+        throw new Error('Ukrposhta native API not implemented yet');
+    }
+
+    async trackMeest(trackingNumber) {
+        // TODO: Додати коли буде партнерство
+        throw new Error('Meest native API not implemented yet');
+    }
+
+    // === ОСНОВНА ЛОГІКА ТРЕКІНГУ ===
+
+    // Виконання трекінгу через вибраний провайдер
+    async executeTracking(trackingNumber, carrierCode, apiProvider) {
+        switch (apiProvider) {
+            case 'native':
+                return await this.trackNativeAPI(trackingNumber, carrierCode);
+            
+            case 'trackingmore':
+                return await this.trackTrackingMore(trackingNumber, carrierCode);
+            
+            default:
+                throw new Error(`Unknown API provider: ${apiProvider}`);
+        }
+    }
+
     // Основна функція трекінгу з гібридною логікою
     async track(trackingNumber, userId = null, forceRefresh = false) {
         const startTime = Date.now();
@@ -490,23 +775,49 @@ class TrackingService {
             
             let result;
             
-            // Виконання трекінгу
-            if (apiProvider === 'native') {
-                if (detectedCarrier.code === 'nova-poshta') {
-                    result = await this.trackNovaPoshta(trackingNumber);
+            // Виконання трекінгу з fallback логікою
+            try {
+                result = await this.executeTracking(trackingNumber, detectedCarrier.code, apiProvider);
+                
+                if (result.success) {
+                    await this.updateQuotaUsage(detectedCarrier.code, apiProvider);
                 } else {
-                    throw new Error(`Native API not implemented for ${detectedCarrier.code}`);
+                    // Спробуємо fallback якщо є
+                    const config = this.providers[detectedCarrier.code];
+                    if (config && config.fallback && !result.success) {
+                        console.warn(`Primary API failed for ${detectedCarrier.code}, trying fallback: ${config.fallback}`);
+                        
+                        result = await this.executeTracking(trackingNumber, detectedCarrier.code, config.fallback);
+                        if (result.success) {
+                            await this.updateQuotaUsage(detectedCarrier.code, config.fallback);
+                        }
+                    }
                 }
-            } else if (apiProvider === 'trackingmore') {
-                result = await this.trackTrackingMore(trackingNumber, detectedCarrier.code);
-            } else {
-                throw new Error(`Unknown API provider: ${apiProvider}`);
+                
+            } catch (error) {
+                console.warn(`Primary API failed for ${detectedCarrier.code}: ${error.message}`);
+                
+                // Спробуємо fallback
+                const config = this.providers[detectedCarrier.code];
+                if (config && config.fallback) {
+                    console.log(`Trying fallback API: ${config.fallback}`);
+                    
+                    try {
+                        result = await this.executeTracking(trackingNumber, detectedCarrier.code, config.fallback);
+                        
+                        if (result.success) {
+                            await this.updateQuotaUsage(detectedCarrier.code, config.fallback);
+                        }
+                    } catch (fallbackError) {
+                        console.error(`Fallback API also failed: ${fallbackError.message}`);
+                        throw error; // Повертаємо оригінальну помилку
+                    }
+                } else {
+                    throw error;
+                }
             }
 
-            if (result.success) {
-                // Оновлення квот
-                await this.updateQuotaUsage(detectedCarrier.code, apiProvider);
-                
+            if (result && result.success) {
                 // Кешування
                 const ttl = this.calculateTTL(result.data.status);
                 try {
@@ -532,7 +843,7 @@ class TrackingService {
 
             return {
                 success: false,
-                error: result.error || 'Tracking failed',
+                error: result?.error || 'Tracking failed',
                 carrier: detectedCarrier.code,
                 responseTime: Date.now() - startTime
             };
@@ -646,7 +957,7 @@ class TrackingService {
         }
     }
 
-    // Збереження в базу даних (без змін - вже працює)
+    // Збереження в базу даних (без змін)
     async saveToDatabase(trackingNumber, trackingData, userId) {
         try {
             const hashedNumber = this.hashTrackingNumber(trackingNumber);
