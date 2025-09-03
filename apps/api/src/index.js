@@ -1,4 +1,4 @@
-// apps/api/src/index.js - ВИПРАВЛЕНА ВЕРСІЯ
+// apps/api/src/index.js - ОНОВЛЕНИЙ З НОВОЮ АРХІТЕКТУРОЮ
 require('dotenv').config();
 
 const express = require('express');
@@ -8,6 +8,10 @@ const rateLimit = require('express-rate-limit');
 const redis = require('redis');
 const { createClient } = require('@supabase/supabase-js');
 const { v4: uuidv4 } = require('uuid');
+
+// НОВІ ІМПОРТИ - оновлена архітектура
+const TrackingService = require('./services/TrackingService');
+const ProviderFactory = require('./providers/ProviderFactory');
 
 // Routes
 const trackRoutes = require('./routes/track');
@@ -19,7 +23,7 @@ const PORT = process.env.PORT || 3001;
 // Trust proxy для отримання реальних IP адрес через nginx
 app.set('trust proxy', 1);
 
-// ВИПРАВЛЕНЕ Redis client initialization
+// Redis client initialization
 const redisClient = redis.createClient({
     url: `redis://${process.env.REDIS_HOST || 'redis'}:${process.env.REDIS_PORT || 6379}`,
     socket: {
@@ -48,7 +52,7 @@ const supabase = createClient(
     }
 );
 
-// ВИПРАВЛЕНІ Redis connection handlers
+// Redis connection handlers
 redisClient.on('error', (err) => {
     console.error('Redis Client Error:', err.message);
 });
@@ -69,14 +73,34 @@ redisClient.on('end', () => {
     console.log('Redis connection ended');
 });
 
+// НОВИЙ: Глобальний TrackingService інстанс
+let trackingService = null;
+
 // Connect to Redis з правильним error handling
 (async () => {
     try {
         await redisClient.connect();
         console.log('Redis connection established');
+        
+        // НОВИЙ: Ініціалізація TrackingService після підключення Redis
+        trackingService = new TrackingService(redisClient, supabase);
+        console.log('TrackingService initialized with new architecture');
+        
+        // Тест провайдерів
+        try {
+            const healthCheck = await ProviderFactory.healthCheckAll();
+            console.log('Providers health check:', JSON.stringify(healthCheck, null, 2));
+        } catch (error) {
+            console.warn('Provider health check failed:', error.message);
+        }
+        
     } catch (error) {
         console.error('Failed to connect to Redis:', error.message);
         console.log('API will continue without Redis caching');
+        
+        // Ініціалізуємо TrackingService навіть без Redis (з обмеженою функціональністю)
+        trackingService = new TrackingService(null, supabase);
+        console.log('TrackingService initialized without Redis');
     }
 })();
 
@@ -143,10 +167,11 @@ app.use((req, res, next) => {
     next();
 });
 
-// Inject Redis and Supabase clients into request
+// ОНОВЛЕНИЙ: Inject clients та TrackingService
 app.use((req, res, next) => {
     req.redis = redisClient;
     req.supabase = supabase;
+    req.trackingService = trackingService; // НОВИЙ: додаємо TrackingService
     next();
 });
 
@@ -231,13 +256,13 @@ const authenticateToken = async (req, res, next) => {
 
 app.use(authenticateToken);
 
-// ВИПРАВЛЕНИЙ Health check endpoint
+// ОНОВЛЕНИЙ Health check endpoint з новою архітектурою
 app.get('/health', async (req, res) => {
     try {
-        // Перевірка Redis підключення (безпечна)
+        // Перевірка Redis підключення
         let redisStatus = 'disconnected';
         try {
-            if (redisClient.isReady) {
+            if (redisClient && redisClient.isReady) {
                 await redisClient.ping();
                 redisStatus = 'connected';
             }
@@ -253,14 +278,38 @@ app.get('/health', async (req, res) => {
         
         if (error) throw error;
         
+        // НОВИЙ: Перевірка TrackingService та провайдерів
+        let trackingServiceStatus = 'not_initialized';
+        let providersStatus = {};
+        
+        if (trackingService) {
+            try {
+                const healthCheck = await trackingService.healthCheck();
+                trackingServiceStatus = 'ok';
+                providersStatus = healthCheck.components.providers;
+            } catch (tsError) {
+                console.warn('TrackingService health check failed:', tsError.message);
+                trackingServiceStatus = 'error';
+            }
+        }
+        
         res.json({
             status: 'ok',
             timestamp: new Date().toISOString(),
-            version: '1.0.0',
+            version: '2.0.0', // ОНОВЛЕНА ВЕРСІЯ
+            architecture: 'multi-source', // НОВЕ
             services: {
                 redis: redisStatus,
                 supabase: 'connected',
+                trackingService: trackingServiceStatus,
                 api: 'running'
+            },
+            providers: providersStatus,
+            features: {
+                multiSourceTracking: true,
+                ukrposhtaNativeAPI: !!process.env.UKRPOSHTA_STATUS_BEARER,
+                internationalTracking: true,
+                costOptimization: true
             },
             uptime: process.uptime()
         });
@@ -269,7 +318,7 @@ app.get('/health', async (req, res) => {
         
         let redisStatus = 'unknown';
         try {
-            redisStatus = redisClient.isReady ? 'connected' : 'disconnected';
+            redisStatus = redisClient && redisClient.isReady ? 'connected' : 'disconnected';
         } catch {}
         
         res.status(503).json({
@@ -279,8 +328,59 @@ app.get('/health', async (req, res) => {
             services: {
                 redis: redisStatus,
                 supabase: 'error',
+                trackingService: trackingService ? 'initialized' : 'not_initialized',
                 api: 'running'
             }
+        });
+    }
+});
+
+// НОВИЙ: Endpoint для тестування провайдерів
+app.get('/api/providers/health', async (req, res) => {
+    try {
+        if (!trackingService) {
+            return res.status(503).json({
+                success: false,
+                error: 'TrackingService not initialized'
+            });
+        }
+        
+        const healthCheck = await ProviderFactory.healthCheckAll();
+        
+        res.json({
+            success: true,
+            providers: healthCheck,
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// НОВИЙ: Endpoint для quota status
+app.get('/api/quota-status', async (req, res) => {
+    try {
+        if (!trackingService) {
+            return res.status(503).json({
+                success: false,
+                error: 'TrackingService not initialized'
+            });
+        }
+        
+        const quotaStatus = await trackingService.getQuotaStatus();
+        
+        res.json({
+            success: true,
+            quotas: quotaStatus,
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
         });
     }
 });
@@ -289,18 +389,28 @@ app.get('/health', async (req, res) => {
 app.use('/api', trackRoutes);
 app.use('/api/auth', authRoutes);
 
-// Root endpoint
+// ОНОВЛЕНИЙ Root endpoint
 app.get('/', (req, res) => {
     res.json({
         name: 'PandaTrack API',
-        version: '1.0.0',
+        version: '2.0.0',
+        architecture: 'multi-source-providers',
         status: 'running',
         documentation: 'https://docs.pandatrack.com.ua',
+        features: [
+            'Multi-source tracking',
+            'Ukrposhta native API',
+            'International tracking via UPU',
+            'Cost-optimized routing',
+            'Provider-based architecture'
+        ],
         endpoints: {
             health: '/health',
             tracking: 'POST /api/tracking',
             carriers: 'GET /api/carriers',
-            detectCarrier: 'POST /api/detect-carrier'
+            detectCarrier: 'POST /api/detect-carrier',
+            providersHealth: 'GET /api/providers/health',
+            quotaStatus: 'GET /api/quota-status'
         }
     });
 });
@@ -315,7 +425,9 @@ app.use('*', (req, res) => {
             health: 'GET /health',
             tracking: 'POST /api/tracking',
             carriers: 'GET /api/carriers',
-            detectCarrier: 'POST /api/detect-carrier'
+            detectCarrier: 'POST /api/detect-carrier',
+            providersHealth: 'GET /api/providers/health',
+            quotaStatus: 'GET /api/quota-status'
         }
     });
 });
@@ -355,17 +467,20 @@ app.use((error, req, res, next) => {
     });
 });
 
-// ВИПРАВЛЕНИЙ Graceful shutdown
+// Graceful shutdown з очищенням провайдерів
 process.on('SIGTERM', async () => {
     console.log('SIGTERM received, shutting down gracefully...');
     
     try {
-        if (redisClient.isReady) {
+        // Очищення кешу провайдерів
+        ProviderFactory.clearCache();
+        
+        if (redisClient && redisClient.isReady) {
             await redisClient.quit();
             console.log('Redis connection closed');
         }
     } catch (error) {
-        console.error('Error closing Redis connection:', error.message);
+        console.error('Error during shutdown:', error.message);
     }
     
     process.exit(0);
@@ -375,12 +490,15 @@ process.on('SIGINT', async () => {
     console.log('SIGINT received, shutting down gracefully...');
     
     try {
-        if (redisClient.isReady) {
+        // Очищення кешу провайдерів
+        ProviderFactory.clearCache();
+        
+        if (redisClient && redisClient.isReady) {
             await redisClient.quit();
             console.log('Redis connection closed');
         }
     } catch (error) {
-        console.error('Error closing Redis connection:', error.message);
+        console.error('Error during shutdown:', error.message);
     }
     
     process.exit(0);
@@ -388,9 +506,11 @@ process.on('SIGINT', async () => {
 
 // Start server
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 PandaTrack API Server running on port ${PORT}`);
+    console.log(`🚀 PandaTrack API Server v2.0 running on port ${PORT}`);
+    console.log(`🏗️  Architecture: Multi-Source Provider Pattern`);
     console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`🔗 Health check: http://localhost:${PORT}/health`);
+    console.log(`📡 Providers health: http://localhost:${PORT}/api/providers/health`);
 });
 
 module.exports = app;
