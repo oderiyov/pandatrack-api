@@ -1,186 +1,512 @@
 // apps/api/src/routes/track.js
 const express = require('express');
-const rateLimit = require('express-rate-limit');
-const TrackingService = require('../services/trackingService');
+const { body, param, validationResult } = require('express-validator');
 
 const router = express.Router();
 
-// Rate limiting для трекінгу
-const trackingRateLimit = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 хвилин
-    max: (req) => {
-        // Авторизовані користувачі - більше запитів
-        if (req.user) {
-            return req.user.subscription_tier === 'premium' ? 100 : 50;
+// Middleware для додавання TrackingService до req
+const attachTrackingService = (req, res, next) => {
+    if (!req.trackingService) {
+        // Отримуємо сервіс з app locals (ініціалізований в index.js)
+        req.trackingService = req.app.locals.trackingService;
+        
+        if (!req.trackingService) {
+            return res.status(500).json({
+                success: false,
+                error: 'TrackingService not initialized',
+                code: 'SERVICE_UNAVAILABLE'
+            });
         }
-        // Анонімні користувачі - обмежено
-        return 10;
-    },
-    message: {
-        success: false,
-        error: 'Too many tracking requests. Please try again later.',
-        retryAfter: 900 // 15 хвилин в секундах
-    },
-    standardHeaders: true,
-    legacyHeaders: false,
-    keyGenerator: (req) => {
-        // Використовуємо IP або user ID для rate limiting
-        return req.user ? `user_${req.user.id}` : `ip_${req.ip}`;
     }
-});
-
-// Middleware для валідації запиту
-const validateTrackingRequest = (req, res, next) => {
-    const { trackingNumber } = req.body;
-    
-    if (!trackingNumber) {
-        return res.status(400).json({
-            success: false,
-            error: 'Tracking number is required',
-            code: 'MISSING_TRACKING_NUMBER'
-        });
-    }
-    
-    if (typeof trackingNumber !== 'string') {
-        return res.status(400).json({
-            success: false,
-            error: 'Tracking number must be a string',
-            code: 'INVALID_TRACKING_NUMBER_TYPE'
-        });
-    }
-    
-    const cleanNumber = trackingNumber.trim();
-    if (cleanNumber.length < 8 || cleanNumber.length > 35) {
-        return res.status(400).json({
-            success: false,
-            error: 'Tracking number length must be between 8 and 35 characters',
-            code: 'INVALID_TRACKING_NUMBER_LENGTH'
-        });
-    }
-    
-    // Перевіряємо на небезпечні символи
-    if (!/^[A-Za-z0-9\-]+$/.test(cleanNumber)) {
-        return res.status(400).json({
-            success: false,
-            error: 'Tracking number contains invalid characters',
-            code: 'INVALID_TRACKING_NUMBER_FORMAT'
-        });
-    }
-    
-    req.body.trackingNumber = cleanNumber;
     next();
 };
 
-// POST /track - основний endpoint для трекінгу
-router.post('/tracking', trackingRateLimit, validateTrackingRequest, async (req, res) => {
-    const startTime = Date.now();
-    
-    try {
-        const { trackingNumber, forceRefresh = false } = req.body;
-        const userId = req.user?.id || null;
+// Rate limiting middleware (простий in-memory лімітер)
+const rateLimitMap = new Map();
+
+const createRateLimit = (windowMs = 60000, maxRequests = 10) => {
+    return (req, res, next) => {
+        const key = req.user ? `user_${req.user.id}` : `ip_${req.ip || req.connection.remoteAddress}`;
+        const now = Date.now();
         
-        // Ініціалізуємо сервіс трекінгу
-        const trackingService = new TrackingService(req.redis, req.supabase);
+        // Більше запитів для авторизованих користувачів
+        const limit = req.user ? 
+            (req.user.subscription_tier === 'premium' ? 100 : 50) : 
+            maxRequests;
+
+        if (!rateLimitMap.has(key)) {
+            rateLimitMap.set(key, { count: 1, resetTime: now + windowMs });
+            return next();
+        }
+
+        const userData = rateLimitMap.get(key);
+
+        if (now > userData.resetTime) {
+            userData.count = 1;
+            userData.resetTime = now + windowMs;
+            return next();
+        }
+
+        if (userData.count >= limit) {
+            return res.status(429).json({
+                success: false,
+                error: 'Too many requests',
+                code: 'RATE_LIMIT_EXCEEDED',
+                retryAfter: Math.ceil((userData.resetTime - now) / 1000),
+                limit: limit,
+                remaining: 0
+            });
+        }
+
+        userData.count++;
         
-        // Виконуємо трекінг
-        const result = await trackingService.track(trackingNumber, userId, forceRefresh);
-        
-        // Логування для моніторингу
-        const responseTime = Date.now() - startTime;
-        console.log({
-            action: 'track_request',
-            trackingNumber: trackingNumber.substring(0, 4) + '***', // Часткове маскування
-            userId: userId,
-            success: result.success,
-            cached: result.cached || false,
-            carrier: result.data?.carrier || 'unknown',
-            responseTime: responseTime,
-            timestamp: new Date().toISOString()
+        // Додаємо rate limit headers
+        res.set({
+            'X-RateLimit-Limit': limit,
+            'X-RateLimit-Remaining': Math.max(0, limit - userData.count),
+            'X-RateLimit-Reset': new Date(userData.resetTime).toISOString()
         });
         
-        if (result.success) {
-            // Успішна відповідь
-            res.json({
-                success: true,
-                data: {
-                    trackingNumber: result.data.trackingNumber,
-                    carrier: result.data.carrier,
-                    status: result.data.status,
-                    statusCode: result.data.statusCode,
-                    lastUpdate: result.data.lastUpdate,
-                    estimatedDelivery: result.data.estimatedDelivery,
-                    events: result.data.events || [],
-                    cached: result.cached || false
-                },
-                meta: {
-                    requestId: req.requestId,
-                    responseTime: responseTime,
-                    timestamp: new Date().toISOString()
-                }
-            });
-        } else {
-            // Помилка трекінгу
-            res.status(404).json({
+        next();
+    };
+};
+
+const trackingRateLimit = createRateLimit(15 * 60 * 1000, 20); // 15 хвилин, 20 запитів
+
+// Validation middleware
+const validateTrackingNumber = [
+    body('trackingNumber')
+        .trim()
+        .notEmpty()
+        .withMessage('Tracking number is required')
+        .isLength({ min: 8, max: 50 })
+        .withMessage('Tracking number must be 8-50 characters')
+        .matches(/^[A-Za-z0-9\-]+$/)
+        .withMessage('Tracking number contains invalid characters'),
+    
+    body('source')
+        .optional()
+        .isIn(['ukrposhta', 'novaposhta', 'trackingmore', 'dhl', 'sat', 'delivery_auto'])
+        .withMessage('Invalid source specified'),
+        
+    body('forceRefresh')
+        .optional()
+        .isBoolean()
+        .withMessage('forceRefresh must be a boolean'),
+
+    body('multiSource')
+        .optional()
+        .isBoolean()
+        .withMessage('multiSource must be a boolean')
+];
+
+// Параметр валідація для GET endpoints
+const validateTrackingParam = [
+    param('trackingNumber')
+        .trim()
+        .isLength({ min: 8, max: 50 })
+        .withMessage('Invalid tracking number length')
+        .matches(/^[A-Za-z0-9\-]+$/)
+        .withMessage('Invalid tracking number format')
+];
+
+// Утиліти для логування
+const logTrackingRequest = (req, result, responseTime, error = null) => {
+    const logData = {
+        action: error ? 'track_error' : 'track_request',
+        trackingNumber: req.body?.trackingNumber?.substring(0, 6) + '***',
+        userId: req.user?.id || null,
+        ip: req.ip,
+        success: result?.success || false,
+        sources: result?.sources?.length || 0,
+        cached: result?.cached || false,
+        multiSource: req.body?.multiSource || false,
+        responseTime: responseTime,
+        error: error?.message,
+        timestamp: new Date().toISOString(),
+        userAgent: req.get('User-Agent')
+    };
+    
+    if (error) {
+        console.error(logData);
+    } else {
+        console.log(logData);
+    }
+};
+
+// POST /track - основний endpoint для multi-source трекінгу
+router.post('/track', 
+    trackingRateLimit,
+    attachTrackingService,
+    validateTrackingNumber,
+    async (req, res) => {
+        const startTime = Date.now();
+        
+        try {
+            // Валідація запиту
+            const errors = validationResult(req);
+            if (!errors.isEmpty()) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Validation failed',
+                    code: 'VALIDATION_ERROR',
+                    details: errors.array()
+                });
+            }
+
+            const { 
+                trackingNumber, 
+                source, 
+                forceRefresh = false, 
+                multiSource = true 
+            } = req.body;
+            const userId = req.user?.id || null;
+
+            console.log(`[TRACK] ${trackingNumber} - source: ${source || 'auto'}, multiSource: ${multiSource}, refresh: ${forceRefresh}`);
+
+            // Використовуємо новий multi-source API
+            const result = await req.trackingService.trackShipment(
+                trackingNumber,
+                source,
+                forceRefresh,
+                { multiSource, userId }
+            );
+
+            const responseTime = Date.now() - startTime;
+            logTrackingRequest(req, result, responseTime);
+
+            // Формуємо відповідь
+            if (result.success) {
+                res.json({
+                    success: true,
+                    trackingNumber: result.trackingNumber,
+                    consolidatedStatus: result.consolidatedStatus,
+                    consolidatedMessage: result.consolidatedMessage,
+                    lastUpdate: result.lastUpdate,
+                    estimatedDelivery: result.estimatedDelivery,
+                    sources: result.sources.map(source => ({
+                        provider: source.provider,
+                        status: source.status,
+                        message: source.message,
+                        events: source.events || [],
+                        cost: source.cost || 0,
+                        cached: source.cached || false,
+                        supportsInternational: source.supportsInternational || false
+                    })),
+                    meta: {
+                        requestId: req.requestId || `req_${Date.now()}`,
+                        responseTime: responseTime,
+                        totalSources: result.sources.length,
+                        cached: result.cached || false,
+                        timestamp: new Date().toISOString()
+                    }
+                });
+            } else {
+                res.status(404).json({
+                    success: false,
+                    error: result.error || 'Tracking information not found in any source',
+                    code: 'TRACKING_NOT_FOUND',
+                    trackingNumber: trackingNumber,
+                    sourcesChecked: result.sourcesChecked || 0,
+                    meta: {
+                        requestId: req.requestId || `req_${Date.now()}`,
+                        responseTime: responseTime,
+                        timestamp: new Date().toISOString()
+                    }
+                });
+            }
+            
+        } catch (error) {
+            const responseTime = Date.now() - startTime;
+            logTrackingRequest(req, null, responseTime, error);
+            
+            // Детальніші коди помилок
+            let statusCode = 500;
+            let errorCode = 'INTERNAL_SERVER_ERROR';
+            
+            if (error.message.includes('rate limit')) {
+                statusCode = 429;
+                errorCode = 'RATE_LIMIT_EXCEEDED';
+            } else if (error.message.includes('not found')) {
+                statusCode = 404;
+                errorCode = 'TRACKING_NOT_FOUND';
+            } else if (error.message.includes('validation')) {
+                statusCode = 400;
+                errorCode = 'VALIDATION_ERROR';
+            }
+            
+            res.status(statusCode).json({
                 success: false,
-                error: result.error || 'Tracking information not found',
-                code: 'TRACKING_NOT_FOUND',
-                carrier: result.carrier || 'unknown',
+                error: error.message,
+                code: errorCode,
                 meta: {
-                    requestId: req.requestId,
+                    requestId: req.requestId || `req_${Date.now()}`,
                     responseTime: responseTime,
                     timestamp: new Date().toISOString()
                 }
             });
         }
-        
-    } catch (error) {
-        const responseTime = Date.now() - startTime;
-        
-        console.error({
-            action: 'track_error',
-            error: error.message,
-            stack: error.stack,
-            userId: req.user?.id,
-            responseTime: responseTime,
-            timestamp: new Date().toISOString()
-        });
-        
-        res.status(500).json({
-            success: false,
-            error: 'Internal server error during tracking',
-            code: 'INTERNAL_SERVER_ERROR',
-            meta: {
-                requestId: req.requestId,
-                responseTime: responseTime,
-                timestamp: new Date().toISOString()
-            }
-        });
     }
-});
+);
+
+// Підтримка старого формату (/tracking endpoint)
+router.post('/tracking', 
+    trackingRateLimit,
+    attachTrackingService,
+    validateTrackingNumber,
+    async (req, res) => {
+        // Перенаправляємо на новий endpoint
+        req.body.multiSource = req.body.multiSource !== false; // За замовчуванням true
+        return router.stack[0].handle(req, res);
+    }
+);
+
+// GET /track/:trackingNumber - альтернативний ендпоінт
+router.get('/track/:trackingNumber',
+    trackingRateLimit,
+    attachTrackingService,
+    validateTrackingParam,
+    async (req, res) => {
+        const startTime = Date.now();
+        
+        try {
+            const errors = validationResult(req);
+            if (!errors.isEmpty()) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Invalid tracking number format',
+                    code: 'VALIDATION_ERROR',
+                    details: errors.array()
+                });
+            }
+
+            const { trackingNumber } = req.params;
+            const { source, refresh, multiSource = 'true' } = req.query;
+            const userId = req.user?.id || null;
+
+            const result = await req.trackingService.trackShipment(
+                trackingNumber,
+                source,
+                refresh === 'true',
+                { multiSource: multiSource !== 'false', userId }
+            );
+
+            const responseTime = Date.now() - startTime;
+
+            if (result.success) {
+                res.json({
+                    success: true,
+                    trackingNumber: result.trackingNumber,
+                    consolidatedStatus: result.consolidatedStatus,
+                    sources: result.sources,
+                    meta: {
+                        responseTime: responseTime,
+                        timestamp: new Date().toISOString()
+                    }
+                });
+            } else {
+                res.status(404).json({
+                    success: false,
+                    error: result.error || 'Tracking information not found',
+                    code: 'TRACKING_NOT_FOUND'
+                });
+            }
+
+        } catch (error) {
+            const responseTime = Date.now() - startTime;
+            console.error(`[GET TRACK ERROR] ${req.params.trackingNumber}: ${error.message}`);
+            
+            res.status(500).json({
+                success: false,
+                error: 'Internal server error during tracking',
+                code: 'INTERNAL_SERVER_ERROR',
+                meta: {
+                    responseTime: responseTime,
+                    timestamp: new Date().toISOString()
+                }
+            });
+        }
+    }
+);
+
+// GET /track/:trackingNumber/history - історія трекінгу
+router.get('/track/:trackingNumber/history',
+    attachTrackingService,
+    validateTrackingParam,
+    async (req, res) => {
+        try {
+            const errors = validationResult(req);
+            if (!errors.isEmpty()) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Invalid tracking number format',
+                    details: errors.array()
+                });
+            }
+
+            const { trackingNumber } = req.params;
+            
+            const history = await req.trackingService.getTrackingHistory(trackingNumber);
+            
+            res.json({
+                success: true,
+                trackingNumber: trackingNumber,
+                history: history,
+                totalEvents: history.length,
+                meta: {
+                    timestamp: new Date().toISOString()
+                }
+            });
+
+        } catch (error) {
+            console.error(`[HISTORY ERROR] ${req.params.trackingNumber}: ${error.message}`);
+            res.status(500).json({
+                success: false,
+                error: 'Failed to get tracking history',
+                code: 'HISTORY_ERROR',
+                message: error.message
+            });
+        }
+    }
+);
+
+// POST /track/batch - пакетний трекінг
+router.post('/track/batch',
+    createRateLimit(15 * 60 * 1000, 5), // Менше лімітів для batch
+    attachTrackingService,
+    [
+        body('trackingNumbers')
+            .isArray({ min: 1, max: 10 })
+            .withMessage('1-10 tracking numbers required'),
+        body('trackingNumbers.*')
+            .matches(/^[A-Za-z0-9\-]{8,50}$/)
+            .withMessage('Invalid tracking number format'),
+        body('source').optional().isString(),
+        body('forceRefresh').optional().isBoolean(),
+        body('multiSource').optional().isBoolean()
+    ],
+    async (req, res) => {
+        const startTime = Date.now();
+        
+        try {
+            const errors = validationResult(req);
+            if (!errors.isEmpty()) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Validation failed',
+                    code: 'VALIDATION_ERROR',
+                    details: errors.array()
+                });
+            }
+
+            const { 
+                trackingNumbers, 
+                source, 
+                forceRefresh = false,
+                multiSource = true 
+            } = req.body;
+            const userId = req.user?.id || null;
+
+            console.log(`[BATCH TRACK] ${trackingNumbers.length} numbers, multiSource: ${multiSource}`);
+
+            const results = await Promise.allSettled(
+                trackingNumbers.map(async (number, index) => {
+                    // Додаємо невелику затримку між запитами
+                    await new Promise(resolve => setTimeout(resolve, index * 100));
+                    
+                    return req.trackingService.trackShipment(
+                        number, 
+                        source, 
+                        forceRefresh,
+                        { multiSource, userId }
+                    );
+                })
+            );
+
+            const response = {
+                success: true,
+                total: trackingNumbers.length,
+                successful: 0,
+                failed: 0,
+                results: []
+            };
+
+            results.forEach((result, index) => {
+                if (result.status === 'fulfilled' && result.value.success) {
+                    response.successful++;
+                    response.results.push({
+                        trackingNumber: trackingNumbers[index],
+                        status: 'success',
+                        data: result.value
+                    });
+                } else {
+                    response.failed++;
+                    response.results.push({
+                        trackingNumber: trackingNumbers[index],
+                        status: 'error',
+                        error: result.reason?.message || result.value?.error || 'Unknown error'
+                    });
+                }
+            });
+
+            const responseTime = Date.now() - startTime;
+            
+            console.log(`[BATCH COMPLETE] ${response.successful}/${response.total} successful, ${responseTime}ms`);
+
+            res.json({
+                ...response,
+                meta: {
+                    responseTime: responseTime,
+                    timestamp: new Date().toISOString()
+                }
+            });
+
+        } catch (error) {
+            const responseTime = Date.now() - startTime;
+            console.error(`[BATCH ERROR]: ${error.message}`);
+            
+            res.status(500).json({
+                success: false,
+                error: 'Batch tracking failed',
+                code: 'BATCH_ERROR',
+                meta: {
+                    responseTime: responseTime,
+                    timestamp: new Date().toISOString()
+                }
+            });
+        }
+    }
+);
 
 // GET /carriers - список підтримуваних перевізників
-router.get('/carriers', async (req, res) => {
+router.get('/carriers', attachTrackingService, async (req, res) => {
     try {
+        // Отримуємо з бази даних
         const { data: carriers, error } = await req.supabase
             .from('carriers')
-            .select('id, name, code, is_active, tracking_url_template')
+            .select('id, name, code, is_active, tracking_url_template, supports_international')
             .eq('is_active', true)
             .order('name');
         
-        if (error) {
-            throw error;
-        }
+        if (error) throw error;
+        
+        // Додаємо інформацію про провайдерів
+        const providersInfo = await req.trackingService.getProvidersInfo();
+        
+        const enrichedCarriers = carriers.map(carrier => ({
+            id: carrier.id,
+            name: carrier.name,
+            code: carrier.code,
+            trackingUrlTemplate: carrier.tracking_url_template,
+            supportsInternational: carrier.supports_international,
+            provider: providersInfo[carrier.code] || null
+        }));
         
         res.json({
             success: true,
-            data: carriers.map(carrier => ({
-                id: carrier.id,
-                name: carrier.name,
-                code: carrier.code,
-                trackingUrlTemplate: carrier.tracking_url_template
-            })),
+            data: enrichedCarriers,
             meta: {
-                count: carriers.length,
+                count: enrichedCarriers.length,
                 timestamp: new Date().toISOString()
             }
         });
@@ -197,104 +523,123 @@ router.get('/carriers', async (req, res) => {
 });
 
 // POST /detect-carrier - автовизначення перевізника
-router.post('/detect-carrier', validateTrackingRequest, async (req, res) => {
+router.post('/detect-carrier', 
+    [
+        body('trackingNumber')
+            .trim()
+            .notEmpty()
+            .matches(/^[A-Za-z0-9\-]{8,50}$/)
+            .withMessage('Invalid tracking number format')
+    ],
+    attachTrackingService,
+    async (req, res) => {
+        try {
+            const errors = validationResult(req);
+            if (!errors.isEmpty()) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Validation failed',
+                    details: errors.array()
+                });
+            }
+
+            const { trackingNumber } = req.body;
+            
+            const detectedCarriers = await req.trackingService.detectCarriers(trackingNumber);
+            
+            res.json({
+                success: true,
+                data: {
+                    trackingNumber: trackingNumber,
+                    detectedCarriers: detectedCarriers,
+                    totalMatches: detectedCarriers.length,
+                    confidence: detectedCarriers.length > 0 ? 'high' : 'low'
+                },
+                meta: {
+                    timestamp: new Date().toISOString()
+                }
+            });
+            
+        } catch (error) {
+            console.error('Carrier detection error:', error);
+            
+            res.status(500).json({
+                success: false,
+                error: 'Failed to detect carrier',
+                code: 'CARRIER_DETECTION_ERROR'
+            });
+        }
+    }
+);
+
+// GET /providers - інформація про провайдерів
+router.get('/providers', attachTrackingService, async (req, res) => {
     try {
-        const { trackingNumber } = req.body;
-        
-        const trackingService = new TrackingService(req.redis, req.supabase);
-        const detectedCarrier = trackingService.detectCarrier(trackingNumber);
-        
+        const providers = await req.trackingService.getProvidersInfo();
         res.json({
             success: true,
-            data: {
-                trackingNumber: trackingNumber,
-                detectedCarrier: detectedCarrier,
-                confidence: detectedCarrier.id ? 'high' : 'low'
-            },
+            data: providers,
             meta: {
                 timestamp: new Date().toISOString()
             }
         });
-        
     } catch (error) {
-        console.error('Carrier detection error:', error);
-        
         res.status(500).json({
             success: false,
-            error: 'Failed to detect carrier',
-            code: 'CARRIER_DETECTION_ERROR'
+            error: 'Failed to get providers info',
+            code: 'PROVIDERS_INFO_ERROR'
         });
     }
 });
 
-// GET /track/:trackingNumber - альтернативний GET endpoint
-router.get('/tracking/:trackingNumber', trackingRateLimit, async (req, res) => {
+// GET /providers/health - health check провайдерів
+router.get('/providers/health', attachTrackingService, async (req, res) => {
     try {
-        const { trackingNumber } = req.params;
-        const forceRefresh = req.query.refresh === 'true';
+        const health = await req.trackingService.checkProvidersHealth();
         
-        // Валідація через middleware не спрацює для GET, валідуємо тут
-        if (!trackingNumber || trackingNumber.length < 8 || trackingNumber.length > 35) {
-            return res.status(400).json({
-                success: false,
-                error: 'Invalid tracking number format',
-                code: 'INVALID_TRACKING_NUMBER'
-            });
-        }
+        const overallHealthy = Object.values(health).every(p => p.status === 'ok');
         
-        if (!/^[A-Za-z0-9\-]+$/.test(trackingNumber)) {
-            return res.status(400).json({
-                success: false,
-                error: 'Tracking number contains invalid characters',
-                code: 'INVALID_TRACKING_NUMBER_FORMAT'
-            });
-        }
-        
-        const userId = req.user?.id || null;
-        const trackingService = new TrackingService(req.redis, req.supabase);
-        
-        const result = await trackingService.track(trackingNumber, userId, forceRefresh);
-        
-        if (result.success) {
-            res.json({
-                success: true,
-                data: {
-                    trackingNumber: result.data.trackingNumber,
-                    carrier: result.data.carrier,
-                    status: result.data.status,
-                    statusCode: result.data.statusCode,
-                    lastUpdate: result.data.lastUpdate,
-                    estimatedDelivery: result.data.estimatedDelivery,
-                    events: result.data.events || [],
-                    cached: result.cached || false
-                }
-            });
-        } else {
-            res.status(404).json({
-                success: false,
-                error: result.error || 'Tracking information not found',
-                code: 'TRACKING_NOT_FOUND'
-            });
-        }
-        
+        res.status(overallHealthy ? 200 : 503).json({
+            success: overallHealthy,
+            data: health,
+            overallStatus: overallHealthy ? 'healthy' : 'degraded',
+            meta: {
+                timestamp: new Date().toISOString()
+            }
+        });
     } catch (error) {
-        console.error('GET tracking error:', error);
-        
         res.status(500).json({
             success: false,
-            error: 'Internal server error during tracking',
-            code: 'INTERNAL_SERVER_ERROR'
+            error: 'Health check failed',
+            code: 'HEALTH_CHECK_ERROR'
         });
     }
 });
 
-// Додати до apps/api/src/routes/track.js в кінець файлу перед module.exports
-
-// GET /api/quota-status - детальний моніторинг квот
-router.get('/quota-status', async (req, res) => {
+// GET /stats - статистика використання
+router.get('/stats', attachTrackingService, async (req, res) => {
     try {
-        const trackingService = new TrackingService(req.redis, req.supabase);
-        const quotaStatus = await trackingService.getQuotaStatus();
+        const stats = await req.trackingService.getUsageStats();
+        res.json({
+            success: true,
+            data: stats,
+            meta: {
+                timestamp: new Date().toISOString()
+            }
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: 'Failed to get statistics',
+            code: 'STATS_ERROR'
+        });
+    }
+});
+
+// GET /quota-status - детальний моніторинг квот (з вашого коду)
+router.get('/quota-status', attachTrackingService, async (req, res) => {
+    try {
+        const quotaStatus = await req.trackingService.getQuotaStatus();
         
         if (!quotaStatus) {
             return res.status(500).json({
@@ -316,83 +661,45 @@ router.get('/quota-status', async (req, res) => {
         
         // Розрахунок витрат
         let dailyCost = 0;
-        Object.entries(quotaStatus.carriers).forEach(([carrier, data]) => {
-            dailyCost += data.used * data.cost;
+        Object.entries(quotaStatus.carriers || {}).forEach(([carrier, data]) => {
+            dailyCost += (data.used || 0) * (data.cost || 0);
         });
         
         analysis.costAnalysis.dailyCost = parseFloat(dailyCost.toFixed(4));
         analysis.costAnalysis.projectedMonthlyCost = parseFloat((dailyCost * 30).toFixed(2));
         
         // Аналіз TrackingMore використання
-        const tmUsagePercent = (quotaStatus.trackingmore.used / quotaStatus.trackingmore.limit) * 100;
-        
-        if (tmUsagePercent > 90) {
-            analysis.healthStatus = 'red';
-            analysis.alerts.push({
-                level: 'critical',
-                type: 'quota_exhaustion',
-                message: `TrackingMore quota critically low: ${quotaStatus.trackingmore.used}/${quotaStatus.trackingmore.limit} (${Math.round(tmUsagePercent)}%)`,
-                action: 'Immediate action required - upgrade plan or implement native APIs',
-                urgency: 'high'
-            });
-        } else if (tmUsagePercent > 70) {
-            analysis.healthStatus = 'yellow';
-            analysis.alerts.push({
-                level: 'warning',
-                type: 'quota_warning', 
-                message: `TrackingMore quota at ${Math.round(tmUsagePercent)}%`,
-                action: 'Monitor usage closely and prepare contingency plans',
-                urgency: 'medium'
-            });
-        }
-        
-        // Прогнозування на основі поточного часу
-        const currentHour = new Date().getHours();
-        const hoursInDay = 24;
-        const projectedDailyUsage = currentHour > 0 ? 
-            Math.round(quotaStatus.trackingmore.used * (hoursInDay / currentHour)) : 
-            quotaStatus.trackingmore.used;
-        
-        if (projectedDailyUsage > quotaStatus.trackingmore.limit) {
-            analysis.alerts.push({
-                level: 'warning',
-                type: 'projected_overrun',
-                message: `Projected daily usage (${projectedDailyUsage}) may exceed limit`,
-                action: 'Implement rate limiting or native API integration',
-                urgency: 'medium'
-            });
-        }
-        
-        // Рекомендації для high-usage перевізників
-        const highUsageCarriers = Object.entries(quotaStatus.carriers)
-            .filter(([carrier, data]) => data.used > 5 && data.provider === 'trackingmore')
-            .sort((a, b) => b[1].used - a[1].used);
-        
-        if (highUsageCarriers.length > 0) {
-            analysis.recommendations.push({
-                type: 'native_api_priority',
-                priority: 'high',
-                carriers: highUsageCarriers.slice(0, 3).map(([carrier, data]) => ({
-                    carrier: carrier,
-                    usage: data.used,
-                    potentialSavings: (data.used * data.cost * 30).toFixed(2) + ' USD/month'
-                })),
-                reasoning: 'High-usage carriers would benefit most from native API integration'
-            });
+        if (quotaStatus.trackingmore) {
+            const tmUsagePercent = (quotaStatus.trackingmore.used / quotaStatus.trackingmore.limit) * 100;
+            
+            if (tmUsagePercent > 90) {
+                analysis.healthStatus = 'red';
+                analysis.alerts.push({
+                    level: 'critical',
+                    type: 'quota_exhaustion',
+                    message: `TrackingMore quota critically low: ${quotaStatus.trackingmore.used}/${quotaStatus.trackingmore.limit} (${Math.round(tmUsagePercent)}%)`,
+                    action: 'Immediate action required - upgrade plan or implement native APIs',
+                    urgency: 'high'
+                });
+            } else if (tmUsagePercent > 70) {
+                analysis.healthStatus = 'yellow';
+                analysis.alerts.push({
+                    level: 'warning',
+                    type: 'quota_warning', 
+                    message: `TrackingMore quota at ${Math.round(tmUsagePercent)}%`,
+                    action: 'Monitor usage closely and prepare contingency plans',
+                    urgency: 'medium'
+                });
+            }
         }
         
         res.json({
             success: true,
             data: quotaStatus,
             analysis: analysis,
-            projections: {
-                dailyUsage: projectedDailyUsage,
-                remainingToday: Math.max(0, quotaStatus.trackingmore.limit - projectedDailyUsage),
-                hoursUntilLimit: currentHour > 0 && projectedDailyUsage > quotaStatus.trackingmore.limit ? 
-                    Math.max(0, Math.floor((quotaStatus.trackingmore.limit - quotaStatus.trackingmore.used) * (currentHour / quotaStatus.trackingmore.used))) : 
-                    null
-            },
-            timestamp: new Date().toISOString()
+            meta: {
+                timestamp: new Date().toISOString()
+            }
         });
         
     } catch (error) {
@@ -405,316 +712,8 @@ router.get('/quota-status', async (req, res) => {
     }
 });
 
-// GET /api/migration-plan - стратегічний план переходу
-router.get('/migration-plan', async (req, res) => {
-    try {
-        const trackingService = new TrackingService(req.redis, req.supabase);
-        const quotaStatus = await trackingService.getQuotaStatus();
-        
-        // Інформація про доступність API
-        const apiAvailability = {
-            'ukrposhta': {
-                available: true,
-                complexity: 'medium',
-                cost: 'free',
-                documentation: 'limited',
-                estimatedDays: 3,
-                notes: 'Official API available, may require registration'
-            },
-            'meest-express': {
-                available: true,
-                complexity: 'high',
-                cost: 'partnership',
-                documentation: 'limited',
-                estimatedDays: 7,
-                notes: 'Corporate API requires business partnership'
-            },
-            'justin': {
-                available: false,
-                complexity: 'high',
-                cost: 'scraping',
-                documentation: 'none',
-                estimatedDays: 10,
-                notes: 'No public API, would require web scraping'
-            },
-            'dhl': {
-                available: true,
-                complexity: 'low',
-                cost: 'free_tier',
-                documentation: 'excellent',
-                estimatedDays: 2,
-                notes: 'DHL Developer API with generous free tier'
-            },
-            'fedex': {
-                available: true,
-                complexity: 'medium',
-                cost: 'free_tier',
-                documentation: 'good',
-                estimatedDays: 4,
-                notes: 'FedEx Developer API available'
-            },
-            'ups': {
-                available: true,
-                complexity: 'medium',
-                cost: 'free_tier',
-                documentation: 'good',
-                estimatedDays: 4,
-                notes: 'UPS Developer API with tracking services'
-            }
-        };
-        
-        // Генерація плану міграції
-        const migrationPhases = {
-            immediate: {
-                title: "Immediate Priority (Week 1-2)",
-                description: "Quick wins with high impact",
-                carriers: [],
-                totalSavings: 0,
-                totalEffort: 0
-            },
-            shortTerm: {
-                title: "Short Term (Month 1)",
-                description: "Medium complexity integrations",
-                carriers: [],
-                totalSavings: 0,
-                totalEffort: 0
-            },
-            longTerm: {
-                title: "Long Term (Month 2-3)",
-                description: "Complex integrations and partnerships",
-                carriers: [],
-                totalSavings: 0,
-                totalEffort: 0
-            }
-        };
-        
-        if (quotaStatus && quotaStatus.carriers) {
-            Object.entries(quotaStatus.carriers).forEach(([carrier, data]) => {
-                const api = apiAvailability[carrier];
-                if (!api || data.provider !== 'trackingmore' || data.used < 1) return;
-                
-                const monthlySavings = data.used * data.cost * 30;
-                const item = {
-                    carrier: carrier,
-                    currentUsage: data.used,
-                    monthlySavings: parseFloat(monthlySavings.toFixed(2)),
-                    developmentDays: api.estimatedDays,
-                    complexity: api.complexity,
-                    availability: api.available,
-                    notes: api.notes,
-                    roi: monthlySavings > 0 ? Math.round(api.estimatedDays / (monthlySavings / 4)) : 0 // ROI в тижнях
-                };
-                
-                // Розподіл по фазах
-                if (api.available && api.complexity === 'low' && data.used > 5) {
-                    migrationPhases.immediate.carriers.push(item);
-                    migrationPhases.immediate.totalSavings += monthlySavings;
-                    migrationPhases.immediate.totalEffort += api.estimatedDays;
-                } else if (api.available && api.complexity === 'medium' && data.used > 2) {
-                    migrationPhases.shortTerm.carriers.push(item);
-                    migrationPhases.shortTerm.totalSavings += monthlySavings;
-                    migrationPhases.shortTerm.totalEffort += api.estimatedDays;
-                } else {
-                    migrationPhases.longTerm.carriers.push(item);
-                    migrationPhases.longTerm.totalSavings += monthlySavings;
-                    migrationPhases.longTerm.totalEffort += api.estimatedDays;
-                }
-            });
-            
-            // Сортування по потенційним заощадженням
-            Object.values(migrationPhases).forEach(phase => {
-                phase.carriers.sort((a, b) => b.monthlySavings - a.monthlySavings);
-                phase.totalSavings = parseFloat(phase.totalSavings.toFixed(2));
-            });
-        }
-        
-        // Загальні рекомендації
-        const recommendations = {
-            nextAction: migrationPhases.immediate.carriers.length > 0 ? 
-                `Start with ${migrationPhases.immediate.carriers[0].carrier} - highest ROI and lowest complexity` :
-                "Continue monitoring usage patterns",
-            timeline: "2-12 weeks for complete migration",
-            totalPotentialSavings: parseFloat((migrationPhases.immediate.totalSavings + 
-                                            migrationPhases.shortTerm.totalSavings + 
-                                            migrationPhases.longTerm.totalSavings).toFixed(2)),
-            breakEvenPoint: "Most integrations pay for themselves within 2-4 weeks"
-        };
-        
-        res.json({
-            success: true,
-            data: {
-                currentStatus: quotaStatus,
-                migrationPhases: migrationPhases,
-                apiAvailability: apiAvailability,
-                recommendations: recommendations,
-                businessCase: {
-                    currentMonthlyCost: parseFloat((Object.values(quotaStatus.carriers)
-                        .reduce((sum, carrier) => sum + (carrier.used * carrier.cost * 30), 0)).toFixed(2)),
-                    projectedSavings: recommendations.totalPotentialSavings,
-                    paybackPeriod: "1-2 months"
-                }
-            },
-            timestamp: new Date().toISOString()
-        });
-        
-    } catch (error) {
-        console.error('Migration plan error:', error);
-        res.status(500).json({
-            success: false,
-            error: 'Failed to generate migration plan',
-            code: 'MIGRATION_PLAN_ERROR'
-        });
-    }
-});
-
-// POST /api/admin/carrier-config - управління конфігурацією перевізників
-router.post('/admin/carrier-config', async (req, res) => {
-    if (!req.user || req.user.subscription_tier !== 'admin') {
-        return res.status(403).json({
-            success: false,
-            error: 'Admin access required',
-            code: 'INSUFFICIENT_PRIVILEGES'
-        });
-    }
-    
-    try {
-        const { action, carrierCode, config } = req.body;
-        
-        if (!action || !carrierCode) {
-            return res.status(400).json({
-                success: false,
-                error: 'Action and carrierCode are required',
-                code: 'MISSING_PARAMETERS'
-            });
-        }
-        
-        const trackingService = new TrackingService(req.redis, req.supabase);
-        const configKey = `carrier_config:${carrierCode}`;
-        
-        switch (action) {
-            case 'enable':
-                if (trackingService.providers[carrierCode]) {
-                    trackingService.providers[carrierCode].enabled = true;
-                    await req.redis.hSet('carrier_configs', carrierCode, JSON.stringify({
-                        ...trackingService.providers[carrierCode],
-                        enabled: true,
-                        updatedAt: new Date().toISOString(),
-                        updatedBy: req.user.id
-                    }));
-                    
-                    res.json({
-                        success: true,
-                        message: `Carrier ${carrierCode} enabled`,
-                        data: trackingService.providers[carrierCode]
-                    });
-                } else {
-                    res.status(404).json({
-                        success: false,
-                        error: 'Carrier not found',
-                        code: 'CARRIER_NOT_FOUND'
-                    });
-                }
-                break;
-                
-            case 'disable':
-                if (trackingService.providers[carrierCode]) {
-                    trackingService.providers[carrierCode].enabled = false;
-                    await req.redis.hSet('carrier_configs', carrierCode, JSON.stringify({
-                        ...trackingService.providers[carrierCode],
-                        enabled: false,
-                        updatedAt: new Date().toISOString(),
-                        updatedBy: req.user.id
-                    }));
-                    
-                    res.json({
-                        success: true,
-                        message: `Carrier ${carrierCode} disabled`,
-                        data: trackingService.providers[carrierCode]
-                    });
-                } else {
-                    res.status(404).json({
-                        success: false,
-                        error: 'Carrier not found',
-                        code: 'CARRIER_NOT_FOUND'
-                    });
-                }
-                break;
-                
-            case 'update_quota':
-                if (trackingService.providers[carrierCode] && config && config.daily_quota) {
-                    trackingService.providers[carrierCode].quota.daily = parseInt(config.daily_quota);
-                    await req.redis.hSet('carrier_configs', carrierCode, JSON.stringify({
-                        ...trackingService.providers[carrierCode],
-                        updatedAt: new Date().toISOString(),
-                        updatedBy: req.user.id
-                    }));
-                    
-                    res.json({
-                        success: true,
-                        message: `Quota updated for ${carrierCode}`,
-                        data: trackingService.providers[carrierCode]
-                    });
-                } else {
-                    res.status(400).json({
-                        success: false,
-                        error: 'Invalid quota configuration',
-                        code: 'INVALID_CONFIG'
-                    });
-                }
-                break;
-                
-            case 'switch_provider':
-                if (trackingService.providers[carrierCode] && config && config.primary_provider) {
-                    const validProviders = ['native', 'trackingmore'];
-                    if (!validProviders.includes(config.primary_provider)) {
-                        return res.status(400).json({
-                            success: false,
-                            error: 'Invalid provider. Must be: ' + validProviders.join(', '),
-                            code: 'INVALID_PROVIDER'
-                        });
-                    }
-                    
-                    trackingService.providers[carrierCode].primary = config.primary_provider;
-                    await req.redis.hSet('carrier_configs', carrierCode, JSON.stringify({
-                        ...trackingService.providers[carrierCode],
-                        updatedAt: new Date().toISOString(),
-                        updatedBy: req.user.id
-                    }));
-                    
-                    res.json({
-                        success: true,
-                        message: `Provider switched to ${config.primary_provider} for ${carrierCode}`,
-                        data: trackingService.providers[carrierCode]
-                    });
-                } else {
-                    res.status(400).json({
-                        success: false,
-                        error: 'Invalid provider configuration',
-                        code: 'INVALID_CONFIG'
-                    });
-                }
-                break;
-                
-            default:
-                res.status(400).json({
-                    success: false,
-                    error: 'Invalid action. Available: enable, disable, update_quota, switch_provider',
-                    code: 'INVALID_ACTION'
-                });
-        }
-        
-    } catch (error) {
-        console.error('Carrier config error:', error);
-        res.status(500).json({
-            success: false,
-            error: 'Failed to update carrier configuration',
-            code: 'CONFIG_UPDATE_ERROR'
-        });
-    }
-});
-
-// GET /api/health-detailed - детальна діагностика системи
-router.get('/health-detailed', async (req, res) => {
+// GET /health-detailed - детальна діагностика системи
+router.get('/health-detailed', attachTrackingService, async (req, res) => {
     try {
         const healthData = {
             timestamp: new Date().toISOString(),
@@ -727,16 +726,12 @@ router.get('/health-detailed', async (req, res) => {
         // Redis діагностика
         try {
             const pingStart = Date.now();
-            await req.redis.ping();
+            await req.redis?.ping();
             const pingTime = Date.now() - pingStart;
-            
-            const redisInfo = await req.redis.info('memory');
-            const memoryMatch = redisInfo.match(/used_memory_human:(.+)/);
             
             healthData.services.redis = {
                 status: 'healthy',
-                ping: pingTime + 'ms',
-                memory: memoryMatch ? memoryMatch[1].trim() : 'unknown'
+                ping: pingTime + 'ms'
             };
             
             if (pingTime > 100) {
@@ -764,14 +759,14 @@ router.get('/health-detailed', async (req, res) => {
             const supabaseStart = Date.now();
             const { data: carriers, error } = await req.supabase
                 .from('carriers')
-                .select('count');
+                .select('count')
+                .limit(1);
                 
             if (error) throw error;
             
             healthData.services.supabase = {
                 status: 'healthy',
-                ping: (Date.now() - supabaseStart) + 'ms',
-                carriers: carriers.length
+                ping: (Date.now() - supabaseStart) + 'ms'
             };
             
         } catch (supabaseError) {
@@ -783,18 +778,6 @@ router.get('/health-detailed', async (req, res) => {
                 service: 'supabase',
                 level: 'critical',
                 message: 'Supabase connection failed'
-            });
-        }
-        
-        // Квоти
-        try {
-            const trackingService = new TrackingService(req.redis, req.supabase);
-            healthData.quotas = await trackingService.getQuotaStatus();
-        } catch (quotaError) {
-            healthData.alerts.push({
-                service: 'quotas',
-                level: 'warning',
-                message: 'Failed to retrieve quota status'
             });
         }
         
