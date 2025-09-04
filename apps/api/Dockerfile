@@ -8,7 +8,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Встановлюємо залежності
-RUN npm ci --only=production && npm cache clean --force
+RUN npm install --omit=dev && npm cache clean --force
 
 # Створюємо non-root користувача для безпеки
 RUN addgroup -g 1001 -S nodejs && \
@@ -35,4 +35,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     }).on('error', () => process.exit(1));"
 
 # Запускаємо додаток
-CMD ["npm", "start"]
+CMD ["node", "src/index.js"]
