@@ -2,138 +2,265 @@
 const ProviderFactory = require('../providers/ProviderFactory');
 
 class MultiSourceResolver {
-    constructor(quotaManager) {
+    constructor(quotaManager, options = {}) {
         this.quotaManager = quotaManager;
+        this.options = {
+            maxConcurrentRequests: 3,
+            timeoutMs: 30000,
+            retryAttempts: 2,
+            retryDelayMs: 1000,
+            enableConflictResolution: true,
+            logVerbose: process.env.NODE_ENV === 'development',
+            ...options
+        };
     }
 
     async resolve(trackingNumber, sources, options = {}) {
+        const startTime = Date.now();
+        const resolveOptions = { ...this.options, ...options };
+        
         try {
-            // Фаза 1: Native APIs (безкоштовні) - паралельно
-            const nativeResults = await this.tryNativeSources(trackingNumber, sources);
-            
-            if (this.hasGoodResult(nativeResults)) {
-                return this.createSuccessResponse(nativeResults, trackingNumber, 'native');
+            this.log(`Starting resolution for ${trackingNumber} with ${sources.length} sources`);
+
+            // Валідація вхідних даних
+            if (!this.validateInputs(trackingNumber, sources)) {
+                return this.createErrorResponse('Invalid input parameters', trackingNumber);
             }
 
-            // Фаза 2: TrackingMore (платні) - тільки якщо native не дали результату
-            const paidResults = await this.tryPaidSources(trackingNumber, sources, nativeResults);
+            // Фаза 1: Native APIs (безкоштовні) - паралельно з обмеженням
+            const nativeResults = await this.tryNativeSources(trackingNumber, sources, resolveOptions);
+            this.log(`Native phase completed: ${nativeResults.length} successful results`);
+            
+            if (this.hasGoodResult(nativeResults)) {
+                const response = this.createSuccessResponse(nativeResults, trackingNumber, 'native');
+                response.processingTime = Date.now() - startTime;
+                return response;
+            }
+
+            // Фаза 2: Paid APIs - тільки якщо native не дали результату
+            const paidResults = await this.tryPaidSources(trackingNumber, sources, nativeResults, resolveOptions);
+            this.log(`Paid phase completed: ${paidResults.length} successful results`);
             
             if (this.hasGoodResult(paidResults)) {
-                return this.createSuccessResponse(paidResults, trackingNumber, 'paid');
+                const response = this.createSuccessResponse(paidResults, trackingNumber, 'paid');
+                response.processingTime = Date.now() - startTime;
+                return response;
+            }
+
+            // Комбінуємо всі результати, навіть якщо вони неповні
+            const allResults = [...nativeResults, ...paidResults];
+            if (allResults.length > 0) {
+                const response = this.createPartialResponse(allResults, trackingNumber);
+                response.processingTime = Date.now() - startTime;
+                return response;
             }
 
             // Немає результатів з жодного джерела
-            return this.createFailureResponse(trackingNumber, sources, nativeResults, paidResults);
+            return this.createFailureResponse(trackingNumber, sources, nativeResults, paidResults, startTime);
 
         } catch (error) {
-            console.error('MultiSourceResolver error:', error.message);
-            return {
-                success: false,
-                error: error.message,
-                trackingNumber: trackingNumber,
-                timestamp: new Date().toISOString()
-            };
+            this.log(`MultiSourceResolver critical error: ${error.message}`, 'error');
+            return this.createErrorResponse(error.message, trackingNumber, startTime);
         }
     }
 
-    async tryNativeSources(trackingNumber, sources) {
+    validateInputs(trackingNumber, sources) {
+        if (!trackingNumber || typeof trackingNumber !== 'string' || trackingNumber.trim().length === 0) {
+            return false;
+        }
+        if (!Array.isArray(sources) || sources.length === 0) {
+            return false;
+        }
+        return sources.every(source => source.code && source.name);
+    }
+
+    async tryNativeSources(trackingNumber, sources, options) {
         const nativeSources = sources.filter(s => s.api === 'native');
         if (nativeSources.length === 0) return [];
 
-        console.log(`Trying ${nativeSources.length} native sources for ${trackingNumber}`);
+        this.log(`Trying ${nativeSources.length} native sources for ${trackingNumber}`);
 
-        const promises = nativeSources.map(async (source) => {
+        // Обмежуємо кількість одночасних запитів
+        const chunks = this.chunkArray(nativeSources, options.maxConcurrentRequests);
+        const allResults = [];
+
+        for (const chunk of chunks) {
+            const promises = chunk.map(source => this.trySource(source, trackingNumber, options));
+            const results = await Promise.allSettled(promises);
+            
+            const chunkResults = results
+                .filter(r => r.status === 'fulfilled')
+                .map(r => r.value)
+                .filter(r => r.success);
+
+            allResults.push(...chunkResults);
+
+            // Якщо знайшли гарний результат, не продовжуємо з наступними chunks
+            if (this.hasGoodResult(chunkResults)) {
+                this.log(`Found good result in chunk, stopping native phase`);
+                break;
+            }
+        }
+
+        return allResults;
+    }
+
+    async tryPaidSources(trackingNumber, sources, nativeResults, options) {
+        // Визначаємо які стадії не покрили native sources
+        const coveredStages = new Set(nativeResults.map(r => r.stage));
+        const paidSources = sources.filter(s => 
+            s.api === 'trackingmore' && !coveredStages.has(s.stage)
+        );
+
+        if (paidSources.length === 0) return [];
+
+        this.log(`Trying ${paidSources.length} paid sources for ${trackingNumber}`);
+
+        // Сортуємо за пріоритетом та беремо найкращий
+        const bestPaidSource = paidSources
+            .sort((a, b) => (a.priority || 99) - (b.priority || 99))[0];
+
+        const result = await this.trySource(bestPaidSource, trackingNumber, options);
+        return result.success ? [result] : [];
+    }
+
+    async trySource(source, trackingNumber, options) {
+        let attempt = 0;
+        
+        while (attempt <= options.retryAttempts) {
             try {
+                // Перевіряємо квоти перед запитом
                 await this.quotaManager.checkAndReserve(source.code);
                 
                 const provider = ProviderFactory.create(source.code);
-                const result = await provider.track(trackingNumber);
                 
-                if (result.success) {
-                    await this.quotaManager.recordUsage(source.code, provider.cost);
+                // Встановлюємо timeout для запиту
+                const timeoutPromise = new Promise((_, reject) => {
+                    setTimeout(() => reject(new Error('Request timeout')), options.timeoutMs);
+                });
+
+                const trackPromise = provider.track(trackingNumber, source.code);
+                const result = await Promise.race([trackPromise, timeoutPromise]);
+                
+                if (result.success && this.validateResult(result)) {
+                    await this.quotaManager.recordUsage(source.code, provider.cost || 0);
+                    
                     return {
                         source: source.name,
                         code: source.code,
-                        result: result,
+                        result: this.normalizeResult(result),
                         success: true,
-                        stage: source.stage || 'unknown'
+                        stage: source.stage || 'unknown',
+                        cost: provider.cost || 0,
+                        attempt: attempt + 1
                     };
+                }
+                
+                // Неуспішний результат, але без retry
+                await this.quotaManager.releaseReservation(source.code);
+                return {
+                    source: source.name,
+                    code: source.code,
+                    success: false,
+                    error: result.error || 'No tracking data available',
+                    attempt: attempt + 1
+                };
+
+            } catch (error) {
+                await this.quotaManager.releaseReservation(source.code);
+                
+                attempt++;
+                if (attempt <= options.retryAttempts) {
+                    this.log(`Retrying ${source.code} (attempt ${attempt}): ${error.message}`);
+                    await this.delay(options.retryDelayMs * attempt);
+                    continue;
                 }
                 
                 return {
                     source: source.name,
                     code: source.code,
                     success: false,
-                    error: result.error || 'No data returned'
-                };
-
-            } catch (error) {
-                await this.quotaManager.releaseReservation(source.code);
-                return {
-                    source: source.name,
-                    code: source.code,
-                    success: false,
-                    error: error.message
+                    error: error.message,
+                    attempt: attempt
                 };
             }
-        });
-
-        const results = await Promise.allSettled(promises);
-        return results
-            .filter(r => r.status === 'fulfilled')
-            .map(r => r.value)
-            .filter(r => r.success);
+        }
     }
 
-    async tryPaidSources(trackingNumber, sources, nativeResults) {
-        // Визначаємо які стадії не покрили native sources
-        const coveredStages = nativeResults.map(r => r.stage);
-        const paidSources = sources.filter(s => 
-            s.api === 'trackingmore' && !coveredStages.includes(s.stage)
-        );
+    validateResult(result) {
+        // Перевіряємо чи результат має мінімально необхідну структуру
+        return result && 
+               result.data && 
+               (Array.isArray(result.data.events) || 
+                result.data.status || 
+                result.data.trackingNumber);
+    }
 
-        if (paidSources.length === 0) return [];
-
-        console.log(`Trying ${paidSources.length} paid sources for ${trackingNumber}`);
-
-        // Для TrackingMore беремо тільки найпріоритетнішого
-        const bestPaidSource = paidSources.sort((a, b) => (a.priority || 99) - (b.priority || 99))[0];
-
-        try {
-            await this.quotaManager.checkAndReserve('trackingmore');
-            
-            const provider = ProviderFactory.create('trackingmore');
-            const result = await provider.track(trackingNumber, bestPaidSource.code);
-            
-            if (result.success) {
-                await this.quotaManager.recordUsage('trackingmore', provider.cost);
-                return [{
-                    source: bestPaidSource.name,
-                    code: bestPaidSource.code,
-                    result: result,
-                    success: true,
-                    stage: bestPaidSource.stage || 'unknown'
-                }];
+    normalizeResult(result) {
+        // Нормалізуємо структуру даних з різних провайдерів
+        const normalized = { ...result };
+        
+        if (normalized.data) {
+            // Забезпечуємо що events завжди є масивом
+            if (!normalized.data.events) {
+                normalized.data.events = [];
+            } else if (!Array.isArray(normalized.data.events)) {
+                normalized.data.events = [];
             }
-            
-            return [];
 
-        } catch (error) {
-            await this.quotaManager.releaseReservation('trackingmore');
-            console.warn('Paid source failed:', error.message);
-            return [];
+            // Нормалізуємо формат дати в events
+            normalized.data.events = normalized.data.events.map(event => ({
+                ...event,
+                date: this.normalizeDate(event.date || event.datetime || event.timestamp),
+                status: event.status || event.description || 'Unknown',
+                location: event.location || event.place || ''
+            }));
+
+            // Додаємо метадані якщо відсутні
+            if (!normalized.data.lastUpdate) {
+                const latestEvent = normalized.data.events[normalized.data.events.length - 1];
+                normalized.data.lastUpdate = latestEvent?.date || new Date().toISOString();
+            }
+        }
+
+        return normalized;
+    }
+
+    normalizeDate(dateInput) {
+        if (!dateInput) return new Date().toISOString();
+        
+        try {
+            const date = new Date(dateInput);
+            return isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
+        } catch {
+            return new Date().toISOString();
         }
     }
 
     hasGoodResult(results) {
-        return results.some(r => r.success && r.result.data && r.result.data.events.length > 0);
+        return results.some(r => {
+            if (!r.success || !r.result?.data) return false;
+            
+            // Перевіряємо різні критерії "хорошого" результату
+            const data = r.result.data;
+            
+            // Має події
+            if (Array.isArray(data.events) && data.events.length > 0) return true;
+            
+            // Має статус (навіть без подій)
+            if (data.status && data.status !== 'unknown') return true;
+            
+            // Має базову інформацію про посилку
+            if (data.trackingNumber || data.carrier) return true;
+            
+            return false;
+        });
     }
 
     createSuccessResponse(results, trackingNumber, phase) {
         const successfulResults = results.filter(r => r.success);
         
         if (successfulResults.length === 1) {
-            // Один результат
             const result = successfulResults[0];
             return {
                 success: true,
@@ -142,11 +269,16 @@ class MultiSourceResolver {
                 primarySource: result.source,
                 phase: phase,
                 multiSource: false,
+                metadata: {
+                    cost: result.cost,
+                    attempts: result.attempt,
+                    cached: false
+                },
                 timestamp: new Date().toISOString()
             };
         }
 
-        // Кілька результатів - агрегація
+        // Агрегація кількох результатів
         const aggregated = this.aggregateResults(successfulResults, trackingNumber);
         return {
             success: true,
@@ -157,6 +289,30 @@ class MultiSourceResolver {
             phase: phase,
             multiSource: true,
             conflictsResolved: aggregated.conflicts,
+            metadata: {
+                totalCost: successfulResults.reduce((sum, r) => sum + (r.cost || 0), 0),
+                totalAttempts: successfulResults.reduce((sum, r) => sum + (r.attempt || 1), 0),
+                cached: false
+            },
+            timestamp: new Date().toISOString()
+        };
+    }
+
+    createPartialResponse(results, trackingNumber) {
+        // Створюємо відповідь навіть з неповними даними
+        const bestResult = results.find(r => r.success) || results[0];
+        
+        return {
+            success: true,
+            partial: true,
+            data: bestResult?.result?.data || { 
+                events: [], 
+                status: 'unknown',
+                trackingNumber 
+            },
+            sources: results.map(r => r.source),
+            primarySource: bestResult?.source || 'unknown',
+            warnings: ['Incomplete tracking data from available sources'],
             timestamp: new Date().toISOString()
         };
     }
@@ -164,88 +320,230 @@ class MultiSourceResolver {
     aggregateResults(results, trackingNumber) {
         // Вибираємо найкращий результат як primary
         const primary = results.reduce((best, current) => {
-            const currentEvents = current.result.data.events?.length || 0;
-            const bestEvents = best.result.data.events?.length || 0;
-            
-            // Пріоритет: більше events > native API > новіші дані
-            if (currentEvents > bestEvents) return current;
-            if (currentEvents === bestEvents) {
-                // При рівній кількості events віддаємо перевагу native API
-                if (current.result.cost === 0 && best.result.cost > 0) return current;
-                if (best.result.cost === 0 && current.result.cost > 0) return best;
-                
-                // При рівних умовах - свіжіші дані
-                const currentUpdate = new Date(current.result.data.lastUpdate);
-                const bestUpdate = new Date(best.result.data.lastUpdate);
-                if (currentUpdate > bestUpdate) return current;
-            }
-            return best;
+            const currentScore = this.calculateResultScore(current);
+            const bestScore = this.calculateResultScore(best);
+            return currentScore > bestScore ? current : best;
         });
 
-        // Об'єднуємо всі події з різних джерел
-        const allEvents = results
-            .flatMap(r => 
-                (r.result.data.events || []).map(event => ({
-                    ...event,
-                    source: r.source
-                }))
-            )
-            .sort((a, b) => new Date(a.date) - new Date(b.date))
-            .filter((event, index, arr) => {
-                // Видаляємо дублікати на основі дати та статусу
-                return index === arr.findIndex(e => 
-                    e.date === event.date && e.status === event.status
-                );
-            });
-
+        // Об'єднуємо всі події
+        const allEvents = this.mergeEvents(results);
+        
         // Виявляємо конфлікти
-        const conflicts = this.detectConflicts(results);
+        const conflicts = this.options.enableConflictResolution ? 
+            this.detectConflicts(results) : [];
 
         return {
             data: {
                 ...primary.result.data,
                 events: allEvents,
-                coverage: {
-                    export: results.some(r => r.stage === 'export'),
-                    transit: results.some(r => r.stage === 'transit'),
-                    import: results.some(r => r.stage === 'import'),
-                    domestic: results.some(r => r.stage === 'domestic')
-                }
+                coverage: this.calculateCoverage(results),
+                confidence: this.calculateConfidence(results)
             },
             primarySource: primary.source,
-            alternativeSources: results.filter(r => r !== primary).map(r => r.source),
+            alternativeSources: results
+                .filter(r => r !== primary)
+                .map(r => r.source),
             conflicts: conflicts
         };
+    }
+
+    calculateResultScore(result) {
+        let score = 0;
+        const data = result.result?.data;
+        
+        if (!data) return 0;
+        
+        // Бали за кількість подій
+        score += (data.events?.length || 0) * 10;
+        
+        // Бали за наявність статусу
+        if (data.status && data.status !== 'unknown') score += 5;
+        
+        // Бали за native API (безкоштовні)
+        if (result.cost === 0) score += 3;
+        
+        // Бали за свіжість даних
+        if (data.lastUpdate) {
+            const age = Date.now() - new Date(data.lastUpdate).getTime();
+            if (age < 24 * 60 * 60 * 1000) score += 2; // Менше доби
+        }
+        
+        return score;
+    }
+
+    mergeEvents(results) {
+        const allEvents = results
+            .flatMap(r => 
+                (r.result?.data?.events || []).map(event => ({
+                    ...event,
+                    source: r.source,
+                    confidence: this.calculateEventConfidence(event, r)
+                }))
+            )
+            .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        // Видаляємо дублікати
+        return allEvents.filter((event, index, arr) => {
+            return index === arr.findIndex(e => 
+                Math.abs(new Date(e.date) - new Date(event.date)) < 60000 && // В межах хвилини
+                this.normalizeStatus(e.status) === this.normalizeStatus(event.status)
+            );
+        });
+    }
+
+    calculateEventConfidence(event, result) {
+        let confidence = 0.5;
+        
+        // Більша довіра до native API
+        if (result.cost === 0) confidence += 0.3;
+        
+        // Більша довіра до детальних подій
+        if (event.location) confidence += 0.1;
+        if (event.description && event.description.length > 10) confidence += 0.1;
+        
+        return Math.min(confidence, 1.0);
+    }
+
+    normalizeStatus(status) {
+        if (!status) return '';
+        return status.toLowerCase()
+            .replace(/[^\w\s]/g, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+
+    calculateCoverage(results) {
+        const stages = new Set(results.map(r => r.stage));
+        return {
+            export: stages.has('export'),
+            transit: stages.has('transit'),
+            import: stages.has('import'),
+            domestic: stages.has('domestic'),
+            completeness: stages.size / 4
+        };
+    }
+
+    calculateConfidence(results) {
+        if (results.length === 0) return 0;
+        
+        const avgConfidence = results.reduce((sum, r) => {
+            const events = r.result?.data?.events || [];
+            const eventConfidence = events.reduce((eSum, e) => eSum + (e.confidence || 0.5), 0) / events.length || 0.5;
+            return sum + eventConfidence;
+        }, 0) / results.length;
+        
+        return Math.round(avgConfidence * 100) / 100;
     }
 
     detectConflicts(results) {
         const conflicts = [];
         
-        // Перевіряємо конфлікти в статусах
-        const statuses = results.map(r => ({ source: r.source, status: r.result.data.status }));
+        // Конфлікти в статусах
+        const statuses = results
+            .map(r => ({ source: r.source, status: r.result?.data?.status }))
+            .filter(s => s.status);
+            
         const uniqueStatuses = [...new Set(statuses.map(s => s.status))];
         
         if (uniqueStatuses.length > 1) {
             conflicts.push({
                 type: 'status_mismatch',
                 details: statuses,
-                resolution: 'Used most detailed source'
+                resolution: 'Used highest confidence source',
+                severity: 'medium'
             });
         }
 
+        // Конфлікти в часових мітках
+        this.detectTimeConflicts(results, conflicts);
+        
         return conflicts;
     }
 
-    createFailureResponse(trackingNumber, sources, nativeResults, paidResults) {
+    detectTimeConflicts(results, conflicts) {
+        const lastUpdates = results
+            .map(r => ({ 
+                source: r.source, 
+                lastUpdate: r.result?.data?.lastUpdate 
+            }))
+            .filter(u => u.lastUpdate);
+            
+        if (lastUpdates.length > 1) {
+            const dates = lastUpdates.map(u => new Date(u.lastUpdate));
+            const timeDiff = Math.max(...dates) - Math.min(...dates);
+            
+            // Якщо різниця більше 24 годин
+            if (timeDiff > 24 * 60 * 60 * 1000) {
+                conflicts.push({
+                    type: 'time_divergence',
+                    details: lastUpdates,
+                    resolution: 'Used most recent data',
+                    severity: 'low'
+                });
+            }
+        }
+    }
+
+    createFailureResponse(trackingNumber, sources, nativeResults, paidResults, startTime) {
         return {
             success: false,
             error: 'No tracking data found from any source',
             trackingNumber: trackingNumber,
             sourcesAttempted: sources.map(s => s.name),
-            nativeResults: nativeResults.length,
-            paidResults: paidResults.length,
+            results: {
+                native: nativeResults.length,
+                paid: paidResults.length,
+                total: nativeResults.length + paidResults.length
+            },
+            processingTime: startTime ? Date.now() - startTime : undefined,
+            suggestions: this.generateSuggestions(trackingNumber, sources),
             timestamp: new Date().toISOString()
         };
+    }
+
+    createErrorResponse(error, trackingNumber, startTime) {
+        return {
+            success: false,
+            error: error,
+            trackingNumber: trackingNumber,
+            processingTime: startTime ? Date.now() - startTime : undefined,
+            timestamp: new Date().toISOString()
+        };
+    }
+
+    generateSuggestions(trackingNumber, sources) {
+        const suggestions = [];
+        
+        if (trackingNumber.length < 8) {
+            suggestions.push('Tracking number seems too short - please verify');
+        }
+        
+        if (sources.length === 0) {
+            suggestions.push('No carriers detected - try manual carrier selection');
+        }
+        
+        suggestions.push('Try again later - tracking data may not be available yet');
+        
+        return suggestions;
+    }
+
+    // Utility methods
+    chunkArray(array, size) {
+        const chunks = [];
+        for (let i = 0; i < array.length; i += size) {
+            chunks.push(array.slice(i, i + size));
+        }
+        return chunks;
+    }
+
+    delay(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    log(message, level = 'info') {
+        if (this.options.logVerbose || level === 'error') {
+            console[level](`[MultiSourceResolver] ${message}`);
+        }
     }
 }
 

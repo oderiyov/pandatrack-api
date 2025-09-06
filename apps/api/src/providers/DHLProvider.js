@@ -1,129 +1,159 @@
-// apps/api/src/providers/DHLProvider.js
+// apps/api/src/providers/DHLProvider.js - ВИПРАВЛЕННЯ ДЛЯ ЛІМІТІВ
 const BaseProvider = require('./BaseProvider');
 
 class DHLProvider extends BaseProvider {
     constructor(config) {
         super(config);
         this.apiKey = process.env.DHL_API_KEY;
-        this.apiSecret = process.env.DHL_API_SECRET;
+        this.baseUrl = 'https://api-eu.dhl.com/track/shipments';
         
-        if (!this.apiKey || !this.apiSecret) {
-            console.warn('DHL API credentials not found in environment variables');
+        if (!this.apiKey) {
+            console.warn('DHL API key not configured');
         }
     }
 
     async track(trackingNumber, options = {}) {
-        try {
-            const response = await this.makeRequest(
-                'https://api-eu.dhl.com/track/shipments',
-                {
-                    method: 'GET',
-                    params: {
-                        trackingNumber: trackingNumber
-                    },
-                    headers: {
-                        'DHL-API-Key': this.apiKey,
-                        'Authorization': `Basic ${Buffer.from(`${this.apiKey}:${this.apiSecret}`).toString('base64')}`,
-                        'Content-Type': 'application/json'
-                    }
-                }
-            );
+        if (!this.apiKey) {
+            throw new Error('DHL API key not configured');
+        }
 
-            if (response.data.shipments && response.data.shipments.length > 0) {
-                const shipment = response.data.shipments[0];
-                return this.normalizeDHLResponse(shipment, trackingNumber);
+        try {
+            const response = await this.makeRequest(this.baseUrl, {
+                method: 'GET',
+                params: {
+                    trackingNumber: trackingNumber,
+                    service: 'express,parcel,ecommerce',
+                    requesterCountryCode: 'UA'
+                },
+                headers: {
+                    'DHL-API-Key': this.apiKey,
+                    'Accept': 'application/json',
+                    'User-Agent': 'PandaTrack/2.0'
+                },
+                timeout: 15000
+            });
+
+            if (response.data?.shipments?.length > 0) {
+                return this.normalizeDHLResponse(response.data.shipments[0], trackingNumber);
             }
 
             return {
                 success: false,
-                error: 'DHL tracking number not found',
+                error: 'DHL: Номер не знайдено',
                 provider: this.name,
                 trackingNumber: trackingNumber
             };
 
         } catch (error) {
-            console.error(`${this.name} API error:`, error.message);
-            throw new Error(`${this.name} API unavailable: ${error.message}`);
+            console.error(`${this.name} API error:`, error.response?.status, error.message);
+            
+            if (error.response?.status === 429) {
+                throw new Error(`${this.name}: Перевищено ліміт запитів (250/день)`);
+            }
+            if (error.response?.status === 401 || error.response?.status === 403) {
+                throw new Error(`${this.name}: API ключ недійсний або немає доступу`);
+            }
+            if (error.response?.status === 404) {
+                return {
+                    success: false,
+                    error: 'DHL номер не знайдено',
+                    provider: this.name,
+                    trackingNumber: trackingNumber
+                };
+            }
+            
+            throw new Error(`${this.name}: ${error.message}`);
         }
     }
 
+    async healthCheck() {
+        if (!this.apiKey) {
+            return {
+                status: 'error',
+                provider: this.name,
+                error: 'API key not configured',
+                timestamp: new Date().toISOString()
+            };
+        }
+
+        // ВИПРАВЛЕННЯ: Не робимо health check для DHL щоб не витрачати ліміти
+        return {
+            status: 'ok',
+            provider: this.name,
+            note: 'API key configured (health check disabled to preserve quota)',
+            quotaLimit: '250 requests/day',
+            timestamp: new Date().toISOString()
+        };
+    }
+
     normalizeDHLResponse(shipment, trackingNumber) {
+        const events = [];
+        
+        if (shipment.events) {
+            shipment.events.forEach(event => {
+                events.push({
+                    date: event.timestamp,
+                    status: event.description,
+                    location: this.buildLocation(event.location),
+                    description: event.description,
+                    statusCode: event.statusCode
+                });
+            });
+        }
+
         return {
             success: true,
             data: {
                 trackingNumber: trackingNumber,
                 carrier: 'dhl',
                 status: shipment.status?.description || 'Unknown',
-                statusCode: shipment.status?.statusCode,
+                normalizedStatus: this.mapStatus(shipment.status?.statusCode),
                 lastUpdate: shipment.status?.timestamp || new Date().toISOString(),
-                events: shipment.events?.map(event => ({
-                    date: event.timestamp,
-                    status: event.description,
-                    location: event.location?.address?.addressLocality || '',
-                    description: event.description
-                })) || [],
+                events: events,
                 estimatedDelivery: shipment.estimatedTimeOfDelivery,
+                service: shipment.service,
                 raw: shipment
             },
             provider: this.name,
-            cost: 0, // 250 безкоштовних запитів/день
+            cost: 0,
+            supportsInternational: true,
             timestamp: new Date().toISOString()
         };
+    }
+
+    buildLocation(location) {
+        if (!location?.address) return '';
+        const parts = [];
+        if (location.address.addressLocality) parts.push(location.address.addressLocality);
+        if (location.address.countryCode) parts.push(location.address.countryCode);
+        return parts.join(', ');
+    }
+
+    mapStatus(statusCode) {
+        if (!statusCode) return 'unknown';
+        
+        const statusMap = {
+            'transit': 'in_transit',
+            'delivered': 'delivered',
+            'picked-up': 'accepted',
+            'pre-transit': 'accepted',
+            'out-for-delivery': 'out_for_delivery',
+            'delivery-attempt': 'delivery_attempt',
+            'exception': 'exception',
+            'returned': 'returning'
+        };
+        
+        return statusMap[statusCode.toLowerCase()] || 'in_transit';
     }
 
     canHandle(trackingNumber, carrierCode = null) {
         const number = trackingNumber.trim().replace(/\s/g, '');
         
-        // DHL формати
-        if (/^\d{10}$/.test(number)) return true;
-        if (/^\d{11}$/.test(number)) return true;
-        if (/^[A-Z]{2}\d{9}[A-Z]{2}$/.test(number)) return true;
+        if (/^\d{10,11}$/.test(number)) return true;
         if (/^JD\d{18}$/.test(number)) return true;
-        if (/^\d{12}$/.test(number)) return true; // Може конфліктувати з іншими
+        if (/^[A-Z]{2}\d{9}[A-Z]{2}$/.test(number)) return true;
         
         return false;
-    }
-
-    async healthCheck() {
-        if (!this.apiKey || !this.apiSecret) {
-            return {
-                status: 'error',
-                provider: this.name,
-                error: 'API credentials missing',
-                timestamp: new Date().toISOString()
-            };
-        }
-
-        try {
-            // Тестовий запит до DHL API
-            const response = await this.makeRequest(
-                'https://api-eu.dhl.com/track/shipments',
-                {
-                    method: 'GET',
-                    params: { trackingNumber: '00340434161536070000' }, // DHL test number
-                    headers: {
-                        'DHL-API-Key': this.apiKey,
-                        'Authorization': `Basic ${Buffer.from(`${this.apiKey}:${this.apiSecret}`).toString('base64')}`
-                    }
-                }
-            );
-            
-            return {
-                status: response.status < 500 ? 'ok' : 'error',
-                provider: this.name,
-                apiKeyValid: !!this.apiKey,
-                quotaRemaining: 250, // DHL дає 250/день
-                responseCode: response.status,
-                timestamp: new Date().toISOString()
-            };
-        } catch (error) {
-            return {
-                status: 'error',
-                provider: this.name,
-                error: error.message,
-                timestamp: new Date().toISOString()
-            };
-        }
     }
 }
 

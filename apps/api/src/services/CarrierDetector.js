@@ -18,9 +18,43 @@ class CarrierDetector {
                 { pattern: /^20\d{12}$/, confidence: 'high', stage: 'domestic' },
                 { pattern: /^59\d{12}$/, confidence: 'high', stage: 'domestic' }
             ],
+            
+            // ВИПРАВЛЕНО: Delivery Auto з підтримкою звичайних цифрових номерів
+            'delivery-auto': [
+                { pattern: /^DA\d{8,12}$/, confidence: 'high', stage: 'domestic' },
+                { pattern: /^\d{8,10}DA$/, confidence: 'medium', stage: 'domestic' },
+                { pattern: /^DELIVERY\d{6,10}$/, confidence: 'high', stage: 'domestic' },
+                { pattern: /^DLV\d{8,12}$/, confidence: 'medium', stage: 'domestic' },
+                // ДОДАНО: Підтримка звичайних номерів Delivery Auto
+                { pattern: /^0\d{9,10}$/, confidence: 'medium', stage: 'domestic' }, // Номери що починаються з 0
+                { pattern: /^\d{10,12}$/, confidence: 'low', stage: 'domestic' }     // Загальні 10-12 цифрові номери
+            ],
+            
+            // ВИПРАВЛЕНО: SAT з підтримкою звичайних номерів
+            'sat': [
+                { pattern: /^SAT\d{8,12}$/, confidence: 'high', stage: 'domestic' },
+                { pattern: /^ST\d{10,12}$/, confidence: 'medium', stage: 'domestic' },
+                { pattern: /^SATELLITE\d{6,10}$/, confidence: 'high', stage: 'domestic' },
+                // ДОДАНО: Підтримка звичайних номерів SAT
+                { pattern: /^\d{8,12}$/, confidence: 'low', stage: 'domestic' }
+            ],
+
+            // ВИПРАВЛЕНО: DHL з кращою підтримкою
+            'dhl': [
+                { pattern: /^\d{10}$/, confidence: 'high', stage: 'international' },
+                { pattern: /^\d{11}$/, confidence: 'high', stage: 'international' },
+                { pattern: /^JD\d{18}$/, confidence: 'high', stage: 'international' },
+                { pattern: /^\d{4}\s?\d{4}\s?\d{4}$/, confidence: 'medium', stage: 'international' },
+                // ДОДАНО: Кращі DHL формати
+                { pattern: /^\d{12}$/, confidence: 'medium', stage: 'international' },
+                { pattern: /^\d{9}$/, confidence: 'medium', stage: 'international' },
+                { pattern: /^[A-Z]{2}\d{9}[A-Z]{2}$/, confidence: 'medium', stage: 'international' }
+            ],
+
+            // Інші українські (lower priority)
             'meest-express': [
                 { pattern: /^ME\d{10,12}$/, confidence: 'high', stage: 'domestic' },
-                { pattern: /^M\d{8,10}$/, confidence: 'medium', stage: 'domestic' },
+                { pattern: /^M\d{8,10}$/, confidence: 'low', stage: 'domestic' },
                 { pattern: /^MEST\d{8,12}$/, confidence: 'high', stage: 'domestic' }
             ],
             'justin': [
@@ -28,28 +62,10 @@ class CarrierDetector {
                 { pattern: /^JU\d{8,12}$/, confidence: 'high', stage: 'domestic' },
                 { pattern: /^JUST\d{8,12}$/, confidence: 'high', stage: 'domestic' }
             ],
-            'delivery-auto': [
-                { pattern: /^DA\d{8,12}$/, confidence: 'high', stage: 'domestic' },
-                { pattern: /^\d{8,10}DA$/, confidence: 'medium', stage: 'domestic' },
-                { pattern: /^DELIVERY\d{6,10}$/, confidence: 'high', stage: 'domestic' },
-                { pattern: /^DLV\d{8,12}$/, confidence: 'medium', stage: 'domestic' }
-            ],
-            'sat': [
-                { pattern: /^SAT\d{8,12}$/, confidence: 'high', stage: 'domestic' },
-                { pattern: /^ST\d{10,12}$/, confidence: 'medium', stage: 'domestic' },
-                { pattern: /^SATELLITE\d{6,10}$/, confidence: 'high', stage: 'domestic' }
-            ],
 
             // Міжнародні перевізники
-            'dhl': [
-                { pattern: /^\d{10}$/, confidence: 'high', stage: 'international' },
-                { pattern: /^\d{11}$/, confidence: 'high', stage: 'international' },
-                { pattern: /^[A-Z]{2}\d{9}[A-Z]{2}$/, confidence: 'medium', stage: 'international' },
-                { pattern: /^JD\d{18}$/, confidence: 'high', stage: 'international' },
-                { pattern: /^\d{4}\s?\d{4}\s?\d{4}$/, confidence: 'medium', stage: 'international' }
-            ],
             'fedex': [
-                { pattern: /^\d{12,14}$/, confidence: 'medium', stage: 'international' },
+                { pattern: /^\d{12,14}$/, confidence: 'low', stage: 'international' }, // Знизили пріоритет
                 { pattern: /^\d{20}$/, confidence: 'high', stage: 'international' },
                 { pattern: /^\d{22}$/, confidence: 'high', stage: 'international' },
                 { pattern: /^96\d{20}$/, confidence: 'high', stage: 'international' }
@@ -65,7 +81,7 @@ class CarrierDetector {
                 { pattern: /^R[A-Z]\d{9}CN$/, confidence: 'high', stage: 'export' }
             ],
             'cainiao': [
-                { pattern: /^[A-Z]{2}\d{9}[A-Z]{2}$/, confidence: 'medium', stage: 'export' }
+                { pattern: /^[A-Z]{2}\d{9}[A-Z]{2}$/, confidence: 'low', stage: 'export' } // Знизили пріоритет
             ],
 
             // Європейські пошти
@@ -88,30 +104,59 @@ class CarrierDetector {
         const number = trackingNumber.trim().toUpperCase().replace(/\s+/g, '');
         const sources = [];
 
+        // ВИПРАВЛЕНО: Сортуємо за пріоритетом та confidence
+        const matches = [];
+        
         for (const [carrierCode, patterns] of Object.entries(this.patterns)) {
             for (const patternInfo of patterns) {
                 if (patternInfo.pattern.test(number)) {
                     const apiType = this.getApiType(carrierCode);
+                    const confidenceScore = this.getConfidenceScore(patternInfo.confidence);
+                    const priorityScore = this.getPriority(carrierCode, apiType);
                     
-                    sources.push({
+                    matches.push({
                         id: this.getCarrierId(carrierCode),
                         code: carrierCode,
                         name: this.getCarrierName(carrierCode),
                         api: apiType,
                         stage: patternInfo.stage,
                         confidence: patternInfo.confidence,
-                        priority: this.getPriority(carrierCode, apiType)
+                        confidenceScore: confidenceScore,
+                        priority: priorityScore,
+                        totalScore: confidenceScore * 10 + (100 - priorityScore) // Вища confidence важливіша
                     });
-                    break;
                 }
             }
         }
 
+        // Сортуємо за загальним скором (вища confidence + нижчий priority = кращий результат)
+        matches.sort((a, b) => b.totalScore - a.totalScore);
+        
+        // Беремо тільки найкращі збіги (не більше 3)
+        const bestMatches = matches.slice(0, 3);
+        
+        sources.push(...bestMatches);
+
+        // Міжнародні номери (додаткова логіка)
         if (/^[A-Z]{2}\d{9}[A-Z]{2}$/.test(number)) {
-            sources.push(...this.detectInternationalSources(number));
+            const internationalSources = this.detectInternationalSources(number);
+            // Додаємо тільки якщо ще немає кращих збігів
+            if (sources.length === 0) {
+                sources.push(...internationalSources);
+            }
         }
 
-        return sources.sort((a, b) => (a.priority || 99) - (b.priority || 99));
+        return sources;
+    }
+
+    getConfidenceScore(confidence) {
+        const scores = {
+            'high': 3,
+            'medium': 2,
+            'low': 1,
+            'very-low': 0
+        };
+        return scores[confidence] || 0;
     }
 
     detectInternationalSources(number) {

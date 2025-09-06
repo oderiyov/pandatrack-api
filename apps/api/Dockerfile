@@ -15,7 +15,7 @@ RUN addgroup -g 1001 -S nodejs && \
     adduser -S pandatrack -u 1001
 
 # Копіюємо вихідний код
-COPY --chown=pandatrack:nodejs src/ ./src/
+COPY --chown=pandatrack:nodejs . ./
 
 # Встановлюємо права доступу
 RUN chown -R pandatrack:nodejs /app && \

@@ -73,7 +73,7 @@ class TrackingService {
             
             if (result.success) {
                 // 5. Кешування успішного результату
-                const ttl = this.calculateTTL(result.consolidatedStatus);
+                const ttl = this.calculateTTL(result.data?.status);
                 await this.cacheManager.set(trackingNumber, result, ttl);
 
                 // 6. Збереження в базу (якщо є userId)
@@ -103,17 +103,46 @@ class TrackingService {
         }
     }
 
-    // COMPATIBILITY METHOD - алієс для routes/track.js
+    // COMPATIBILITY METHOD - ВИПРАВЛЕНИЙ для routes/track.js
     async trackShipment(trackingNumber, source = null, forceRefresh = false, options = {}) {
         const userId = options.userId || null;
         const trackingOptions = {
             forceRefresh,
-            source, // специфічний провайдер якщо заданий
-            multiSource: options.multiSource !== false, // за замовчуванням true
+            source,
+            multiSource: options.multiSource !== false,
             ...options
         };
         
-        return await this.track(trackingNumber, userId, trackingOptions);
+        const result = await this.track(trackingNumber, userId, trackingOptions);
+        
+        // КРИТИЧНО: Конвертуємо нову структуру MultiSourceResolver в стару для routes
+        if (result.success) {
+            return {
+                success: true,
+                trackingNumber: trackingNumber,
+                consolidatedStatus: result.data?.status || 'unknown',
+                consolidatedMessage: result.data?.status || '',
+                lastUpdate: result.data?.lastUpdate || new Date().toISOString(),
+                estimatedDelivery: result.data?.estimatedDelivery || null,
+                sources: [{
+                    provider: result.primarySource || 'unknown',
+                    status: result.data?.status || 'unknown',
+                    message: result.data?.status || '',
+                    events: result.data?.events || [],
+                    cost: result.metadata?.cost || 0,
+                    cached: result.cached || false,
+                    supportsInternational: false
+                }],
+                cached: result.cached || false
+            };
+        }
+        
+        return {
+            success: false,
+            error: result.error || 'Tracking failed',
+            sourcesChecked: 0,
+            cached: false
+        };
     }
 
     // PROVIDER MANAGEMENT METHODS - для routes сумісності
@@ -209,17 +238,17 @@ class TrackingService {
         const statusLower = (status || '').toLowerCase();
         
         // Доставлені посилки кешуємо довго
-        if (statusLower.includes('delivered') || statusLower.includes('доставлен')) {
+        if (statusLower.includes('delivered') || statusLower.includes('доставлен') || statusLower.includes('отримано')) {
             return 86400; // 24 години
         }
         
         // Посилки в дорозі оновлюються частіше
-        if (statusLower.includes('transit') || statusLower.includes('в пути')) {
+        if (statusLower.includes('transit') || statusLower.includes('в пути') || statusLower.includes('відправлен')) {
             return 3600; // 1 година
         }
         
         // Нові посилки можуть швидко змінити статус
-        if (statusLower.includes('created') || statusLower.includes('принят')) {
+        if (statusLower.includes('created') || statusLower.includes('принят') || statusLower.includes('прийнято')) {
             return 14400; // 4 години
         }
         
@@ -254,21 +283,20 @@ class TrackingService {
                 await this.supabase
                     .from('shipments')
                     .update({
-                        status: trackingResult.consolidatedStatus,
-                        status_code: trackingResult.sources[0]?.statusCode || null,
-                        last_update: trackingResult.lastUpdate,
-                        estimated_delivery: trackingResult.estimatedDelivery,
+                        status: trackingResult.data?.status,
+                        status_code: trackingResult.data?.statusCode || null,
+                        last_update: trackingResult.data?.lastUpdate,
+                        estimated_delivery: trackingResult.data?.estimatedDelivery,
                         updated_at: new Date().toISOString()
                     })
                     .eq('id', existing.id);
 
-                // Оновлюємо події з усіх джерел
-                if (trackingResult.sources && trackingResult.sources.length > 0) {
-                    await this.updateEventsFromSources(existing.id, trackingResult.sources);
+                // Оновлюємо події
+                if (trackingResult.data?.events && trackingResult.data.events.length > 0) {
+                    await this.updateEventsFromNewStructure(existing.id, trackingResult);
                 }
             } else {
                 // Створюємо новий запис
-                const primarySource = trackingResult.sources[0];
                 const carrierId = this.carrierDetector.detectCarrier(trackingNumber).id;
                 
                 const { data: shipment } = await this.supabase
@@ -278,18 +306,18 @@ class TrackingService {
                         tracking_number: encryptedNumber,
                         tracking_hash: hashedNumber,
                         carrier_id: carrierId,
-                        status: trackingResult.consolidatedStatus,
-                        status_code: primarySource?.statusCode || null,
-                        last_update: trackingResult.lastUpdate,
-                        estimated_delivery: trackingResult.estimatedDelivery,
+                        status: trackingResult.data?.status,
+                        status_code: trackingResult.data?.statusCode || null,
+                        last_update: trackingResult.data?.lastUpdate,
+                        estimated_delivery: trackingResult.data?.estimatedDelivery,
                         created_at: new Date().toISOString(),
                         updated_at: new Date().toISOString()
                     })
                     .select('id')
                     .single();
 
-                if (shipment && trackingResult.sources) {
-                    await this.insertEventsFromSources(shipment.id, trackingResult.sources);
+                if (shipment && trackingResult.data?.events) {
+                    await this.insertEventsFromNewStructure(shipment.id, trackingResult);
                 }
             }
         } catch (error) {
@@ -297,7 +325,59 @@ class TrackingService {
         }
     }
 
-    // EVENTS MANAGEMENT - для multi-source архітектури
+    // EVENTS MANAGEMENT - оновлено для нової структури MultiSourceResolver
+    async updateEventsFromNewStructure(shipmentId, trackingResult) {
+        try {
+            const events = trackingResult.data?.events || [];
+            const source = trackingResult.primarySource || 'unknown';
+            
+            if (events.length > 0) {
+                const formattedEvents = events.map(event => ({
+                    shipment_id: shipmentId,
+                    event_date: event.date || new Date().toISOString(),
+                    status: event.status || 'Unknown',
+                    location: event.location || '',
+                    description: event.description || event.status || '',
+                    source: event.source || source
+                }));
+
+                await this.supabase
+                    .from('events')
+                    .upsert(formattedEvents, { 
+                        onConflict: 'shipment_id,event_date,status,source',
+                        ignoreDuplicates: true 
+                    });
+            }
+        } catch (error) {
+            console.error('Events update error:', error.message);
+        }
+    }
+
+    async insertEventsFromNewStructure(shipmentId, trackingResult) {
+        try {
+            const events = trackingResult.data?.events || [];
+            const source = trackingResult.primarySource || 'unknown';
+            
+            if (events.length > 0) {
+                const formattedEvents = events.map(event => ({
+                    shipment_id: shipmentId,
+                    event_date: event.date || new Date().toISOString(),
+                    status: event.status || 'Unknown',
+                    location: event.location || '',
+                    description: event.description || event.status || '',
+                    source: event.source || source
+                }));
+
+                await this.supabase
+                    .from('events')
+                    .insert(formattedEvents);
+            }
+        } catch (error) {
+            console.error('Events insert error:', error.message);
+        }
+    }
+
+    // LEGACY EVENTS METHODS - для старої структури (backward compatibility)
     async updateEventsFromSources(shipmentId, sources) {
         try {
             const allEvents = [];
