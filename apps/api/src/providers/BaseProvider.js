@@ -18,7 +18,6 @@ class BaseProvider {
 
     async healthCheck() {
         try {
-            // Базовий health check - спробувати трекінг з тестовим номером
             return { status: 'ok', provider: this.name, timestamp: new Date().toISOString() };
         } catch (error) {
             return { status: 'error', provider: this.name, error: error.message };
@@ -63,36 +62,102 @@ class BaseProvider {
     }
 
     async makeRequest(url, options = {}) {
+        const startTime = Date.now();
+        
+        // ВИПРАВЛЕННЯ: Правильне формування axios config
         const config = {
-            timeout: this.timeout,
+            method: options.method || 'GET',
+            url: url,
+            timeout: options.timeout || this.timeout,
             headers: {
-                'User-Agent': 'PandaTrack/1.0',
+                'User-Agent': 'PandaTrack/2.0',
+                'Accept': 'application/json',
                 ...options.headers
-            },
-            ...options
+            }
         };
 
+        // ВИПРАВЛЕННЯ: Додаємо params для GET запитів
+        if (options.params) {
+            config.params = options.params;
+        }
+
+        // ВИПРАВЛЕННЯ: Додаємо data для POST запитів
+        if (options.data) {
+            config.data = options.data;
+        }
+
+        // ВИПРАВЛЕННЯ: Встановлюємо Content-Type для POST
+        if (config.method === 'POST' && !config.headers['Content-Type']) {
+            config.headers['Content-Type'] = 'application/json';
+        }
+
         try {
-            const response = await axios(url, config);
+            const response = await axios(config);
+            
+            // Додаємо responseTime для моніторингу
+            response.responseTime = Date.now() - startTime;
+            
             return response;
         } catch (error) {
+            const responseTime = Date.now() - startTime;
+            
             if (error.code === 'ECONNABORTED') {
-                throw new Error(`${this.name} API timeout after ${this.timeout}ms`);
+                throw new Error(`${this.name} API timeout after ${options.timeout || this.timeout}ms`);
             }
             if (error.response) {
-                throw new Error(`${this.name} API error: ${error.response.status} ${error.response.statusText}`);
+                // Додаємо більше інформації про помилку
+                const errorMsg = `${this.name} API error: ${error.response.status} ${error.response.statusText}`;
+                const customError = new Error(errorMsg);
+                customError.response = error.response;
+                customError.responseTime = responseTime;
+                throw customError;
             }
+            
             throw new Error(`${this.name} API unavailable: ${error.message}`);
         }
     }
 
     canHandle(trackingNumber, carrierCode = null) {
-        // Override в дочірніх класах для специфічної логіки
         return true;
     }
 
     supportsStage(stage) {
         return this.stages.includes(stage) || this.stages.includes('all');
+    }
+
+    // НОВИЙ МЕТОД: Спрощений makeRequest для простих GET запитів
+    async makeSimpleRequest(url, headers = {}) {
+        const startTime = Date.now();
+        
+        try {
+            const response = await axios.get(url, {
+                timeout: this.timeout,
+                headers: {
+                    'User-Agent': 'PandaTrack/2.0',
+                    'Accept': 'application/json',
+                    ...headers
+                }
+            });
+            
+            response.responseTime = Date.now() - startTime;
+            return response;
+            
+        } catch (error) {
+            const responseTime = Date.now() - startTime;
+            
+            if (error.code === 'ECONNABORTED') {
+                throw new Error(`${this.name} API timeout after ${this.timeout}ms`);
+            }
+            if (error.response) {
+                const errorMsg = `${this.name} API error: ${error.response.status} ${error.response.statusText}`;
+                const customError = new Error(errorMsg);
+                customError.response = error.response;
+                customError.responseTime = responseTime;
+                throw customError;
+            }
+            
+            throw new Error(`${this.name} API unavailable: ${error.message}`);
+        }
     }
 }
 

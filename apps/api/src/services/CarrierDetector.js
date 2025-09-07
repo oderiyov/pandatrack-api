@@ -1,4 +1,3 @@
-// apps/api/src/services/CarrierDetector.js
 class CarrierDetector {
     constructor() {
         this.patterns = this.initializePatterns();
@@ -8,47 +7,51 @@ class CarrierDetector {
         return {
             // Українські перевізники
             'ukrposhta': [
+                // ВИПРАВЛЕННЯ: Додано 13 цифр (як показав bulk endpoint)
+                { pattern: /^[0-9]{13}$/, confidence: 'high', stage: 'domestic' },
                 { pattern: /^[0-9]{14}$/, confidence: 'high', stage: 'domestic' },
                 { pattern: /^[A-Z]{2}\d{9}UA$/, confidence: 'high', stage: 'import' },
                 { pattern: /^EM\d{9}UA$/, confidence: 'high', stage: 'import' },
                 { pattern: /^CP\d{9}UA$/, confidence: 'high', stage: 'import' },
-                { pattern: /^RG\d{9}UA$/, confidence: 'high', stage: 'import' }
+                { pattern: /^RG\d{9}UA$/, confidence: 'high', stage: 'import' },
+                // ВИПРАВЛЕННЯ: Додано всі UPU міжнародні формати
+                { pattern: /^[A-Z]{2}\d{9}[A-Z]{2}$/, confidence: 'high', stage: 'international' },
+                // Розширені UPU patterns з документації
+                { pattern: /^(RA|RB|RC|RD|RE|RG|RH|RI|RJ|RK|RL|RM|RN|RO|RP|RQ|RR|RS|RT|RU|RV|RW|RX|RY|RZ)\d{9}[A-Z]{2}$/, confidence: 'high', stage: 'international' },
+                { pattern: /^(CA|CB|CC|CD|CE|CF|CG|CH|CI|CJ|CK|CL|CM|CN|CO|CP|CQ|CR|CS|CT|CU|CV|CW|CX|CY|CZ)\d{9}[A-Z]{2}$/, confidence: 'high', stage: 'international' },
+                { pattern: /^(EA|EB|EC|ED|EE|EF|EG|EH|EI|EJ|EK|EL|EM|EN|EO|EP|EQ|ER|ES|ET|EU|EV|EW|EX|EY|EZ)\d{9}[A-Z]{2}$/, confidence: 'high', stage: 'international' },
+                { pattern: /^(LA|LB|LC|LD|LE|LF|LG|LH|LI|LJ|LK|LL|LM|LN|LO|LP|LQ|LR|LS|LT|LU|LV|LW|LX|LY|LZ)\d{9}[A-Z]{2}$/, confidence: 'high', stage: 'international' }
             ],
             'nova-poshta': [
                 { pattern: /^20\d{12}$/, confidence: 'high', stage: 'domestic' },
                 { pattern: /^59\d{12}$/, confidence: 'high', stage: 'domestic' }
             ],
             
-            // ВИПРАВЛЕНО: Delivery Auto з підтримкою звичайних цифрових номерів
             'delivery-auto': [
                 { pattern: /^DA\d{8,12}$/, confidence: 'high', stage: 'domestic' },
                 { pattern: /^\d{8,10}DA$/, confidence: 'medium', stage: 'domestic' },
                 { pattern: /^DELIVERY\d{6,10}$/, confidence: 'high', stage: 'domestic' },
                 { pattern: /^DLV\d{8,12}$/, confidence: 'medium', stage: 'domestic' },
-                // ДОДАНО: Підтримка звичайних номерів Delivery Auto
-                { pattern: /^0\d{9,10}$/, confidence: 'medium', stage: 'domestic' }, // Номери що починаються з 0
-                { pattern: /^\d{10,12}$/, confidence: 'low', stage: 'domestic' }     // Загальні 10-12 цифрові номери
+                // Підтримка звичайних номерів з нижчим пріоритетом
+                { pattern: /^0\d{9,10}$/, confidence: 'low', stage: 'domestic' },
+                { pattern: /^\d{10,12}$/, confidence: 'very-low', stage: 'domestic' }
             ],
             
-            // ВИПРАВЛЕНО: SAT з підтримкою звичайних номерів
             'sat': [
                 { pattern: /^SAT\d{8,12}$/, confidence: 'high', stage: 'domestic' },
                 { pattern: /^ST\d{10,12}$/, confidence: 'medium', stage: 'domestic' },
                 { pattern: /^SATELLITE\d{6,10}$/, confidence: 'high', stage: 'domestic' },
-                // ДОДАНО: Підтримка звичайних номерів SAT
-                { pattern: /^\d{8,12}$/, confidence: 'low', stage: 'domestic' }
+                // Підтримка звичайних номерів з дуже низьким пріоритетом
+                { pattern: /^\d{8,12}$/, confidence: 'very-low', stage: 'domestic' }
             ],
 
-            // ВИПРАВЛЕНО: DHL з кращою підтримкою
             'dhl': [
                 { pattern: /^\d{10}$/, confidence: 'high', stage: 'international' },
                 { pattern: /^\d{11}$/, confidence: 'high', stage: 'international' },
                 { pattern: /^JD\d{18}$/, confidence: 'high', stage: 'international' },
                 { pattern: /^\d{4}\s?\d{4}\s?\d{4}$/, confidence: 'medium', stage: 'international' },
-                // ДОДАНО: Кращі DHL формати
                 { pattern: /^\d{12}$/, confidence: 'medium', stage: 'international' },
-                { pattern: /^\d{9}$/, confidence: 'medium', stage: 'international' },
-                { pattern: /^[A-Z]{2}\d{9}[A-Z]{2}$/, confidence: 'medium', stage: 'international' }
+                { pattern: /^\d{9}$/, confidence: 'medium', stage: 'international' }
             ],
 
             // Інші українські (lower priority)
@@ -65,10 +68,11 @@ class CarrierDetector {
 
             // Міжнародні перевізники
             'fedex': [
-                { pattern: /^\d{12,14}$/, confidence: 'low', stage: 'international' }, // Знизили пріоритет
                 { pattern: /^\d{20}$/, confidence: 'high', stage: 'international' },
                 { pattern: /^\d{22}$/, confidence: 'high', stage: 'international' },
-                { pattern: /^96\d{20}$/, confidence: 'high', stage: 'international' }
+                { pattern: /^96\d{20}$/, confidence: 'high', stage: 'international' },
+                // Знижено пріоритет для коротких номерів
+                { pattern: /^\d{12,14}$/, confidence: 'very-low', stage: 'international' }
             ],
             'ups': [
                 { pattern: /^1Z[A-Z0-9]{16}$/, confidence: 'high', stage: 'international' },
@@ -81,7 +85,7 @@ class CarrierDetector {
                 { pattern: /^R[A-Z]\d{9}CN$/, confidence: 'high', stage: 'export' }
             ],
             'cainiao': [
-                { pattern: /^[A-Z]{2}\d{9}[A-Z]{2}$/, confidence: 'low', stage: 'export' } // Знизили пріоритет
+                { pattern: /^[A-Z]{2}\d{9}[A-Z]{2}$/, confidence: 'very-low', stage: 'export' } // Дуже низький пріоритет
             ],
 
             // Європейські пошти
@@ -103,8 +107,6 @@ class CarrierDetector {
     detectMultipleSources(trackingNumber) {
         const number = trackingNumber.trim().toUpperCase().replace(/\s+/g, '');
         const sources = [];
-
-        // ВИПРАВЛЕНО: Сортуємо за пріоритетом та confidence
         const matches = [];
         
         for (const [carrierCode, patterns] of Object.entries(this.patterns)) {
@@ -123,26 +125,32 @@ class CarrierDetector {
                         confidence: patternInfo.confidence,
                         confidenceScore: confidenceScore,
                         priority: priorityScore,
-                        totalScore: confidenceScore * 10 + (100 - priorityScore) // Вища confidence важливіша
+                        totalScore: confidenceScore * 10 + (100 - priorityScore)
                     });
                 }
             }
         }
 
-        // Сортуємо за загальним скором (вища confidence + нижчий priority = кращий результат)
+        // Сортуємо за загальним скором
         matches.sort((a, b) => b.totalScore - a.totalScore);
         
-        // Беремо тільки найкращі збіги (не більше 3)
-        const bestMatches = matches.slice(0, 3);
-        
+        // ВИПРАВЛЕННЯ: Беремо до 5 найкращих збігів замість 3
+        const bestMatches = matches.slice(0, 5);
         sources.push(...bestMatches);
 
-        // Міжнародні номери (додаткова логіка)
+        // ВИПРАВЛЕННЯ: Завжди додаємо міжнародні джерела для UPU форматів
         if (/^[A-Z]{2}\d{9}[A-Z]{2}$/.test(number)) {
             const internationalSources = this.detectInternationalSources(number);
-            // Додаємо тільки якщо ще немає кращих збігів
-            if (sources.length === 0) {
-                sources.push(...internationalSources);
+            
+            // Додаємо міжнародні джерела з нижчим пріоритетом якщо їх ще немає
+            for (const intSource of internationalSources) {
+                if (!sources.find(s => s.code === intSource.code)) {
+                    sources.push({
+                        ...intSource,
+                        id: this.getCarrierId(intSource.code),
+                        totalScore: this.getConfidenceScore(intSource.confidence) * 10 + (100 - intSource.priority)
+                    });
+                }
             }
         }
 
@@ -151,10 +159,10 @@ class CarrierDetector {
 
     getConfidenceScore(confidence) {
         const scores = {
-            'high': 3,
-            'medium': 2,
-            'low': 1,
-            'very-low': 0
+            'high': 4,
+            'medium': 3,
+            'low': 2,
+            'very-low': 1
         };
         return scores[confidence] || 0;
     }
@@ -162,55 +170,27 @@ class CarrierDetector {
     detectInternationalSources(number) {
         const sources = [];
         
-        if (/^RO\d{9}EE$/.test(number)) {
-            sources.push(
-                { 
-                    code: 'ukrposhta', 
-                    name: 'Укрпошта (UPU)', 
-                    api: 'native', 
-                    stage: 'import',
-                    confidence: 'high',
-                    priority: 1 
-                },
-                { 
-                    code: 'china-post', 
-                    name: 'International Post', 
-                    api: 'trackingmore', 
-                    stage: 'transit',
-                    confidence: 'medium',
-                    priority: 2 
-                }
-            );
-        } else if (/^[A-Z]{2}\d{9}CN$/.test(number)) {
-            sources.push(
-                { 
-                    code: 'ukrposhta', 
-                    name: 'Укрпошта (UPU)', 
-                    api: 'native', 
-                    stage: 'import',
-                    confidence: 'high',
-                    priority: 1 
-                },
-                { 
-                    code: 'china-post', 
-                    name: 'China Post', 
-                    api: 'trackingmore', 
-                    stage: 'export',
-                    confidence: 'high',
-                    priority: 2 
-                }
-            );
-        } else {
-            sources.push(
-                { 
-                    code: 'ukrposhta', 
-                    name: 'Укрпошта (UPU)', 
-                    api: 'native', 
-                    stage: 'transit',
-                    confidence: 'medium',
-                    priority: 1 
-                }
-            );
+        // ВИПРАВЛЕННЯ: Спрощена логіка для міжнародних номерів
+        if (/^[A-Z]{2}\d{9}[A-Z]{2}$/.test(number)) {
+            // Завжди додаємо Укрпошту для UPU форматів
+            sources.push({
+                code: 'ukrposhta',
+                name: 'Укрпошта (UPU)',
+                api: 'native',
+                stage: 'international',
+                confidence: 'high',
+                priority: 1
+            });
+
+            // Додаємо TrackingMore як fallback
+            sources.push({
+                code: 'trackingmore-international',
+                name: 'International Tracking',
+                api: 'trackingmore',
+                stage: 'international',
+                confidence: 'medium',
+                priority: 10
+            });
         }
         
         return sources;
@@ -235,16 +215,17 @@ class CarrierDetector {
         
         const trackingMorePriorities = {
             'china-post': 10,
-            'cainiao': 11,
+            'cainiao': 15,
             'meest-express': 12,
             'justin': 13,
             'fedex': 14,
-            'ups': 15,
+            'ups': 11,
             'deutsche-post': 16,
             'royal-mail': 17,
-            'postnl': 18
+            'postnl': 18,
+            'trackingmore-international': 20
         };
-        return trackingMorePriorities[carrierCode] || 20;
+        return trackingMorePriorities[carrierCode] || 25;
     }
 
     getCarrierId(carrierCode) {
@@ -262,7 +243,8 @@ class CarrierDetector {
             'cainiao': 11,
             'deutsche-post': 12,
             'royal-mail': 13,
-            'postnl': 14
+            'postnl': 14,
+            'trackingmore-international': 99
         };
         return carrierIds[carrierCode] || null;
     }
@@ -282,7 +264,8 @@ class CarrierDetector {
             'cainiao': 'Cainiao',
             'deutsche-post': 'Deutsche Post',
             'royal-mail': 'Royal Mail',
-            'postnl': 'PostNL'
+            'postnl': 'PostNL',
+            'trackingmore-international': 'International Tracking'
         };
         return carrierNames[carrierCode] || carrierCode;
     }
