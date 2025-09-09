@@ -1,7 +1,7 @@
 // app/track/[tn]/page.tsx
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { Header } from '@/components/header'
 import { Footer } from '@/components/footer'
@@ -122,8 +122,8 @@ export default function TrackingPage() {
     return { originCountry, destinationCountry }
   }
 
-  // Enhanced fetch with mobile browser compatibility
-  const fetchTrackingData = async (attempt = 0) => {
+  // Enhanced fetch with mobile browser compatibility - useCallback to fix dependency warning
+  const fetchTrackingData = useCallback(async (attempt = 0) => {
     try {
       const decodedTN = decodeURIComponent(trackingNumber)
       
@@ -228,11 +228,11 @@ export default function TrackingPage() {
                    err.message.includes('Failed to fetch') ||
                    err.message.includes('ERR_NETWORK')) {
           if (isIOS || isSafari) {
-            errorMessage = 'Проблема з мережею. Перевірте з\'єднання та спробуйте ще раз. Можливо, потрібно дозволити cross-site tracking в налаштуваннях Safari.'
+            errorMessage = 'Проблема з мережею. Перевірте з&rsquo;єднання та спробуйте ще раз. Можливо, потрібно дозволити cross-site tracking в налаштуваннях Safari.'
           } else if (isAndroid) {
-            errorMessage = 'Проблема з мережею. Перевірте з\'єднання та спробуйте ще раз.'
+            errorMessage = 'Проблема з мережею. Перевірте з&rsquo;єднання та спробуйте ще раз.'
           } else {
-            errorMessage = 'Проблема з мережею. Перевірте з\'єднання та спробуйте ще раз.'
+            errorMessage = 'Проблема з мережею. Перевірте з&rsquo;єднання та спробуйте ще раз.'
           }
         } else if (err.message.includes('CORS')) {
           errorMessage = 'Тимчасова проблема з безпекою. Спробуйте ще раз через хвилину.'
@@ -254,7 +254,7 @@ export default function TrackingPage() {
       
       setError(errorMessage)
     }
-  }
+  }, [trackingNumber, isIOS, isSafari, isAndroid])
 
   useEffect(() => {
     if (!trackingNumber) return
@@ -267,7 +267,7 @@ export default function TrackingPage() {
     }
 
     initFetch()
-  }, [trackingNumber])
+  }, [trackingNumber, fetchTrackingData])
 
   const handleRetry = () => {
     if (trackingNumber) {
@@ -345,7 +345,7 @@ export default function TrackingPage() {
                     <h3 className="font-semibold text-blue-900 mb-2">Для Safari iOS:</h3>
                     <ul className="text-sm text-blue-800 space-y-1">
                       <li>• Перевірте налаштування Safari → Конфіденційність</li>
-                      <li>• Вимкніть "Запобігти міжсайтовому відстеженню"</li>
+                      <li>• Вимкніть &ldquo;Запобігти міжсайтовому відстеженню&rdquo;</li>
                       <li>• Або спробуйте в приватному режимі</li>
                     </ul>
                   </div>

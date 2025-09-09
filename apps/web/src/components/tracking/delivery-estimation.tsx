@@ -22,7 +22,7 @@ interface DeliveryEstimationProps {
 export default function DeliveryEstimation({ trackingData, isDelivered }: DeliveryEstimationProps) {
   // Calculate delivery estimation based on carrier and route
   const getDeliveryEstimation = () => {
-    const { daysInTransit = 0, sourcesChecked, originCountry, destinationCountry } = trackingData
+    const { sourcesChecked, originCountry, destinationCountry } = trackingData
     
     // Base estimation logic
     const estimations = {
