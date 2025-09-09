@@ -66,6 +66,12 @@ export default function TrackingPage() {
   const [trackingData, setTrackingData] = useState<TrackingData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [retryCount, setRetryCount] = useState(0)
+
+  // Detect browser/device for better error handling
+  const isIOS = typeof window !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent)
+  const isSafari = typeof window !== 'undefined' && /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
+  const isAndroid = typeof window !== 'undefined' && /Android/.test(navigator.userAgent)
 
   // Calculate days in transit
   const calculateDaysInTransit = (events: TrackingEvent[]): number => {
@@ -116,85 +122,151 @@ export default function TrackingPage() {
     return { originCountry, destinationCountry }
   }
 
+  // Enhanced fetch with mobile browser compatibility
+  const fetchTrackingData = async (attempt = 0) => {
+    try {
+      const decodedTN = decodeURIComponent(trackingNumber)
+      
+      // Create abort controller with timeout based on device
+      const controller = new AbortController()
+      const timeout = isIOS || isSafari ? 15000 : 10000 // Longer timeout for iOS
+      const timeoutId = setTimeout(() => controller.abort(), timeout)
+      
+      const headers: Record<string, string> = {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+      
+      // Add User-Agent only for non-mobile browsers (mobile browsers restrict this)
+      if (!isIOS && !isAndroid) {
+        headers['User-Agent'] = 'PandaTrack-Web/1.0'
+      }
+
+      const response = await fetch(`https://api.pandatrack.com.ua/api/track/${encodeURIComponent(decodedTN)}`, {
+        method: 'GET',
+        headers,
+        mode: 'cors',
+        credentials: 'omit',
+        signal: controller.signal,
+        // Add cache busting for mobile browsers
+        cache: 'no-cache'
+      })
+      
+      clearTimeout(timeoutId)
+
+      if (!response.ok) {
+        throw new Error(`Помилка ${response.status}: ${response.statusText}`)
+      }
+
+      // Verify response content type
+      const contentType = response.headers.get('content-type')
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error('Сервер повернув невірний формат даних')
+      }
+
+      const data: ApiResponse = await response.json()
+      
+      if (!data.success) {
+        throw new Error(data.error || data.message || 'Не вдалося отримати дані про посилку')
+      }
+
+      const primarySource = data.sources?.[0]
+      if (!primarySource) {
+        throw new Error('Дані про посилку не знайдено')
+      }
+
+      // Process events and format dates
+      const processedEvents = (primarySource.events || []).map(event => {
+        const eventDate = new Date(event.date)
+        const description = Array.isArray(event.description) 
+          ? event.description.join(', ') 
+          : event.description
+
+        return {
+          date: eventDate.toLocaleDateString('uk-UA'),
+          time: eventDate.toLocaleTimeString('uk-UA', { 
+            hour: '2-digit', 
+            minute: '2-digit' 
+          }),
+          status: event.status,
+          description: description || event.status,
+          location: event.location,
+          statusCode: event.statusCode
+        }
+      })
+
+      const daysInTransit = calculateDaysInTransit(processedEvents)
+      const { originCountry, destinationCountry } = detectCountries(processedEvents, trackingNumber)
+
+      const adaptedData: TrackingData = {
+        trackingNumber: data.trackingNumber || trackingNumber,
+        carrier: primarySource.provider,
+        status: data.consolidatedStatus || primarySource.status,
+        description: primarySource.message || primarySource.status,
+        events: processedEvents,
+        estimatedDelivery: undefined,
+        sourcesChecked: data.sources?.map(s => s.provider) || [],
+        lastUpdated: data.meta?.timestamp || new Date().toISOString(),
+        daysInTransit,
+        originCountry,
+        destinationCountry
+      }
+
+      setTrackingData(adaptedData)
+      setRetryCount(0) // Reset retry count on success
+      
+    } catch (err) {
+      console.error('Tracking fetch error:', err)
+      
+      // Enhanced error handling for different devices
+      let errorMessage = 'Невідома помилка при відстеженні'
+      
+      if (err instanceof Error) {
+        if (err.name === 'AbortError') {
+          errorMessage = 'Запит перевищив час очікування. Спробуйте ще раз.'
+        } else if (err.message.includes('NetworkError') || 
+                   err.message.includes('Failed to fetch') ||
+                   err.message.includes('ERR_NETWORK')) {
+          if (isIOS || isSafari) {
+            errorMessage = 'Проблема з мережею. Перевірте з\'єднання та спробуйте ще раз. Можливо, потрібно дозволити cross-site tracking в налаштуваннях Safari.'
+          } else if (isAndroid) {
+            errorMessage = 'Проблема з мережею. Перевірте з\'єднання та спробуйте ще раз.'
+          } else {
+            errorMessage = 'Проблема з мережею. Перевірте з\'єднання та спробуйте ще раз.'
+          }
+        } else if (err.message.includes('CORS')) {
+          errorMessage = 'Тимчасова проблема з безпекою. Спробуйте ще раз через хвилину.'
+        } else {
+          errorMessage = err.message
+        }
+      }
+      
+      // Auto-retry logic for network errors (max 3 attempts)
+      if (attempt < 2 && 
+          (errorMessage.includes('мережею') || errorMessage.includes('очікування'))) {
+        console.log(`Retrying... attempt ${attempt + 1}`)
+        setTimeout(() => {
+          setRetryCount(attempt + 1)
+          fetchTrackingData(attempt + 1)
+        }, 2000 * (attempt + 1)) // Exponential backoff
+        return
+      }
+      
+      setError(errorMessage)
+    }
+  }
+
   useEffect(() => {
     if (!trackingNumber) return
 
-    const fetchTrackingData = async () => {
+    const initFetch = async () => {
       setLoading(true)
       setError(null)
-      
-      try {
-        const decodedTN = decodeURIComponent(trackingNumber)
-        const response = await fetch(`https://api.pandatrack.com.ua/api/track/${encodeURIComponent(decodedTN)}`, {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-            'User-Agent': 'PandaTrack-Web/1.0'
-          }
-        })
-
-        if (!response.ok) {
-          throw new Error(`Помилка ${response.status}: ${response.statusText}`)
-        }
-
-        const data: ApiResponse = await response.json()
-        
-        if (!data.success) {
-          throw new Error(data.error || data.message || 'Не вдалося отримати дані про посилку')
-        }
-
-        const primarySource = data.sources?.[0]
-        if (!primarySource) {
-          throw new Error('Дані про посилку не знайдено')
-        }
-
-        // Process events and format dates
-        const processedEvents = (primarySource.events || []).map(event => {
-          const eventDate = new Date(event.date)
-          const description = Array.isArray(event.description) 
-            ? event.description.join(', ') 
-            : event.description
-
-          return {
-            date: eventDate.toLocaleDateString('uk-UA'),
-            time: eventDate.toLocaleTimeString('uk-UA', { 
-              hour: '2-digit', 
-              minute: '2-digit' 
-            }),
-            status: event.status,
-            description: description || event.status,
-            location: event.location,
-            statusCode: event.statusCode
-          }
-        })
-
-        const daysInTransit = calculateDaysInTransit(processedEvents)
-        const { originCountry, destinationCountry } = detectCountries(processedEvents, trackingNumber)
-
-        const adaptedData: TrackingData = {
-          trackingNumber: data.trackingNumber || trackingNumber,
-          carrier: primarySource.provider,
-          status: data.consolidatedStatus || primarySource.status,
-          description: primarySource.message || primarySource.status,
-          events: processedEvents,
-          estimatedDelivery: undefined,
-          sourcesChecked: data.sources?.map(s => s.provider) || [],
-          lastUpdated: data.meta?.timestamp || new Date().toISOString(),
-          daysInTransit,
-          originCountry,
-          destinationCountry
-        }
-
-        setTrackingData(adaptedData)
-      } catch (err) {
-        console.error('Tracking fetch error:', err)
-        setError(err instanceof Error ? err.message : 'Невідома помилка при відстеженні')
-      } finally {
-        setLoading(false)
-      }
+      await fetchTrackingData()
+      setLoading(false)
     }
 
-    fetchTrackingData()
+    initFetch()
   }, [trackingNumber])
 
   const handleRetry = () => {
@@ -202,16 +274,22 @@ export default function TrackingPage() {
       setError(null)
       setTrackingData(null)
       setLoading(true)
-      window.location.reload()
+      setRetryCount(0)
+      // Use location.reload only as last resort for mobile
+      if (isIOS || isSafari) {
+        window.location.reload()
+      } else {
+        fetchTrackingData().finally(() => setLoading(false))
+      }
     }
   }
 
   // Check if delivered
   const isDelivered = Boolean(
-  trackingData?.status?.toLowerCase().includes('delivered') || 
-  trackingData?.status?.toLowerCase().includes('вручено') ||
-  trackingData?.status?.toLowerCase().includes('отримано')
-)
+    trackingData?.status?.toLowerCase().includes('delivered') || 
+    trackingData?.status?.toLowerCase().includes('вручено') ||
+    trackingData?.status?.toLowerCase().includes('отримано')
+  )
 
   if (loading) {
     return (
@@ -228,6 +306,13 @@ export default function TrackingPage() {
                   <div className="h-32 bg-gray-200 rounded"></div>
                 </div>
               </div>
+              {retryCount > 0 && (
+                <div className="mt-4 text-center">
+                  <p className="text-sm text-blue-600">
+                    Спроба {retryCount + 1} з 3...
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </main>
@@ -253,6 +338,19 @@ export default function TrackingPage() {
                   Помилка відстеження
                 </h2>
                 <p className="text-[#333037]/70 mb-6">{error}</p>
+                
+                {/* Device-specific help */}
+                {(isIOS || isSafari) && error.includes('мережею') && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 text-left">
+                    <h3 className="font-semibold text-blue-900 mb-2">Для Safari iOS:</h3>
+                    <ul className="text-sm text-blue-800 space-y-1">
+                      <li>• Перевірте налаштування Safari → Конфіденційність</li>
+                      <li>• Вимкніть "Запобігти міжсайтовому відстеженню"</li>
+                      <li>• Або спробуйте в приватному режимі</li>
+                    </ul>
+                  </div>
+                )}
+                
                 <div className="space-y-4">
                   <button
                     onClick={handleRetry}
