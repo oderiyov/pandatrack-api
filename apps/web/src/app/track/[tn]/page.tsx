@@ -3,8 +3,6 @@
 
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
-import Link from 'next/link'
-import { Metadata } from 'next'
 import { Header } from '@/components/header'
 import { Footer } from '@/components/footer'
 import { TrackingForm } from '@/components/tracking-form'
@@ -86,7 +84,7 @@ export default function TrackingPage() {
   // Detect countries from tracking data
   const detectCountries = (events: TrackingEvent[], trackingNumber: string) => {
     let originCountry = 'Невідомо'
-    let destinationCountry = 'Україна' // Default for Ukrainian service
+    const destinationCountry = 'Україна' // Default for Ukrainian service
     
     // Detect from tracking number format
     if (trackingNumber.length >= 13) {

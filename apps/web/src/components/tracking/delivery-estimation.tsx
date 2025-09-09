@@ -101,7 +101,6 @@ export default function DeliveryEstimation({ trackingData, isDelivered }: Delive
 
   // In transit estimation
   const isDelayed = (trackingData.daysInTransit || 0) > estimation.max
-  const isOnTime = (trackingData.daysInTransit || 0) <= estimation.max
 
   return (
     <div className={`border rounded-lg p-6 ${
