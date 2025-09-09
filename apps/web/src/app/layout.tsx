@@ -1,35 +1,25 @@
+// app/layout.tsx - Fixed TypeScript errors
 import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
 
 const geistSans = Geist({
-  subsets: ['latin'],
-  variable: '--font-geist-sans',
+  variable: "--font-geist-sans",
+  subsets: ["latin"],
 })
 
 const geistMono = Geist_Mono({
-  subsets: ['latin'],
-  variable: '--font-geist-mono',
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
 })
 
 export const metadata: Metadata = {
   title: {
-    default: 'PandaTrack - відстежити посилку з будь-якого перевізника | Україна',
+    default: 'PandaTrack - Відстеження посилок по Україні',
     template: '%s | PandaTrack'
   },
-  description: 'Відстежуйте посилки з Нової Пошти, Укрпошти, DHL, USPS, China Post та 50+ інших перевізників. Швидко, точно, безкоштовно.',
-  keywords: [
-    'відстежити посилку',
-    'трекінг посилок',
-    'нова пошта відстеження', 
-    'укрпошта трекінг',
-    'dhl tracking',
-    'відстеження замовлень',
-    'посилка з китаю',
-    'aliexpress tracking',
-    'tracking ukraine',
-    'пандатрек'
-  ],
+  description: 'Відстежуйте посилки з Нової Пошти, Укрпошти, DHL, AliExpress, Amazon та інших перевізників. Швидко, точно, безкоштовно.',
+  keywords: 'відстеження посилок, нова пошта, укрпошта, dhl, aliexpress, tracking, україна',
   authors: [{ name: 'PandaTrack Team' }],
   creator: 'PandaTrack',
   publisher: 'PandaTrack',
@@ -38,52 +28,47 @@ export const metadata: Metadata = {
     address: false,
     telephone: false,
   },
-  robots: {
-    index: false,        // ЗАБОРОНИТИ індексацію
-    follow: false,       // ЗАБОРОНИТИ переходи по лінках
-    noarchive: true,     // ЗАБОРОНИТИ кешування
-    nosnippet: true,     // ЗАБОРОНИТИ сніпети
-    googleBot: {
-      index: false,
-      follow: false,
-      'max-video-preview': -1,
-      'max-image-preview': 'large',
-      'max-snippet': -1,
-    },
-  },
+  
+  // Mobile-specific metadata
+  viewport: 'width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes, viewport-fit=cover',
+  
+  // Theme colors
+  themeColor: '#f0e5d9',
+  
+  // PWA manifest
+  manifest: '/manifest.json',
+  
+  // Open Graph for social sharing
   openGraph: {
     type: 'website',
     locale: 'uk_UA',
     url: 'https://pandatrack.com.ua',
+    title: 'PandaTrack - Відстеження посилок по Україні',
+    description: 'Відстежуйте посилки з будь-якого перевізника в одному місці',
     siteName: 'PandaTrack',
-    title: 'PandaTrack - відстежити посилку з будь-якого перевізника',
-    description: 'Відстежуйте посилки з Нової Пошти, Укрпошти, DHL, USPS, China Post та 50+ інших перевізників. Швидко, точно, безкоштовно.',
     images: [
       {
         url: '/og-image.png',
         width: 1200,
         height: 630,
-        alt: 'PandaTrack - відстежити посилку',
-      },
-    ],
+        alt: 'PandaTrack - Відстеження посилок',
+      }
+    ]
   },
+  
+  // Twitter Card
   twitter: {
     card: 'summary_large_image',
-    title: 'PandaTrack - відстежити посилку з будь-якого перевізника',
-    description: 'Відстежуйте посилки з Нової Пошти, Укрпошти, DHL та 50+ інших перевізників',
+    title: 'PandaTrack - Відстеження посилок',
+    description: 'Відстежуйте посилки з будь-якого перевізника',
     images: ['/og-image.png'],
   },
-  alternates: {
-    canonical: 'https://pandatrack.com.ua',
-    languages: {
-      'uk-UA': 'https://pandatrack.com.ua',
-      'x-default': 'https://pandatrack.com.ua',
-    },
+  
+  // Robots and indexing
+  robots: {
+    index: true,
+    follow: true,
   },
-  verification: {
-    google: 'your-google-verification-code',
-  },
-  category: 'technology',
 }
 
 export default function RootLayout({
@@ -92,67 +77,29 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="uk-UA">
+    <html lang="uk" className={`${geistSans.variable} ${geistMono.variable}`}>
       <head>
-        {/* Structured Data - Website Schema */}
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
-              "@context": "https://schema.org",
-              "@type": "WebSite",
-              "name": "PandaTrack",
-              "url": "https://pandatrack.com.ua",
-              "description": "Відстеження посилок з будь-якого перевізника",
-              "potentialAction": {
-                "@type": "SearchAction",
-                "target": "https://pandatrack.com.ua/track/{search_term_string}",
-                "query-input": "required name=search_term_string"
-              },
-              "publisher": {
-                "@type": "Organization",
-                "name": "PandaTrack",
-                "url": "https://pandatrack.com.ua",
-                "logo": {
-                  "@type": "ImageObject",
-                  "url": "https://pandatrack.com.ua/logo.png",
-                  "width": 512,
-                  "height": 512
-                }
-              }
-            })
-          }}
-        />
+        {/* Preconnect to external domains */}
+        <link rel="preconnect" href="https://api.pandatrack.com.ua" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         
-        {/* Organization Schema */}
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
-              "@context": "https://schema.org",
-              "@type": "Organization",
-              "name": "PandaTrack",
-              "url": "https://pandatrack.com.ua",
-              "logo": "https://pandatrack.com.ua/logo.png",
-              "description": "Український сервіс відстеження посилок з будь-якого перевізника",
-              "foundingDate": "2025",
-              "address": {
-                "@type": "PostalAddress",
-                "addressCountry": "UA",
-                "addressRegion": "Київська область",
-                "addressLocality": "Київ"
-              },
-              "contactPoint": {
-                "@type": "ContactPoint",
-                "contactType": "customer service",
-                "email": "support@pandatrack.com.ua",
-                "availableLanguage": ["Ukrainian", "English"]
-              }
-            })
-          }}
-        />
+        {/* DNS prefetch */}
+        <link rel="dns-prefetch" href="//api.pandatrack.com.ua" />
+        
+        {/* Favicon and app icons */}
+        <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+        
+        {/* iOS-specific meta tags */}
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="PandaTrack" />
+        
+        {/* Disable automatic link detection */}
+        <meta name="format-detection" content="telephone=no, date=no, email=no, address=no" />
       </head>
-      <body className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}>
+      <body className="antialiased bg-[#f5f5f5] text-[#333037]">
         {children}
       </body>
     </html>
