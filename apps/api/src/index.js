@@ -126,35 +126,13 @@ app.use(helmet({
     }
 }));
 
-// CORS configuration
-const corsOptions = {
-    origin: function (origin, callback) {
-        const allowedOrigins = [
-            'https://pandatrack.com.ua',
-            'https://www.pandatrack.com.ua',
-            'https://app.pandatrack.com.ua'
-        ];
-        
-        if (!origin) return callback(null, true);
-        
-        if (process.env.NODE_ENV !== 'production') {
-            allowedOrigins.push('http://localhost:3000');
-            allowedOrigins.push('http://localhost:3001');
-        }
-        
-        if (allowedOrigins.indexOf(origin) !== -1) {
-            callback(null, true);
-        } else {
-            callback(new Error('Not allowed by CORS'));
-        }
-    },
+// SIMPLIFIED CORS - let Nginx handle detailed CORS control
+app.use(cors({
+    origin: true,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-    exposedHeaders: ['X-RateLimit-Limit', 'X-RateLimit-Remaining', 'X-RateLimit-Reset']
-};
-
-app.use(cors(corsOptions));
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+}));
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
