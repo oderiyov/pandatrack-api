@@ -9,10 +9,11 @@ import { TrackingForm } from '@/components/tracking-form'
 
 interface TrackingEvent {
   date: string
-  time: string
+  time?: string
   status: string
-  description: string
+  description: string | string[]
   location?: string
+  statusCode?: string
 }
 
 interface TrackingData {
@@ -26,9 +27,25 @@ interface TrackingData {
   lastUpdated: string
 }
 
+interface ApiSource {
+  provider: string
+  status: string
+  message: string
+  events?: TrackingEvent[]
+  cost?: number
+  cached?: boolean
+  supportsInternational?: boolean
+}
+
 interface ApiResponse {
   success: boolean
-  data?: TrackingData
+  trackingNumber?: string
+  consolidatedStatus?: string
+  sources?: ApiSource[]
+  meta?: {
+    responseTime: number
+    timestamp: string
+  }
   error?: string
   message?: string
 }
@@ -64,11 +81,49 @@ export default function TrackingPage() {
 
         const data: ApiResponse = await response.json()
         
-        if (!data.success || !data.data) {
+        // Check if API returned error
+        if (!data.success) {
           throw new Error(data.error || data.message || 'Не вдалося отримати дані про посилку')
         }
 
-        setTrackingData(data.data)
+        // Adapt API response to expected format
+        const primarySource = data.sources?.[0]
+        if (!primarySource) {
+          throw new Error('Дані про посилку не знайдено')
+        }
+
+        // Process events and format dates
+        const processedEvents = (primarySource.events || []).map(event => {
+          const eventDate = new Date(event.date)
+          const description = Array.isArray(event.description) 
+            ? event.description.join(', ') 
+            : event.description
+
+          return {
+            date: eventDate.toLocaleDateString('uk-UA'),
+            time: eventDate.toLocaleTimeString('uk-UA', { 
+              hour: '2-digit', 
+              minute: '2-digit' 
+            }),
+            status: event.status,
+            description: description || event.status,
+            location: event.location,
+            statusCode: event.statusCode
+          }
+        })
+
+        const adaptedData: TrackingData = {
+          trackingNumber: data.trackingNumber || trackingNumber,
+          carrier: primarySource.provider,
+          status: data.consolidatedStatus || primarySource.status,
+          description: primarySource.message || primarySource.status,
+          events: processedEvents,
+          estimatedDelivery: undefined, // API doesn't provide this yet
+          sourcesChecked: data.sources?.map(s => s.provider) || [],
+          lastUpdated: data.meta?.timestamp || new Date().toISOString()
+        }
+
+        setTrackingData(adaptedData)
       } catch (err) {
         console.error('Tracking fetch error:', err)
         setError(err instanceof Error ? err.message : 'Невідома помилка при відстеженні')
@@ -191,9 +246,10 @@ export default function TrackingPage() {
               </div>
               <div className="mt-4 md:mt-0">
                 <span className={`inline-block px-4 py-2 rounded-full text-sm font-medium ${
-                  trackingData.status.includes('доставлен') ? 'bg-green-100 text-green-800' :
-                  trackingData.status.includes('транзит') ? 'bg-blue-100 text-blue-800' :
-                  trackingData.status.includes('очікує') ? 'bg-yellow-100 text-yellow-800' :
+                  trackingData.status.includes('доставлен') || trackingData.status.includes('отримано') ? 'bg-green-100 text-green-800' :
+                  trackingData.status.includes('транзит') || trackingData.status.includes('дорозі') ? 'bg-blue-100 text-blue-800' :
+                  trackingData.status.includes('очікує') || trackingData.status.includes('обробляється') ? 'bg-yellow-100 text-yellow-800' :
+                  trackingData.status.includes('неуспішна') || trackingData.status.includes('помилка') ? 'bg-red-100 text-red-800' :
                   'bg-gray-100 text-gray-800'
                 }`}>
                   {trackingData.status}
@@ -232,7 +288,12 @@ export default function TrackingPage() {
               <div className="space-y-4">
                 {trackingData.events.map((event, index) => (
                   <div key={index} className="flex items-start space-x-4 pb-4 border-b border-gray-100 last:border-b-0">
-                    <div className="flex-shrink-0 w-3 h-3 bg-[#333037] rounded-full mt-2"></div>
+                    <div className={`flex-shrink-0 w-3 h-3 rounded-full mt-2 ${
+                      event.status.includes('отримано') || event.status.includes('доставлен') ? 'bg-green-500' :
+                      event.status.includes('неуспішна') || event.status.includes('помилка') ? 'bg-red-500' :
+                      event.status.includes('транзит') || event.status.includes('дорозі') ? 'bg-blue-500' :
+                      'bg-[#333037]'
+                    }`}></div>
                     <div className="flex-1">
                       <div className="flex flex-col md:flex-row md:items-center md:justify-between">
                         <div>
@@ -242,9 +303,9 @@ export default function TrackingPage() {
                             <p className="text-[#333037]/60 text-sm">📍 {event.location}</p>
                           )}
                         </div>
-                        <div className="text-sm text-[#333037]/60 mt-2 md:mt-0">
+                        <div className="text-sm text-[#333037]/60 mt-2 md:mt-0 md:text-right">
                           <p>{event.date}</p>
-                          <p>{event.time}</p>
+                          {event.time && <p>{event.time}</p>}
                         </div>
                       </div>
                     </div>
