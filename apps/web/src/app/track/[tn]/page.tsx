@@ -1,11 +1,19 @@
+// app/track/[tn]/page.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import { Metadata } from 'next'
 import { Header } from '@/components/header'
 import { Footer } from '@/components/footer'
 import { TrackingForm } from '@/components/tracking-form'
+import DeliveryEstimation from '@/components/tracking/delivery-estimation'
+import TrackingTimeline from '@/components/tracking/tracking-timeline'
+import TrackingMetadata from '@/components/tracking/tracking-metadata'
+import TrackingActions from '@/components/tracking/tracking-actions'
+import RelatedCarriers from '@/components/tracking/related-carriers'
+import TrackingFAQ from '@/components/tracking/tracking-faq'
 
 interface TrackingEvent {
   date: string
@@ -25,6 +33,9 @@ interface TrackingData {
   estimatedDelivery?: string
   sourcesChecked: string[]
   lastUpdated: string
+  daysInTransit?: number
+  originCountry?: string
+  destinationCountry?: string
 }
 
 interface ApiSource {
@@ -58,6 +69,55 @@ export default function TrackingPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  // Calculate days in transit
+  const calculateDaysInTransit = (events: TrackingEvent[]): number => {
+    if (!events || events.length === 0) return 0
+    
+    const firstEvent = events[events.length - 1] // API returns newest first
+    const firstDate = new Date(firstEvent.date)
+    const today = new Date()
+    
+    const diffTime = Math.abs(today.getTime() - firstDate.getTime())
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    
+    return diffDays
+  }
+
+  // Detect countries from tracking data
+  const detectCountries = (events: TrackingEvent[], trackingNumber: string) => {
+    let originCountry = 'Невідомо'
+    let destinationCountry = 'Україна' // Default for Ukrainian service
+    
+    // Detect from tracking number format
+    if (trackingNumber.length >= 13) {
+      const countryCode = trackingNumber.slice(-2).toUpperCase()
+      const countryCodes: Record<string, string> = {
+        'CN': 'Китай',
+        'US': 'США', 
+        'GB': 'Великобританія',
+        'DE': 'Німеччина',
+        'UA': 'Україна',
+        'EE': 'Естонія'
+      }
+      if (countryCodes[countryCode]) {
+        originCountry = countryCodes[countryCode]
+      }
+    }
+    
+    // Detect from events
+    events.forEach(event => {
+      if (event.location) {
+        if (event.location.includes('Китай') || event.location.includes('China')) {
+          originCountry = 'Китай'
+        } else if (event.location.includes('США') || event.location.includes('USA')) {
+          originCountry = 'США'
+        }
+      }
+    })
+    
+    return { originCountry, destinationCountry }
+  }
+
   useEffect(() => {
     if (!trackingNumber) return
 
@@ -81,12 +141,10 @@ export default function TrackingPage() {
 
         const data: ApiResponse = await response.json()
         
-        // Check if API returned error
         if (!data.success) {
           throw new Error(data.error || data.message || 'Не вдалося отримати дані про посилку')
         }
 
-        // Adapt API response to expected format
         const primarySource = data.sources?.[0]
         if (!primarySource) {
           throw new Error('Дані про посилку не знайдено')
@@ -112,15 +170,21 @@ export default function TrackingPage() {
           }
         })
 
+        const daysInTransit = calculateDaysInTransit(processedEvents)
+        const { originCountry, destinationCountry } = detectCountries(processedEvents, trackingNumber)
+
         const adaptedData: TrackingData = {
           trackingNumber: data.trackingNumber || trackingNumber,
           carrier: primarySource.provider,
           status: data.consolidatedStatus || primarySource.status,
           description: primarySource.message || primarySource.status,
           events: processedEvents,
-          estimatedDelivery: undefined, // API doesn't provide this yet
+          estimatedDelivery: undefined,
           sourcesChecked: data.sources?.map(s => s.provider) || [],
-          lastUpdated: data.meta?.timestamp || new Date().toISOString()
+          lastUpdated: data.meta?.timestamp || new Date().toISOString(),
+          daysInTransit,
+          originCountry,
+          destinationCountry
         }
 
         setTrackingData(adaptedData)
@@ -140,17 +204,23 @@ export default function TrackingPage() {
       setError(null)
       setTrackingData(null)
       setLoading(true)
-      // Re-trigger useEffect
       window.location.reload()
     }
   }
+
+  // Check if delivered
+  const isDelivered = Boolean(
+  trackingData?.status?.toLowerCase().includes('delivered') || 
+  trackingData?.status?.toLowerCase().includes('вручено') ||
+  trackingData?.status?.toLowerCase().includes('отримано')
+)
 
   if (loading) {
     return (
       <div className="min-h-screen bg-[#f5f5f5] text-[#333037]">
         <Header />
         <main className="container mx-auto px-4 py-8">
-          <div className="max-w-4xl mx-auto">
+          <div className="max-w-6xl mx-auto">
             <div className="bg-white rounded-lg shadow-sm p-8">
               <div className="animate-pulse">
                 <div className="h-8 bg-gray-200 rounded w-1/3 mb-6"></div>
@@ -173,7 +243,7 @@ export default function TrackingPage() {
       <div className="min-h-screen bg-[#f5f5f5] text-[#333037]">
         <Header />
         <main className="container mx-auto px-4 py-8">
-          <div className="max-w-4xl mx-auto">
+          <div className="max-w-6xl mx-auto">
             <div className="bg-white rounded-lg shadow-sm p-8">
               <div className="text-center">
                 <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
@@ -213,7 +283,7 @@ export default function TrackingPage() {
       <div className="min-h-screen bg-[#f5f5f5] text-[#333037]">
         <Header />
         <main className="container mx-auto px-4 py-8">
-          <div className="max-w-4xl mx-auto">
+          <div className="max-w-6xl mx-auto">
             <div className="bg-white rounded-lg shadow-sm p-8 text-center">
               <h2 className="text-xl font-semibold mb-4">Посилку не знайдено</h2>
               <p className="text-[#333037]/70 mb-6">
@@ -230,117 +300,128 @@ export default function TrackingPage() {
 
   return (
     <div className="min-h-screen bg-[#f5f5f5] text-[#333037]">
+      {/* SEO structured data */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "TrackAction",
+            "object": {
+              "@type": "Product",
+              "identifier": trackingData.trackingNumber
+            },
+            "result": {
+              "@type": "DeliveryEvent", 
+              "deliveryStatus": trackingData.status,
+              "hasDeliveryMethod": trackingData.sourcesChecked
+            }
+          })
+        }}
+      />
+
       <Header />
-      <main className="container mx-auto px-4 py-8">
-        <div className="max-w-4xl mx-auto">
-          {/* Tracking Header */}
-          <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4">
-              <div>
-                <h1 className="text-2xl font-bold mb-2">
-                  Відстеження #{trackingData.trackingNumber}
-                </h1>
-                <p className="text-[#333037]/70">
-                  Перевізник: <span className="font-medium">{trackingData.carrier}</span>
-                </p>
-              </div>
-              <div className="mt-4 md:mt-0">
-                <span className={`inline-block px-4 py-2 rounded-full text-sm font-medium ${
-                  trackingData.status.includes('доставлен') || trackingData.status.includes('отримано') ? 'bg-green-100 text-green-800' :
-                  trackingData.status.includes('транзит') || trackingData.status.includes('дорозі') ? 'bg-blue-100 text-blue-800' :
-                  trackingData.status.includes('очікує') || trackingData.status.includes('обробляється') ? 'bg-yellow-100 text-yellow-800' :
-                  trackingData.status.includes('неуспішна') || trackingData.status.includes('помилка') ? 'bg-red-100 text-red-800' :
-                  'bg-gray-100 text-gray-800'
-                }`}>
-                  {trackingData.status}
-                </span>
-              </div>
-            </div>
-            
-            <p className="text-[#333037] mb-4">{trackingData.description}</p>
-            
-            {trackingData.estimatedDelivery && (
-              <div className="bg-[#eaf0f5] rounded-lg p-4 mb-4">
-                <p className="text-sm font-medium">
-                  Очікувана доставка: {trackingData.estimatedDelivery}
-                </p>
-              </div>
-            )}
-
-            <div className="flex flex-wrap gap-2 mb-4">
-              <span className="text-sm text-[#333037]/60">Перевірено в:</span>
-              {trackingData.sourcesChecked.map((source, index) => (
-                <span key={index} className="bg-[#f0e5d9] px-2 py-1 rounded text-xs">
-                  {source}
-                </span>
-              ))}
-            </div>
-
-            <p className="text-xs text-[#333037]/50">
-              Останнє оновлення: {new Date(trackingData.lastUpdated).toLocaleString('uk-UA')}
+      
+      {/* Hero Section with Search */}
+      <section className="bg-[#f0e5d9] py-6">
+        <div className="container mx-auto px-4">
+          <div className="max-w-6xl mx-auto">
+            <h1 className="text-2xl font-bold text-[#333037] mb-4">
+              Відстеження посилки: {trackingData.trackingNumber}
+            </h1>
+            <p className="text-[#333037]/70 mb-6">
+              Український сервіс відстеження посилок Нової Пошти, Укрпошти, DHL та інших перевізників
             </p>
-          </div>
-
-          {/* Tracking Events */}
-          {trackingData.events && trackingData.events.length > 0 && (
-            <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-              <h2 className="text-xl font-semibold mb-6">Історія відправлення</h2>
-              <div className="space-y-4">
-                {trackingData.events.map((event, index) => (
-                  <div key={index} className="flex items-start space-x-4 pb-4 border-b border-gray-100 last:border-b-0">
-                    <div className={`flex-shrink-0 w-3 h-3 rounded-full mt-2 ${
-                      event.status.includes('отримано') || event.status.includes('доставлен') ? 'bg-green-500' :
-                      event.status.includes('неуспішна') || event.status.includes('помилка') ? 'bg-red-500' :
-                      event.status.includes('транзит') || event.status.includes('дорозі') ? 'bg-blue-500' :
-                      'bg-[#333037]'
-                    }`}></div>
-                    <div className="flex-1">
-                      <div className="flex flex-col md:flex-row md:items-center md:justify-between">
-                        <div>
-                          <p className="font-medium mb-1">{event.status}</p>
-                          <p className="text-[#333037]/70 text-sm mb-2">{event.description}</p>
-                          {event.location && (
-                            <p className="text-[#333037]/60 text-sm">📍 {event.location}</p>
-                          )}
-                        </div>
-                        <div className="text-sm text-[#333037]/60 mt-2 md:mt-0 md:text-right">
-                          <p>{event.date}</p>
-                          {event.time && <p>{event.time}</p>}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Actions */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h3 className="text-lg font-semibold mb-4">Відстежити іншу посилку</h3>
-            <TrackingForm />
-          </div>
-
-          {/* Help Section */}
-          <div className="mt-8 bg-[#f7e2cc] rounded-lg p-6">
-            <h3 className="text-lg font-semibold mb-3">Потрібна допомога?</h3>
-            <p className="text-[#333037]/80 mb-4">
-              Якщо у вас виникли питання щодо відстеження або доставки, перевірте наші довідники:
-            </p>
-            <div className="flex flex-wrap gap-3">
-              <Link href="/guides/delivery-statuses" className="text-blue-600 hover:underline text-sm">
-                Розшифровка статусів
-              </Link>
-              <Link href="/guides/delivery-times" className="text-blue-600 hover:underline text-sm">
-                Терміни доставки
-              </Link>
-              <Link href="/guides/tracking-not-working" className="text-blue-600 hover:underline text-sm">
-                Чому не відстежується
-              </Link>
+            
+            {/* Quick search form */}
+            <div className="max-w-md">
+              <TrackingForm defaultValue="" placeholder="Введіть новий трек-номер..." />
             </div>
           </div>
         </div>
+      </section>
+
+      <main className="container mx-auto px-4 py-8">
+        <div className="max-w-6xl mx-auto">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            {/* Left Column - Timeline */}
+            <div className="lg:col-span-2 space-y-6">
+              {/* Delivery Estimation */}
+              <DeliveryEstimation 
+                trackingData={trackingData}
+                isDelivered={isDelivered}
+              />
+              
+              {/* Tracking Timeline */}
+              <TrackingTimeline 
+                events={trackingData.events}
+                isDelivered={isDelivered}
+              />
+            </div>
+
+            {/* Right Column - Metadata & Actions */}
+            <div className="space-y-6">
+              {/* Package Metadata */}
+              <TrackingMetadata trackingData={trackingData} />
+              
+              {/* Action Buttons */}
+              <TrackingActions 
+                trackingNumber={trackingData.trackingNumber}
+                trackingUrl={`https://pandatrack.com.ua/track/${trackingData.trackingNumber}`}
+              />
+            </div>
+          </div>
+
+          {/* FAQ Section */}
+          <TrackingFAQ 
+            carriers={trackingData.sourcesChecked}
+            status={trackingData.status}
+          />
+
+          {/* Related Carriers */}
+          <RelatedCarriers 
+            currentCarriers={trackingData.sourcesChecked}
+          />
+
+          {/* Community Section - Future Artalk Integration */}
+          <section className="bg-white rounded-lg shadow-sm p-6 mt-8">
+            <h2 className="text-xl font-bold mb-4">Питання про відстеження</h2>
+            <p className="text-[#333037]/70 mb-6">
+              В коментарях ви можете запитати про своє відправлення або поділитися досвідом
+            </p>
+            
+            {/* Placeholder for Artalk - will be implemented separately */}
+            <div className="bg-gray-50 rounded-lg p-8 text-center">
+              <p className="text-[#333037]/60">
+                Система коментарів буде доступна незабаром
+              </p>
+            </div>
+          </section>
+
+          {/* Educational Content */}
+          <section className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-8">
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <h3 className="text-lg font-bold mb-3">Що таке номер відстеження?</h3>
+              <p className="text-[#333037]/70 text-sm leading-relaxed">
+                Трек номер — це унікальний код посилки для відстеження між країнами. 
+                Міжнародні номери виглядають як RO123456789CN, де перші букви — тип відправлення, 
+                останні — код країни відправника.
+              </p>
+            </div>
+            
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <h3 className="text-lg font-bold mb-3">Як відстежити посилку?</h3>
+              <ol className="text-[#333037]/70 text-sm space-y-1 leading-relaxed">
+                <li>1. Знайдіть трек-номер в email або на сайті магазину</li>
+                <li>2. Введіть номер у поле пошуку вище</li>
+                <li>3. Отримайте актуальну інформацію про статус доставки</li>
+              </ol>
+            </div>
+          </section>
+        </div>
       </main>
+      
       <Footer />
     </div>
   )
