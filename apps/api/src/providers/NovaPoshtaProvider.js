@@ -1,4 +1,4 @@
-// apps/api/src/providers/NovaPoshtaProvider.js - СТАБІЛЬНА ВЕРСІЯ
+// apps/api/src/providers/NovaPoshtaProvider.js - ПОВНА ВЕРСІЯ З ВИПРАВЛЕННЯМИ
 const BaseProvider = require('./BaseProvider');
 
 class NovaPoshtaProvider extends BaseProvider {
@@ -126,14 +126,17 @@ class NovaPoshtaProvider extends BaseProvider {
         
         // 1. Створення накладної
         if (data.DateCreated) {
-            events.push({
-                date: this.parseDate(data.DateCreated),
-                status: 'Накладна створена',
-                description: 'Відправник оформив накладну',
-                location: data.CitySender || 'Unknown',
-                statusCode: '1',
-                eventType: 'created'
-            });
+            const createdDate = this.parseDate(data.DateCreated);
+            if (createdDate) {
+                events.push({
+                    date: createdDate,
+                    status: 'Накладна створена',
+                    description: 'Відправник оформив накладну',
+                    location: data.CitySender || 'Unknown',
+                    statusCode: '1',
+                    eventType: 'created'
+                });
+            }
         }
 
         // 2. Сканування/прийняття
@@ -151,20 +154,22 @@ class NovaPoshtaProvider extends BaseProvider {
             }
         }
 
-        // 3. Поточний статус (використовуємо найточнішу дату)
+        // 3. Поточний статус доставки (найважливіша подія)
         if (data.Status && data.StatusCode) {
             let currentEventDate = null;
             
-            // Пріоритет дат для поточного статусу
-            if (data.RecipientDateTime) {
+            // Для доставлених посилок використовуємо RecipientDateTime
+            if (data.StatusCode === '9' || data.StatusCode === '10' || data.StatusCode === '11') {
                 currentEventDate = this.parseDate(data.RecipientDateTime);
-            } else if (data.ActualDeliveryDate) {
-                currentEventDate = this.parseDate(data.ActualDeliveryDate);
-            } else if (data.TrackingUpdateDate) {
-                currentEventDate = this.parseDate(data.TrackingUpdateDate);
             }
             
-            // Якщо немає жодної валідної дати, НЕ створюємо подію
+            // Для інших статусів пробуємо різні дати
+            if (!currentEventDate) {
+                currentEventDate = this.parseDate(data.ActualDeliveryDate) ||
+                                 this.parseDate(data.TrackingUpdateDate);
+            }
+            
+            // Створюємо подію тільки якщо є валідна дата
             if (currentEventDate) {
                 events.push({
                     date: currentEventDate,
@@ -258,19 +263,39 @@ class NovaPoshtaProvider extends BaseProvider {
     parseDate(dateString) {
         if (!dateString || dateString === '0001-01-01 00:00:00' || dateString === '') return null;
         
+        
         try {
-            // Nova Poshta повертає дати в форматі "dd-mm-yyyy hh:mm:ss"
             let date;
             
-            if (dateString.includes('-') && dateString.includes(' ') && dateString.length <= 19) {
+            // Nova Poshta повертає дати в різних форматах
+            if (dateString.includes('-') && dateString.includes(' ')) {
                 // Формат: "24-06-2025 14:31:32"
                 const [datePart, timePart] = dateString.split(' ');
                 const [day, month, year] = datePart.split('-');
                 date = new Date(`${year}-${month}-${day}T${timePart}.000Z`);
+            } else if (dateString.includes('.') && dateString.includes(' ')) {
+                // Формат: "25.06.2025 11:20:36"
+                const [datePart, timePart] = dateString.split(' ');
+                const [day, month, year] = datePart.split('.');
+                date = new Date(`${year}-${month}-${day}T${timePart}.000Z`);
+            } else if (dateString.includes(':') && dateString.includes('.')) {
+                // Формат: "11:20 25.06.2025"
+                const parts = dateString.split(' ');
+                if (parts.length === 2) {
+                    const timePart = parts[0] + ':00'; // Додаємо секунди
+                    const datePart = parts[1];
+                    const [day, month, year] = datePart.split('.');
+                    date = new Date(`${year}-${month}-${day}T${timePart}.000Z`);
+                }
+            } else if (dateString.includes('.') && !dateString.includes(' ')) {
+                // Формат: "25.06.2025" (тільки дата)
+                const [day, month, year] = dateString.split('.');
+                date = new Date(`${year}-${month}-${day}T00:00:00.000Z`);
             } else {
                 // Пробуємо стандартний парсинг (для ISO дат)
                 date = new Date(dateString);
             }
+            
             
             if (isNaN(date.getTime())) {
                 console.warn('Invalid date format:', dateString);
