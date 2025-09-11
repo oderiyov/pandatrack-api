@@ -1,4 +1,4 @@
-// components/tracking/tracking-timeline.tsx
+// components/tracking/tracking-timeline.tsx - ВИПРАВЛЕНА ВЕРСІЯ
 'use client'
 
 interface TrackingEvent {
@@ -8,6 +8,7 @@ interface TrackingEvent {
   description: string | string[]
   location?: string
   statusCode?: string
+  displayDate?: string // Додаємо для нового формату
 }
 
 interface TrackingTimelineProps {
@@ -82,32 +83,34 @@ export default function TrackingTimeline({ events, isDelivered }: TrackingTimeli
       <h2 className="text-xl font-bold mb-6 text-[#333037]">Історія відправлення</h2>
       
       <div className="relative">
-        {/* Timeline line */}
-        <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-gray-200"></div>
+        {/* ВИПРАВЛЕНА Timeline line - додаємо додатковий відступ зверху */}
+        <div className="absolute left-[14px] top-6 bottom-0 w-0.5 bg-gray-200 -ml-px"></div>
         
-        <div className="space-y-6">
+        <div className="space-y-0">
           {events.map((event, index) => (
-            <div key={index} className="relative flex items-start space-x-4">
-              {/* Timeline dot */}
-              <div className={`relative z-10 flex-shrink-0 w-3 h-3 rounded-full mt-2 ${getStatusColor(event, index)}`}>
-                {index === 0 && !isDelivered && (
-                  <div className="absolute inset-0 rounded-full bg-blue-500 animate-ping opacity-75"></div>
-                )}
+            <div key={index} className="relative flex items-start">
+              {/* ВИПРАВЛЕНИЙ Timeline dot - центрування відносно тексту */}
+              <div className="relative z-10 flex-shrink-0 mr-4 pt-1.5">
+                <div className={`w-3 h-3 rounded-full ${getStatusColor(event, index)}`}>
+                  {index === 0 && !isDelivered && (
+                    <div className="absolute inset-0 rounded-full bg-blue-500 animate-ping opacity-75"></div>
+                  )}
+                </div>
               </div>
               
-              {/* Event content */}
+              {/* ВИПРАВЛЕНИЙ Event content - без додаткових відступів що розбивають лінію */}
               <div className="flex-1 min-w-0 pb-6">
                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between">
                   <div className="flex-1">
-                    <h3 className="font-semibold text-[#333037] mb-1">
+                    <h3 className="font-semibold text-[#333037] mb-1 leading-tight">
                       {event.status}
                     </h3>
-                    <p className="text-[#333037]/70 text-sm mb-2">
+                    <p className="text-[#333037]/70 text-sm mb-2 leading-relaxed">
                       {formatDescription(event.description)}
                     </p>
                     {event.location && (
-                      <p className="text-[#333037]/60 text-sm flex items-center">
-                        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <p className="text-[#333037]/60 text-sm flex items-center leading-tight">
+                        <svg className="w-4 h-4 mr-1 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
                                 d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
@@ -118,9 +121,12 @@ export default function TrackingTimeline({ events, isDelivered }: TrackingTimeli
                     )}
                   </div>
                   
-                  <div className="text-sm text-[#333037]/60 mt-2 sm:mt-0 sm:text-right sm:ml-4">
-                    <p className="font-medium">{event.date}</p>
-                    {event.time && <p>{event.time}</p>}
+                  {/* ВИПРАВЛЕНА дата та час - використовуємо новий формат */}
+                  <div className="text-sm text-[#333037]/60 mt-2 sm:mt-0 sm:text-right sm:ml-4 flex-shrink-0">
+                    <p className="font-medium">
+                      {event.displayDate || event.date}
+                    </p>
+                    {event.time && <p className="leading-tight">{event.time}</p>}
                   </div>
                 </div>
               </div>

@@ -35,22 +35,22 @@ export default function TrackingMetadata({ trackingData }: TrackingMetadataProps
     const carrierData: Record<string, { name: string; url: string; logo?: string }> = {
       'ukrposhta': {
         name: 'Укрпошта',
-        url: `https://www.ukrposhta.ua/tracking?barcode=${trackingNumber}`,
+        url: `https://www.ukrposhta.ua/`,
         logo: '🏣'
       },
       'novaposhta': {
         name: 'Нова Пошта',
-        url: `https://novaposhta.ua/tracking/?cargo_number=${trackingNumber}`,
+        url: `https://novaposhta.ua/tracking/`,
         logo: '📦'
       },
       'dhl': {
         name: 'DHL',
-        url: `https://www.dhl.com/ua-en/home/tracking/tracking-express.html?submit=1&tracking-id=${trackingNumber}`,
+        url: `https://www.dhl.com/ua-en/home/tracking.html`,
         logo: '✈️'
       },
       'cainiao': {
         name: 'Cainiao',
-        url: `https://global.cainiao.com/detail.htm?mailNoList=${trackingNumber}`,
+        url: `https://global.cainiao.com/`,
         logo: '🐧'
       }
     }

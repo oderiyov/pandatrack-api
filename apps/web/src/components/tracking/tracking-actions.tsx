@@ -131,22 +131,6 @@ export default function TrackingActions({ trackingNumber, trackingUrl }: Trackin
           </button>
         </div>
       </div>
-
-      {/* QR Code placeholder */}
-      <div className="border-t border-gray-200 pt-6 mt-6">
-        <h4 className="font-semibold text-[#333037] mb-3">QR код для швидкого доступу</h4>
-        <div className="bg-gray-50 rounded-lg p-6 text-center">
-          <div className="w-20 h-20 bg-gray-200 rounded mx-auto mb-2 flex items-center justify-center">
-            <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                    d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M12 12h-4.01M12 12v4.01M12 12V7.99" />
-            </svg>
-          </div>
-          <p className="text-xs text-[#333037]/60">
-            QR код буде доступний незабаром
-          </p>
-        </div>
-      </div>
     </div>
   )
 }
