@@ -3,8 +3,16 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 
-export function TrackingForm() {
-  const [trackingNumber, setTrackingNumber] = useState('')
+interface TrackingFormProps {
+  defaultValue?: string
+  placeholder?: string
+}
+
+export function TrackingForm({ 
+  defaultValue = '', 
+  placeholder = "Введіть номер для відстеження..." 
+}: TrackingFormProps) {
+  const [trackingNumber, setTrackingNumber] = useState(defaultValue)
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
 
@@ -24,7 +32,7 @@ export function TrackingForm() {
           type="text"
           value={trackingNumber}
           onChange={(e) => setTrackingNumber(e.target.value)}
-          placeholder="Введіть номер для відстеження..."
+          placeholder={placeholder}
           className="flex-1 px-6 py-4 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg bg-white"
           style={{ maxWidth: '1080px' }}
           disabled={isLoading}
