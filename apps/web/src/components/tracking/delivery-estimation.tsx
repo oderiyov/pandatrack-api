@@ -19,6 +19,29 @@ interface DeliveryEstimationProps {
   isDelivered: boolean
 }
 
+// Функція для форматування дат в українському форматі
+const formatUkrainianDate = (dateString: string): string => {
+  try {
+    const date = new Date(dateString)
+    if (isNaN(date.getTime())) return 'Невідома дата'
+
+    const months = [
+      'січ.', 'лют.', 'бер.', 'квіт.', 'трав.', 'черв.',
+      'лип.', 'серп.', 'вер.', 'жовт.', 'лист.', 'груд.'
+    ]
+
+    const day = date.getDate()
+    const month = months[date.getMonth()]
+    const year = date.getFullYear()
+    const hours = date.getHours().toString().padStart(2, '0')
+    const minutes = date.getMinutes().toString().padStart(2, '0')
+
+    return `${day} ${month} ${year} р. ${hours}:${minutes}`
+  } catch (error) {
+    return 'Невідома дата'
+  }
+}
+
 export default function DeliveryEstimation({ trackingData, isDelivered }: DeliveryEstimationProps) {
   // Calculate delivery estimation based on carrier and route
   const getDeliveryEstimation = () => {
@@ -91,7 +114,7 @@ export default function DeliveryEstimation({ trackingData, isDelivered }: Delive
               Посилка доставлена за {trackingData.daysInTransit} днів
             </h3>
             <p className="text-green-700">
-              Доставлено {trackingData.events[0]?.date}
+              Доставлено {formatUkrainianDate(trackingData.events[0]?.date)}
             </p>
           </div>
         </div>

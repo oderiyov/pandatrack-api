@@ -1,4 +1,4 @@
-// components/tracking/tracking-timeline.tsx - ВИПРАВЛЕНА ВЕРСІЯ
+// components/tracking/tracking-timeline.tsx
 'use client'
 
 interface TrackingEvent {
@@ -8,7 +8,7 @@ interface TrackingEvent {
   description: string | string[]
   location?: string
   statusCode?: string
-  displayDate?: string // Додаємо для нового формату
+  displayDate?: string
 }
 
 interface TrackingTimelineProps {
@@ -82,24 +82,24 @@ export default function TrackingTimeline({ events, isDelivered }: TrackingTimeli
     <div className="bg-white rounded-lg shadow-sm p-6">
       <h2 className="text-xl font-bold mb-6 text-[#333037]">Історія відправлення</h2>
       
-      <div className="relative">
-        {/* ВИПРАВЛЕНА Timeline line - додаємо додатковий відступ зверху */}
-        <div className="absolute left-[14px] top-6 bottom-0 w-0.5 bg-gray-200 -ml-px"></div>
+      <div className="relative pl-8">
+        {/* ГОЛОВНА лінія - проходить через центри всіх кругів */}
+        <div className="absolute left-[15px] top-0 bottom-0 w-0.5 bg-gray-200"></div>
         
-        <div className="space-y-0">
+        <div className="space-y-6">
           {events.map((event, index) => (
-            <div key={index} className="relative flex items-start">
-              {/* ВИПРАВЛЕНИЙ Timeline dot - центрування відносно тексту */}
-              <div className="relative z-10 flex-shrink-0 mr-4 pt-1.5">
-                <div className={`w-3 h-3 rounded-full ${getStatusColor(event, index)}`}>
+            <div key={index} className="relative">
+              {/* КРУГ - позиціонується точно на лінії */}
+              <div className="absolute -left-[21px] top-1">
+                <div className={`w-4 h-4 rounded-full border-2 border-white shadow-sm ${getStatusColor(event, index)}`}>
                   {index === 0 && !isDelivered && (
                     <div className="absolute inset-0 rounded-full bg-blue-500 animate-ping opacity-75"></div>
                   )}
                 </div>
               </div>
               
-              {/* ВИПРАВЛЕНИЙ Event content - без додаткових відступів що розбивають лінію */}
-              <div className="flex-1 min-w-0 pb-6">
+              {/* КОНТЕНТ - вирівняний з кругом */}
+              <div className="ml-0">
                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between">
                   <div className="flex-1">
                     <h3 className="font-semibold text-[#333037] mb-1 leading-tight">
@@ -121,7 +121,7 @@ export default function TrackingTimeline({ events, isDelivered }: TrackingTimeli
                     )}
                   </div>
                   
-                  {/* ВИПРАВЛЕНА дата та час - використовуємо новий формат */}
+                  {/* ДАТА та ЧАС */}
                   <div className="text-sm text-[#333037]/60 mt-2 sm:mt-0 sm:text-right sm:ml-4 flex-shrink-0">
                     <p className="font-medium">
                       {event.displayDate || event.date}
