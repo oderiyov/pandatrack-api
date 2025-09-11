@@ -85,7 +85,9 @@ let trackingService = null;
         // НОВИЙ: Ініціалізація TrackingService після підключення Redis
         trackingService = new TrackingService(redisClient, supabase);
         console.log('TrackingService initialized with new architecture');
-        
+        app.locals.trackingService = trackingService;
+        global.trackingService = trackingService;
+
         // Тест провайдерів
         try {
             const healthCheck = await ProviderFactory.healthCheckAll();
@@ -101,6 +103,8 @@ let trackingService = null;
         // Ініціалізуємо TrackingService навіть без Redis (з обмеженою функціональністю)
         trackingService = new TrackingService(null, supabase);
         console.log('TrackingService initialized without Redis');
+        app.locals.trackingService = trackingService;
+        global.trackingService = trackingService;
     }
 })();
 

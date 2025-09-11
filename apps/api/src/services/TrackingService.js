@@ -131,9 +131,13 @@ class TrackingService {
                     events: result.data?.events || [],
                     cost: result.metadata?.cost || 0,
                     cached: result.cached || false,
-                    supportsInternational: false
+                    supportsInternational: true // ВИПРАВЛЕННЯ: було false
                 }],
-                cached: result.cached || false
+                cached: result.cached || false,
+                meta: {
+                    responseTime: result.processingTime || 0,
+                    timestamp: new Date().toISOString()
+                }
             };
         }
         

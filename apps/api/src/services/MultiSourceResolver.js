@@ -1,4 +1,4 @@
-// apps/api/src/services/MultiSourceResolver.js
+// apps/api/src/services/MultiSourceResolver.js - ПОВНИЙ ВИПРАВЛЕНИЙ ФАЙЛ
 const ProviderFactory = require('../providers/ProviderFactory');
 
 class MultiSourceResolver {
@@ -208,13 +208,27 @@ class MultiSourceResolver {
                 normalized.data.events = [];
             }
 
-            // Нормалізуємо формат дати в events
-            normalized.data.events = normalized.data.events.map(event => ({
-                ...event,
-                date: this.normalizeDate(event.date || event.datetime || event.timestamp),
-                status: event.status || event.description || 'Unknown',
-                location: event.location || event.place || ''
-            }));
+            // ВИПРАВЛЕНО: Нормалізуємо формат дати в events з правильною обробкою
+            normalized.data.events = normalized.data.events
+                .map(event => {
+                    const normalizedDate = this.normalizeDate(
+                        event.date || event.datetime || event.timestamp
+                    );
+                    
+                    // ВИПРАВЛЕННЯ: Пропускаємо події з некоректними датами
+                    if (!normalizedDate) {
+                        console.warn('Skipping event with invalid date:', event);
+                        return null;
+                    }
+                    
+                    return {
+                        ...event,
+                        date: normalizedDate,
+                        status: event.status || event.description || 'Unknown',
+                        location: event.location || event.place || ''
+                    };
+                })
+                .filter(event => event !== null); // Видаляємо події з некоректними датами
 
             // Додаємо метадані якщо відсутні
             if (!normalized.data.lastUpdate) {
@@ -226,14 +240,16 @@ class MultiSourceResolver {
         return normalized;
     }
 
+    // ВИПРАВЛЕНА ФУНКЦІЯ - ключове виправлення
     normalizeDate(dateInput) {
-        if (!dateInput) return new Date().toISOString();
+        if (!dateInput) return null; // ВИПРАВЛЕННЯ: повертаємо null замість поточної дати
         
         try {
             const date = new Date(dateInput);
-            return isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
+            // ВИПРАВЛЕННЯ: якщо дата некоректна, повертаємо null замість поточної дати
+            return isNaN(date.getTime()) ? null : date.toISOString();
         } catch {
-            return new Date().toISOString();
+            return null; // ВИПРАВЛЕННЯ: повертаємо null при помилці
         }
     }
 

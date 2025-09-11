@@ -1,85 +1,53 @@
-// apps/api/src/providers/NovaPoshtaProvider.js - НОВИЙ API v1.0
+// apps/api/src/providers/NovaPoshtaProvider.js - СТАБІЛЬНА ВЕРСІЯ
 const BaseProvider = require('./BaseProvider');
 
 class NovaPoshtaProvider extends BaseProvider {
     constructor(config) {
         super(config);
         this.apiKey = process.env.NOVAPOSHTA_API_KEY;
-        this.jwtToken = null;
-        this.jwtExpires = null;
-        this.baseUrl = 'https://api.novapost.com/v.1.0';
+        this.baseUrl = 'https://api.novaposhta.ua/v2.0/json/';
+        this.name = 'Nova Poshta';
         
         if (!this.apiKey) {
             console.warn('Nova Poshta API key not found in environment variables');
         }
     }
 
-    async getJwtToken() {
-        // Перевіряємо чи токен ще дійсний (з запасом 5 хвилин)
-        if (this.jwtToken && this.jwtExpires && Date.now() < (this.jwtExpires - 5 * 60 * 1000)) {
-            return this.jwtToken;
-        }
-
-        try {
-            const response = await this.makeRequest(`${this.baseUrl}/clients/authorization`, {
-                method: 'GET',
-                params: {
-                    apiKey: this.apiKey
-                },
-                timeout: 10000
-            });
-
-            if (response.data && response.data.jwt) {
-                this.jwtToken = response.data.jwt;
-                // JWT токени Nova Post діють 1 годину
-                this.jwtExpires = Date.now() + (60 * 60 * 1000);
-                
-                console.log('Nova Poshta JWT token refreshed');
-                return this.jwtToken;
-            }
-
-            throw new Error('Failed to get JWT token from Nova Post API');
-
-        } catch (error) {
-            console.error('Nova Poshta JWT error:', error.message);
-            this.jwtToken = null;
-            this.jwtExpires = null;
-            throw new Error(`Nova Poshta authentication failed: ${error.message}`);
-        }
-    }
-
     async track(trackingNumber, options = {}) {
         try {
-            // Отримуємо JWT токен
-            const jwt = await this.getJwtToken();
+            // Використовуємо офіційний Nova Poshta API v2.0
+            const requestBody = {
+                apiKey: this.apiKey,
+                modelName: "TrackingDocument",
+                calledMethod: "getStatusDocuments",
+                methodProperties: {
+                    Documents: [{
+                        DocumentNumber: trackingNumber,
+                        Phone: "" // Можна додати телефон для розширеної інформації
+                    }]
+                }
+            };
 
-            // Викликаємо FullTracking API
-            const response = await this.makeRequest(`${this.baseUrl}/shipments/tracking`, {
-                method: 'GET',
+            const response = await this.makeRequest(this.baseUrl, {
+                method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${jwt}`,
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
                 },
-                params: {
-                    'numbers[]': trackingNumber,
-                    // Включаємо додаткову інформацію
-                    withUndeliveryReason: true,
-                    withCreatedOnTheBasis: true,
-                    external: 1
-                },
+                data: requestBody,
                 timeout: 15000
             });
 
-            console.log('Nova Poshta FullTracking API response:', JSON.stringify(response.data, null, 2));
+            console.log('Nova Poshta API v2.0 response:', JSON.stringify(response.data, null, 2));
 
-            // Перевіряємо успішність відповіді
-            if (response.data && response.data.items && response.data.items.length > 0) {
-                const trackingData = response.data.items[0];
-                return this.normalizeNovaPostResponse(trackingData, trackingNumber);
+            // Перевіряємо структуру відповіді згідно документації
+            if (response.data && response.data.success && response.data.data && response.data.data.length > 0) {
+                return this.normalizeOfficialApiResponse(response.data.data[0], trackingNumber);
             } else {
+                const errorMessage = response.data?.errors?.[0] || 'No tracking data found';
                 return {
                     success: false,
-                    error: 'Nova Post: Tracking number not found or no tracking data available',
+                    error: `Nova Poshta: ${errorMessage}`,
                     provider: this.name,
                     trackingNumber: trackingNumber
                 };
@@ -88,24 +56,10 @@ class NovaPoshtaProvider extends BaseProvider {
         } catch (error) {
             console.error(`${this.name} API error:`, error.message);
             
-            // Обробка помилок авторизації
-            if (error.message.includes('401') || error.message.includes('Unauthorized')) {
-                // Скидаємо JWT і спробуємо ще раз
-                this.jwtToken = null;
-                this.jwtExpires = null;
-                
-                return {
-                    success: false,
-                    error: 'Nova Post authorization failed. Please check API key.',
-                    provider: this.name,
-                    trackingNumber: trackingNumber
-                };
-            }
-            
             if (error.response) {
                 return {
                     success: false,
-                    error: `Nova Post API HTTP ${error.response.status}: ${error.response.statusText}`,
+                    error: `Nova Poshta API HTTP ${error.response.status}: ${error.response.statusText}`,
                     provider: this.name,
                     trackingNumber: trackingNumber
                 };
@@ -115,226 +69,239 @@ class NovaPoshtaProvider extends BaseProvider {
         }
     }
 
-    normalizeNovaPostResponse(data, trackingNumber) {
+    normalizeOfficialApiResponse(data, trackingNumber) {
         try {
-            const events = this.buildEventsFromTracking(data);
-            const currentStatus = this.getCurrentStatus(data);
-            const metadata = this.extractMetadata(data);
+            // Створюємо події з даних офіційного API
+            const events = this.buildEventsFromOfficialData(data);
+            const status = this.determineStatus(data);
+            const metadata = this.extractOfficialMetadata(data);
 
             return {
                 success: true,
                 data: {
                     trackingNumber: trackingNumber,
-                    carrier: 'Nova Post',
-                    status: currentStatus.status,
-                    normalizedStatus: this.mapNovaPostStatus(currentStatus.statusCode),
-                    statusCode: currentStatus.statusCode,
-                    lastUpdate: currentStatus.statusDate || new Date().toISOString(),
+                    carrier: 'Nova Poshta',
+                    status: status.description,
+                    normalizedStatus: this.mapOfficialStatus(data.StatusCode),
+                    statusCode: data.StatusCode,
+                    lastUpdate: this.parseDate(data.TrackingUpdateDate) || new Date().toISOString(),
                     events: events,
-                    estimatedDelivery: currentStatus.scheduledDate,
-                    actualDelivery: currentStatus.closingDate,
-                    deliveryType: currentStatus.deliveryType,
-                    destinationCountry: currentStatus.deliveryCountry,
-                    daysInTransit: this.calculateDaysInTransit(
-                        currentStatus.createdDate, 
-                        currentStatus.closingDate
-                    ),
+                    estimatedDelivery: this.parseDate(data.ScheduledDeliveryDate),
+                    actualDelivery: this.parseDate(data.ActualDeliveryDate),
+                    daysInTransit: this.calculateDaysFromOfficialData(data),
+                    sender: {
+                        city: data.CitySender,
+                        address: data.SenderAddress,
+                        warehouse: data.WarehouseSender
+                    },
+                    recipient: {
+                        city: data.CityRecipient,
+                        address: data.RecipientAddress,
+                        warehouse: data.WarehouseRecipient
+                    },
+                    weight: data.DocumentWeight,
+                    cost: data.DocumentCost,
                     ...metadata,
                     raw: data
                 },
                 provider: this.name,
-                cost: 0, // Nova Post API безкоштовний
+                cost: 0,
                 supportsInternational: true,
                 timestamp: new Date().toISOString()
             };
 
         } catch (error) {
-            console.error('Nova Post response normalization error:', error.message);
+            console.error('Nova Poshta response normalization error:', error.message);
             return {
                 success: false,
-                error: `Failed to process Nova Post response: ${error.message}`,
+                error: `Failed to process Nova Poshta response: ${error.message}`,
                 provider: this.name,
                 trackingNumber: trackingNumber
             };
         }
     }
 
-    buildEventsFromTracking(data) {
+    buildEventsFromOfficialData(data) {
         const events = [];
-
-        // Використовуємо detailsTracking для повної історії подій
-        if (data.detailsTracking && Array.isArray(data.detailsTracking)) {
-            data.detailsTracking.forEach(event => {
-                events.push({
-                    date: this.parseISODate(event.date),
-                    status: event.eventName || event.event || 'Unknown Event',
-                    description: this.translateEventDescription(event.event, event.eventName),
-                    location: this.buildLocationFromEvent(event),
-                    statusCode: event.code,
-                    eventType: event.event,
-                    eventStatus: event.eventStatus,
-                    countryCode: event.countryCode
-                });
+        
+        // 1. Створення накладної
+        if (data.DateCreated) {
+            events.push({
+                date: this.parseDate(data.DateCreated),
+                status: 'Накладна створена',
+                description: 'Відправник оформив накладну',
+                location: data.CitySender || 'Unknown',
+                statusCode: '1',
+                eventType: 'created'
             });
         }
 
-        // Додаємо події з historyOnlineTracking якщо немає detailsTracking
-        if (events.length === 0 && data.historyOnlineTracking && Array.isArray(data.historyOnlineTracking)) {
-            data.historyOnlineTracking.forEach(event => {
+        // 2. Сканування/прийняття
+        if (data.DateScan && data.DateScan !== '0001-01-01 00:00:00') {
+            const scanDate = this.parseDate(data.DateScan);
+            if (scanDate) {
                 events.push({
-                    date: this.parseISODate(event.date),
-                    status: event.eventName || event.event || 'Unknown Event',
-                    description: this.translateEventDescription(event.event, event.eventName),
-                    location: this.buildLocationFromEvent(event),
-                    statusCode: event.code,
-                    eventType: event.event,
-                    eventStatus: event.eventStatus,
-                    countryCode: event.countryCode
+                    date: scanDate,
+                    status: 'Відправлення прийнято',
+                    description: 'Накладна відскановано в систему',
+                    location: data.CitySender || 'Unknown',
+                    statusCode: '4',
+                    eventType: 'accepted'
                 });
-            });
+            }
         }
 
-        // Сортуємо події по даті (найновіші спочатку для UI)
-        return events.sort((a, b) => new Date(b.date) - new Date(a.date));
+        // 3. Поточний статус (використовуємо найточнішу дату)
+        if (data.Status && data.StatusCode) {
+            let currentEventDate = null;
+            
+            // Пріоритет дат для поточного статусу
+            if (data.RecipientDateTime) {
+                currentEventDate = this.parseDate(data.RecipientDateTime);
+            } else if (data.ActualDeliveryDate) {
+                currentEventDate = this.parseDate(data.ActualDeliveryDate);
+            } else if (data.TrackingUpdateDate) {
+                currentEventDate = this.parseDate(data.TrackingUpdateDate);
+            }
+            
+            // Якщо немає жодної валідної дати, НЕ створюємо подію
+            if (currentEventDate) {
+                events.push({
+                    date: currentEventDate,
+                    status: data.Status,
+                    description: data.Status,
+                    location: this.buildLocationFromOfficialData(data),
+                    statusCode: data.StatusCode,
+                    eventType: 'current'
+                });
+            }
+        }
+
+        // 4. Додаткові події на основі дат
+        if (data.ScheduledDeliveryDate && data.ScheduledDeliveryDate !== data.RecipientDateTime) {
+            const scheduledDate = this.parseDate(data.ScheduledDeliveryDate);
+            if (scheduledDate) {
+                events.push({
+                    date: scheduledDate,
+                    status: 'Заплановано до доставки',
+                    description: 'Очікувана дата доставки',
+                    location: data.CityRecipient || 'Unknown',
+                    statusCode: '6',
+                    eventType: 'scheduled'
+                });
+            }
+        }
+
+        // Видаляємо дублікати та сортуємо
+        const uniqueEvents = events
+            .filter(event => event.date !== null) // Тільки валідні дати
+            .filter((event, index, arr) => 
+                index === arr.findIndex(e => 
+                    Math.abs(new Date(e.date) - new Date(event.date)) < 60000 && // В межах хвилини
+                    e.statusCode === event.statusCode
+                )
+            );
+
+        return uniqueEvents.sort((a, b) => new Date(a.date) - new Date(b.date));
     }
 
-    getCurrentStatus(data) {
-        // Беремо поточний статус з currentStatus масиву
-        if (data.currentStatus && Array.isArray(data.currentStatus) && data.currentStatus.length > 0) {
-            return data.currentStatus[0];
-        }
-
-        // Fallback до першої події якщо currentStatus немає
-        if (data.detailsTracking && Array.isArray(data.detailsTracking) && data.detailsTracking.length > 0) {
-            const latestEvent = data.detailsTracking[0];
-            return {
-                status: latestEvent.eventName || latestEvent.event,
-                statusCode: latestEvent.code,
-                statusDate: latestEvent.date,
-                deliveryType: 'Unknown',
-                deliveryCountry: latestEvent.countryCode
-            };
-        }
-
+    determineStatus(data) {
         return {
-            status: 'Unknown',
-            statusCode: '999',
-            statusDate: new Date().toISOString(),
-            deliveryType: 'Unknown',
-            deliveryCountry: 'UA'
+            description: data.Status || 'Unknown Status',
+            code: data.StatusCode || '999'
         };
     }
 
-    extractMetadata(data) {
-        const metadata = {};
-
-        // Інформація про посилки
-        if (data.parcels && Array.isArray(data.parcels) && data.parcels.length > 0) {
-            const parcel = data.parcels[0];
-            metadata.weight = parcel.actualWeight;
-            metadata.declaredValue = parcel.insuranceCost;
-            metadata.currency = parcel.insuranceCostCurrencyCode;
-            metadata.description = parcel.parcelDescription;
-            metadata.dimensions = {
-                length: parcel.length,
-                width: parcel.width,
-                height: parcel.height
-            };
-        }
-
-        // Причини недоставки
-        if (data.undeliveryReasons && Array.isArray(data.undeliveryReasons)) {
-            metadata.undeliveryReasons = data.undeliveryReasons.map(reason => ({
-                reason: reason.reasonName,
-                date: this.parseISODate(reason.reasonDate),
-                subtype: reason.subtypeOfReasonName
-            }));
-        }
-
-        // Пов'язані відправлення
-        if (data.alternativeNumbers && Array.isArray(data.alternativeNumbers)) {
-            metadata.relatedShipments = data.alternativeNumbers;
-        }
-
-        return metadata;
-    }
-
-    parseISODate(dateString) {
-        if (!dateString) return new Date().toISOString();
-        
-        try {
-            // Nova Post повертає дати в ISO 8601 UTC форматі
-            const date = new Date(dateString);
-            return isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
-        } catch {
-            return new Date().toISOString();
-        }
-    }
-
-    buildLocationFromEvent(event) {
-        const locationParts = [];
-        
-        if (event.settlementName) locationParts.push(event.settlementName);
-        if (event.divisionName) locationParts.push(event.divisionName);
-        if (event.countryCode) locationParts.push(event.countryCode);
-        
-        return locationParts.join(', ') || 'Unknown Location';
-    }
-
-    translateEventDescription(eventType, eventName) {
-        // Повертаємо людськозрозумілий опис події
-        if (eventName) return eventName;
-
-        const translations = {
-            'ReceivedWarehouse': 'Отримано на складі',
-            'ReceivedDoors': 'Доставлено за адресою',
-            'Departure': 'Відправлено',
-            'Arrival': 'Прибуло',
-            'InCityRecipient': 'У місті отримувача',
-            'ArrivalSC': 'Прибуло в сортувальний центр',
-            'LoadingCourier': 'Завантажено кур\'єру',
-            'ArrivalSenderDoors': 'Забрано у відправника',
-            'TransferToPartner': 'Передано партнеру',
-            'CustomsClearanceInitiated': 'Митне оформлення',
-            'OrderRedirecting': 'Перенаправлення',
-            'UndeliveryReasonsNoConnection': 'Неуспішна доставка (немає зв\'язку)',
-            'UndeliveryReasonsClient': 'Неуспішна доставка (відмова клієнта)'
+    extractOfficialMetadata(data) {
+        return {
+            payerType: data.PayerType,
+            serviceType: data.ServiceType,
+            cargoDescription: data.CargoDescriptionString,
+            announcedPrice: data.AnnouncedPrice,
+            afterpayment: data.AfterpaymentOnGoodsCost,
+            seatsAmount: data.SeatsAmount,
+            packageType: data.Packaging
         };
-
-        return translations[eventType] || eventType || 'Невідома подія';
     }
 
-    calculateDaysInTransit(createdDate, deliveredDate) {
+    buildLocationFromOfficialData(data) {
+        if (data.StatusCode === '9' || data.StatusCode === '10') {
+            // Доставлено
+            return `${data.CityRecipient}, ${data.WarehouseRecipient}`;
+        } else if (data.StatusCode === '7' || data.StatusCode === '8') {
+            // На відділенні
+            return `${data.CityRecipient}, ${data.WarehouseRecipient}`;
+        } else {
+            // В дорозі або на складі відправника
+            return data.CitySender || 'Unknown Location';
+        }
+    }
+
+    calculateDaysFromOfficialData(data) {
+        const createdDate = this.parseDate(data.DateCreated);
+        const currentDate = this.parseDate(data.ActualDeliveryDate) || 
+                           this.parseDate(data.RecipientDateTime) ||
+                           this.parseDate(data.TrackingUpdateDate) ||
+                           new Date().toISOString();
+        
         if (!createdDate) return 0;
-
-        const startDate = new Date(createdDate);
-        const endDate = deliveredDate ? new Date(deliveredDate) : new Date();
         
-        const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
+        const start = new Date(createdDate);
+        const end = new Date(currentDate);
+        
+        if (isNaN(start.getTime()) || isNaN(end.getTime())) return 0;
+        
+        const diffTime = Math.abs(end.getTime() - start.getTime());
         return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     }
 
-    mapNovaPostStatus(statusCode) {
+    parseDate(dateString) {
+        if (!dateString || dateString === '0001-01-01 00:00:00' || dateString === '') return null;
+        
+        try {
+            // Nova Poshta повертає дати в форматі "dd-mm-yyyy hh:mm:ss"
+            let date;
+            
+            if (dateString.includes('-') && dateString.includes(' ') && dateString.length <= 19) {
+                // Формат: "24-06-2025 14:31:32"
+                const [datePart, timePart] = dateString.split(' ');
+                const [day, month, year] = datePart.split('-');
+                date = new Date(`${year}-${month}-${day}T${timePart}.000Z`);
+            } else {
+                // Пробуємо стандартний парсинг (для ISO дат)
+                date = new Date(dateString);
+            }
+            
+            if (isNaN(date.getTime())) {
+                console.warn('Invalid date format:', dateString);
+                return null;
+            }
+            
+            return date.toISOString();
+        } catch (error) {
+            console.warn('Date parsing error for:', dateString, error.message);
+            return null;
+        }
+    }
+
+    mapOfficialStatus(statusCode) {
         const statusMap = {
-            '1': 'pending',      // Ready to send
-            '4': 'accepted',     // Accepted for sending
-            '5': 'in_transit',   // Sent from division
-            '6': 'in_transit',   // Arrived in recipient city
-            '7': 'at_pickup',    // Arrived at division
-            '8': 'at_pickup',    // Arrived at postomat
-            '9': 'delivered',    // Closed (delivered)
-            '10': 'delivered',   // Closed with money transfer
-            '11': 'delivered',   // Money transfer completed
-            '13': 'in_transit',  // At sorting center
-            '16': 'in_transit',  // Transferred to partner
-            '101': 'out_for_delivery', // Uploaded to courier
-            '102': 'returning',  // Returns
-            '103': 'refused',    // Refusal
-            '104': 'redirected', // Redirecting
-            '105': 'disposed',   // Utilization
-            '111': 'exception',  // Failed delivery
-            '112': 'exception',  // Delivery postponed
-            '999': 'unknown'     // Undetermined
+            '1': 'pending',      // Створено
+            '3': 'not_found',    // Не знайдено
+            '4': 'accepted',     // Прийнято
+            '5': 'in_transit',   // В дорозі до міста
+            '6': 'in_transit',   // У місті одержувача
+            '7': 'at_pickup',    // Прибув на відділення
+            '8': 'at_pickup',    // Завантажено в поштомат
+            '9': 'delivered',    // Отримано
+            '10': 'delivered',   // Отримано з грошовим переказом
+            '11': 'delivered',   // Грошовий переказ видано
+            '101': 'out_for_delivery', // На шляху до одержувача
+            '102': 'returning',  // Відмова від отримання
+            '103': 'refused',    // Відмова
+            '104': 'redirected', // Змінено адресу
+            '111': 'exception',  // Невдала доставка
+            '112': 'exception'   // Доставка перенесена
         };
 
         return statusMap[statusCode] || 'unknown';
@@ -343,10 +310,7 @@ class NovaPoshtaProvider extends BaseProvider {
     canHandle(trackingNumber, carrierCode = null) {
         const number = trackingNumber.trim();
         
-        // Nova Post нові формати (SHPL префікс для міжнародних)
-        if (/^SHPL\d{10}$/.test(number)) return true;
-        
-        // Старі Nova Poshta формати (для зворотної сумісності)
+        // Nova Poshta формати
         if (/^20\d{12,13}$/.test(number)) return true;
         if (/^59\d{12,13}$/.test(number)) return true;
         if (/^\d{13,15}$/.test(number)) return true;
@@ -365,15 +329,30 @@ class NovaPoshtaProvider extends BaseProvider {
         }
 
         try {
-            // Перевіряємо отримання JWT токену
-            const jwt = await this.getJwtToken();
-            
+            // Тестуємо з невалідним номером щоб не витрачати ресурси
+            const testBody = {
+                apiKey: this.apiKey,
+                modelName: "TrackingDocument",
+                calledMethod: "getStatusDocuments",
+                methodProperties: {
+                    Documents: [{ DocumentNumber: "1234567890123", Phone: "" }]
+                }
+            };
+
+            const response = await this.makeRequest(this.baseUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                data: testBody,
+                timeout: 10000
+            });
+
+            // Навіть якщо номер не знайдено, API працює
             return {
                 status: 'ok',
                 provider: this.name,
-                apiVersion: 'v1.0',
-                features: ['FullTracking', 'JWT Authentication'],
-                jwtValid: !!jwt,
+                apiVersion: 'v2.0',
+                features: ['Official API', 'Status Tracking'],
+                apiKeyValid: !!response.data,
                 timestamp: new Date().toISOString()
             };
 
