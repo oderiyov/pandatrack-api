@@ -1,4 +1,4 @@
-// app/track/[tn]/page.tsx
+// app/track/[tn]/page.tsx - ПОВНИЙ ФАЙЛ З ВИПРАВЛЕННЯМИ
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
@@ -73,16 +73,39 @@ export default function TrackingPage() {
   const isSafari = typeof window !== 'undefined' && /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
   const isAndroid = typeof window !== 'undefined' && /Android/.test(navigator.userAgent)
 
-  // Calculate days in transit
+  // ВИПРАВЛЕНО: Calculate days in transit using real event dates
   const calculateDaysInTransit = (events: TrackingEvent[]): number => {
     if (!events || events.length === 0) return 0
     
-    const firstEvent = events[events.length - 1] // API returns newest first
-    const firstDate = new Date(firstEvent.date)
-    const today = new Date()
+    // Sort events by date to find actual first and last events
+    const sortedEvents = [...events].sort((a, b) => {
+      const dateA = new Date(a.date).getTime()
+      const dateB = new Date(b.date).getTime()
+      return dateA - dateB // Oldest first
+    })
     
-    const diffTime = Math.abs(today.getTime() - firstDate.getTime())
+    if (sortedEvents.length === 0) return 0
+    
+    const firstEvent = sortedEvents[0] // Oldest event
+    const lastEvent = sortedEvents[sortedEvents.length - 1] // Newest event
+    
+    const firstDate = new Date(firstEvent.date)
+    const lastDate = new Date(lastEvent.date)
+    
+    // Validate dates
+    if (isNaN(firstDate.getTime()) || isNaN(lastDate.getTime())) {
+      console.warn('Invalid dates in events:', { firstDate, lastDate })
+      return 0
+    }
+    
+    const diffTime = Math.abs(lastDate.getTime() - firstDate.getTime())
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    
+    // Sanity check - if more than 365 days, something is wrong
+    if (diffDays > 365) {
+      console.warn('Calculated days in transit seems too high:', diffDays)
+      return 0
+    }
     
     return diffDays
   }
@@ -175,15 +198,29 @@ export default function TrackingPage() {
         throw new Error('Дані про посилку не знайдено')
       }
 
-      // Process events and format dates
+      // ВИПРАВЛЕНО: Process events with better date handling
       const processedEvents = (primarySource.events || []).map(event => {
-        const eventDate = new Date(event.date)
+        // Handle different date formats from API
+        let eventDate: Date
+        try {
+          eventDate = new Date(event.date)
+          // Validate the date
+          if (isNaN(eventDate.getTime())) {
+            console.warn('Invalid event date:', event.date)
+            eventDate = new Date() // Fallback to current date
+          }
+        } catch (error) {
+          console.warn('Date parsing error for event:', event.date, error)
+          eventDate = new Date() // Fallback to current date
+        }
+
         const description = Array.isArray(event.description) 
           ? event.description.join(', ') 
           : event.description
 
         return {
-          date: eventDate.toLocaleDateString('uk-UA'),
+          date: eventDate.toISOString(),
+          displayDate: eventDate.toLocaleDateString('uk-UA'),
           time: eventDate.toLocaleTimeString('uk-UA', { 
             hour: '2-digit', 
             minute: '2-digit' 
@@ -193,6 +230,10 @@ export default function TrackingPage() {
           location: event.location,
           statusCode: event.statusCode
         }
+      }).filter(event => {
+        // Filter out events with invalid dates
+        const testDate = new Date(event.date)
+        return !isNaN(testDate.getTime())
       })
 
       const daysInTransit = calculateDaysInTransit(processedEvents)
@@ -461,7 +502,7 @@ export default function TrackingPage() {
               {/* Package Metadata */}
               <TrackingMetadata trackingData={trackingData} />
               
-              {/* Action Buttons */}
+              {/* Action Buttons - QR код видалено як запитували */}
               <TrackingActions 
                 trackingNumber={trackingData.trackingNumber}
                 trackingUrl={`https://pandatrack.com.ua/track/${trackingData.trackingNumber}`}
