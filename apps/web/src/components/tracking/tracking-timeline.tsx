@@ -1,4 +1,4 @@
-// components/tracking/tracking-timeline.tsx - ВИПРАВЛЕНЕ ВИРІВНЮВАННЯ
+// components/tracking/tracking-timeline.tsx - ПОВНІСТЮ ВИПРАВЛЕНИЙ
 'use client'
 
 interface TrackingEvent {
@@ -14,9 +14,10 @@ interface TrackingEvent {
 interface TrackingTimelineProps {
   events: TrackingEvent[]
   isDelivered: boolean
+  carrier?: string
 }
 
-export default function TrackingTimeline({ events, isDelivered }: TrackingTimelineProps) {
+export default function TrackingTimeline({ events, isDelivered, carrier }: TrackingTimelineProps) {
   if (!events || events.length === 0) {
     return (
       <div className="bg-white rounded-lg shadow-sm p-6">
@@ -32,6 +33,31 @@ export default function TrackingTimeline({ events, isDelivered }: TrackingTimeli
     const dateB = new Date(b.date).getTime()
     return dateB - dateA // Newest first
   })
+
+  // Функція для отримання логотипу перевізника
+  const getCarrierLogo = (carrierName?: string) => {
+    if (!carrierName) return '📦';
+    
+    const carrierLower = carrierName.toLowerCase();
+    
+    if (carrierLower.includes('nova') || carrierLower.includes('нова')) {
+      return '📦'; // Nova Poshta
+    } else if (carrierLower.includes('ukr') || carrierLower.includes('укр')) {
+      return '🏣'; // Ukrposhta  
+    } else if (carrierLower.includes('dhl')) {
+      return '✈️'; // DHL
+    } else if (carrierLower.includes('meest') || carrierLower.includes('міст')) {
+      return '🚚'; // Meest
+    } else if (carrierLower.includes('sat')) {
+      return '🚛'; // SAT
+    } else if (carrierLower.includes('delivery')) {
+      return '🚐'; // Delivery Auto
+    } else if (carrierLower.includes('cainiao')) {
+      return '🐧'; // Cainiao
+    } else {
+      return '📦'; // Default
+    }
+  }
 
   // Функція для очищення тексту від дублювання
   const cleanStatusText = (status: string, description: string | string[], location?: string) => {
@@ -84,23 +110,42 @@ export default function TrackingTimeline({ events, isDelivered }: TrackingTimeli
           const isFirstEvent = index === 0
           const { mainText, subText } = cleanStatusText(event.status, event.description, event.location)
 
-          // Determine status color
+          // Поліпшена логіка кольорів timeline
           const getStatusColor = () => {
+            // Зелений для доставлених
             if (isFirstEvent && isDelivered) {
               return {
                 dot: 'bg-green-500 border-green-500',
                 line: 'bg-gray-300'
               }
-            } else if (index < 3) {
+            }
+            
+            // Перевірка чи це доставлений статус
+            const deliveredKeywords = ['доставлено', 'отримано', 'вручено', 'delivered', 'received'];
+            const isDeliveredStatus = deliveredKeywords.some(keyword => 
+              mainText.toLowerCase().includes(keyword) || 
+              (subText && subText.toLowerCase().includes(keyword))
+            );
+            
+            if (isDeliveredStatus) {
+              return {
+                dot: 'bg-green-500 border-green-500',
+                line: 'bg-gray-300'
+              }
+            }
+            
+            // Синій для активних (останні 2-3 статуси якщо не доставлено)
+            if (!isDelivered && index < 3) {
               return {
                 dot: 'bg-blue-500 border-blue-500',
                 line: 'bg-gray-300'
               }
-            } else {
-              return {
-                dot: 'bg-gray-400 border-gray-400',
-                line: 'bg-gray-300'
-              }
+            }
+            
+            // Сірий для старих статусів
+            return {
+              dot: 'bg-gray-400 border-gray-400',
+              line: 'bg-gray-300'
             }
           }
 
@@ -122,18 +167,23 @@ export default function TrackingTimeline({ events, isDelivered }: TrackingTimeli
 
               {/* Event Content */}
               <div className="flex-1 pb-8">
-                {/* Status Header - H3 тепер вирівняний з кружком */}
+                {/* Status Header з логотипом */}
                 <div className="mb-2">
-                  <h3 className="font-bold text-[#333037] text-lg leading-tight">
-                    {mainText}
-                  </h3>
-                  
-                  {/* Додаткова інформація - показуємо тільки якщо є */}
-                  {subText && (
-                    <p className="text-[#333037]/80 text-sm mt-1">
-                      {subText}
-                    </p>
-                  )}
+                  <div className="flex items-start space-x-2">
+                    <span className="text-lg flex-shrink-0">{getCarrierLogo(carrier)}</span>
+                    <div>
+                      <h3 className="font-bold text-[#333037] text-lg leading-tight">
+                        {mainText}
+                      </h3>
+                      
+                      {/* Додаткова інформація - показуємо тільки якщо є */}
+                      {subText && (
+                        <p className="text-[#333037]/80 text-sm mt-1">
+                          {subText}
+                        </p>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 {/* Date and Time */}

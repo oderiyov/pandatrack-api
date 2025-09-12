@@ -538,6 +538,7 @@ export default function TrackingPage() {
               <TrackingTimeline 
                 events={trackingData.events}
                 isDelivered={isDelivered}
+                carrier={trackingData.carrier}
               />
             </div>
 
