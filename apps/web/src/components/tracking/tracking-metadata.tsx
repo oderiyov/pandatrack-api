@@ -40,7 +40,7 @@ export default function TrackingMetadata({ trackingData }: TrackingMetadataProps
       },
       'novaposhta': {
         name: 'Нова Пошта',
-        url: `https://novaposhta.ua/tracking/`,
+        url: `https://tracking.novaposhta.ua/#/uk`,
         logo: '📦'
       },
       'dhl': {
