@@ -13,10 +13,22 @@ const EXACT_TRANSLATIONS = {
     'Left branch': 'Вийшло з відділення',
     'Left the branch': 'Вийшло з відділення',
     
-    // Доставка
-    'Delivered': 'Доставлено',
+    // Доставка - БЕЗ дублювання description
     'Delivered at parcel locker': 'Доставлено до поштомату',
-    'Delivered at address': 'Доставлено за адресою'
+    'Delivered at address': 'Доставлено за адресою',
+    'Delivered': 'Доставлено',
+    
+    // Прибуття - коротші варіанти
+    'Arrived at parcel locker': 'Прибуло до поштомату', 
+    'Arrived at the address depot': 'Прибуло до адресного депо',
+    'Arrived at the depot': 'Прибуло до депо',
+    'Arrived at the KIT': 'Прибуло до КІТ',
+    'Arrived at terminal': 'Прибуло до терміналу',
+    
+    // Відправка - коротші варіанти  
+    'Left the address depot': 'Вийшло з адресного депо',
+    'Left the KIT': 'Вийшло з КІТ',
+    'Left the terminal': 'Вийшло з терміналу'
 };
 
 // Словник локацій та термінів
@@ -62,20 +74,25 @@ function translateStatus(englishStatus) {
 
     // Основні patterns для статусів
     translated = translated
-        // Delivered patterns
-        .replace(/^Delivered at parcel locker (\d+)$/g, 'Доставлено до поштомату $1')
+        // Delivered patterns - з номерами
+        .replace(/^Delivered at parcel locker (\d+)$/g, 'Отримано в поштоматі $1')
+        .replace(/^Delivered at branch (\d+)$/g, 'Отримано у відділенні $1') 
         .replace(/^Delivered at (.+)$/g, 'Доставлено до $1')
         
         // Arrived patterns  
         .replace(/^Arrived at parcel locker (\d+)$/g, 'Прибуло до поштомату $1')
+        .replace(/^Arrived at branch (\d+)$/g, 'Прибуло до відділення $1')
         .replace(/^Arrived at the (.+)$/g, 'Прибуло до $1')
         .replace(/^Arrived at (.+)$/g, 'Прибуло до $1')
         
         // Left patterns
         .replace(/^Left the (.+)$/g, 'Вийшло з $1')
+        .replace(/^Left branch (\d+)$/g, 'Вийшло з відділення $1')
         .replace(/^Left (.+)$/g, 'Вийшло з $1')
         
-        // Accepted patterns
+        // Accepted patterns  
+        .replace(/^Accepted at branch (\d+)$/g, 'Прийнято у відділенні $1')
+        .replace(/^Accepted at pickup point (\d+)$/g, 'Прийнято у пункті прийому $1')
         .replace(/^Accepted at (.+)$/g, 'Прийнято у $1');
 
     // Замінюємо терміни та локації
