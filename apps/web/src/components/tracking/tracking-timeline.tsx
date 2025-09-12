@@ -1,4 +1,4 @@
-// components/tracking/tracking-timeline.tsx
+// components/tracking/tracking-timeline.tsx - ОПТИМІЗОВАНА ВЕРСІЯ
 'use client'
 
 interface TrackingEvent {
@@ -20,128 +20,157 @@ export default function TrackingTimeline({ events, isDelivered }: TrackingTimeli
   if (!events || events.length === 0) {
     return (
       <div className="bg-white rounded-lg shadow-sm p-6">
-        <h2 className="text-xl font-bold mb-6 text-[#333037]">Історія відправлення</h2>
-        <div className="text-center py-8">
-          <p className="text-[#333037]/60">Інформація про статуси поки недоступна</p>
-        </div>
+        <h2 className="text-xl font-bold mb-4 text-[#333037]">Історія відправлення</h2>
+        <p className="text-[#333037]/70">Дані про історію відправлення поки недоступні</p>
       </div>
     )
   }
 
-  const getStatusColor = (event: TrackingEvent, index: number) => {
-    const status = event.status.toLowerCase()
-    
-    // Delivered status
-    if (status.includes('отримано') || 
-        status.includes('доставлен') || 
-        status.includes('вручено') ||
-        status.includes('delivered')) {
-      return 'bg-green-500'
-    }
-    
-    // Error/Failed status
-    if (status.includes('неуспішна') || 
-        status.includes('помилка') || 
-        status.includes('повернуто') ||
-        status.includes('failed')) {
-      return 'bg-red-500'
-    }
-    
-    // First event (latest) - active
-    if (index === 0 && !isDelivered) {
-      return 'bg-blue-500 animate-pulse'
-    }
-    
-    // In transit
-    if (status.includes('транзит') || 
-        status.includes('дорозі') || 
-        status.includes('transit') ||
-        status.includes('shipped')) {
-      return 'bg-blue-500'
-    }
-    
-    // Processing/Waiting
-    if (status.includes('очікує') || 
-        status.includes('обробляється') ||
-        status.includes('processing')) {
-      return 'bg-yellow-500'
-    }
-    
-    // Default
-    return 'bg-[#333037]'
-  }
+  // Sort events by date (newest first for display)
+  const sortedEvents = [...events].sort((a, b) => {
+    const dateA = new Date(a.date).getTime()
+    const dateB = new Date(b.date).getTime()
+    return dateB - dateA // Newest first
+  })
 
-  const formatDescription = (description: string | string[]) => {
-    if (Array.isArray(description)) {
-      return description.join(', ')
+  // Функція для очищення тексту від дублювання
+  const cleanStatusText = (status: string, description: string | string[], location?: string) => {
+    const descText = Array.isArray(description) ? description.join(', ') : description
+    
+    // Якщо status і description ідентичні, показуємо тільки один раз
+    if (status === descText) {
+      return {
+        mainText: status,
+        subText: location || null
+      }
     }
-    return description
+    
+    // Якщо description містить додаткову інформацію
+    if (descText && descText !== status) {
+      // Перевіряємо чи description не просто повторює status
+      const statusLower = status.toLowerCase()
+      const descLower = descText.toLowerCase()
+      
+      if (descLower.includes(statusLower) || statusLower.includes(descLower)) {
+        // Якщо один містить інший, беремо довший
+        const mainText = descText.length > status.length ? descText : status
+        return {
+          mainText,
+          subText: location || null
+        }
+      } else {
+        // Якщо різні, показуємо статус як заголовок, опис як підтекст
+        return {
+          mainText: status,
+          subText: location ? `${descText} • ${location}` : descText
+        }
+      }
+    }
+    
+    // За замовчуванням
+    return {
+      mainText: status,
+      subText: location || null
+    }
   }
 
   return (
     <div className="bg-white rounded-lg shadow-sm p-6">
       <h2 className="text-xl font-bold mb-6 text-[#333037]">Історія відправлення</h2>
       
-      <div className="relative pl-8">
-        {/* ГОЛОВНА лінія - проходить через центри всіх кругів */}
-        <div className="absolute left-[15px] top-0 bottom-0 w-0.5 bg-gray-200"></div>
-        
-        <div className="space-y-6">
-          {events.map((event, index) => (
+      <div className="relative">
+        {sortedEvents.map((event, index) => {
+          const isLastEvent = index === sortedEvents.length - 1
+          const isFirstEvent = index === 0
+          const { mainText, subText } = cleanStatusText(event.status, event.description, event.location)
+
+          // Determine status color
+          const getStatusColor = () => {
+            if (isFirstEvent && isDelivered) {
+              return {
+                dot: 'bg-green-500',
+                ring: 'ring-green-500 ring-opacity-30',
+                line: 'bg-gray-300'
+              }
+            } else if (index < 3) {
+              return {
+                dot: 'bg-blue-500',
+                ring: 'ring-blue-500 ring-opacity-30',
+                line: 'bg-gray-300'
+              }
+            } else {
+              return {
+                dot: 'bg-gray-400',
+                ring: 'ring-gray-400 ring-opacity-30',
+                line: 'bg-gray-300'
+              }
+            }
+          }
+
+          const colors = getStatusColor()
+
+          return (
             <div key={index} className="relative">
-              {/* КРУГ - позиціонується точно на лінії */}
-              <div className="absolute -left-[21px] top-1">
-                <div className={`w-4 h-4 rounded-full border-2 border-white shadow-sm ${getStatusColor(event, index)}`}>
-                  {index === 0 && !isDelivered && (
-                    <div className="absolute inset-0 rounded-full bg-blue-500 animate-ping opacity-75"></div>
+              <div className="flex items-start">
+                {/* Timeline візуальний елемент */}
+                <div className="flex flex-col items-center">
+                  {/* Dot/Circle з кільцем */}
+                  <div className={`relative w-3 h-3 ${colors.dot} rounded-full ${colors.ring} ring-4`}>
+                  </div>
+                  
+                  {/* Vertical Line - показується тільки якщо не останній елемент */}
+                  {!isLastEvent && (
+                    <div className={`w-0.5 h-16 mt-2 ${colors.line}`}></div>
                   )}
+                </div>
+
+                {/* Event Content */}
+                <div className="ml-6 flex-1 min-w-0">
+                  {/* Основний текст статусу */}
+                  <h3 className="font-semibold text-[#333037] text-base leading-snug">
+                    {mainText}
+                  </h3>
+                  
+                  {/* Додаткова інформація */}
+                  {subText && (
+                    <p className="text-[#333037]/70 text-sm mt-1 leading-relaxed">
+                      {subText}
+                    </p>
+                  )}
+
+                  {/* Date and Time */}
+                  <div className="flex items-center mt-2 text-sm">
+                    <span className="font-medium text-[#333037]">
+                      {event.displayDate || new Date(event.date).toLocaleDateString('uk-UA', {
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric'
+                      }) + ' р.'}
+                    </span>
+                    {event.time && (
+                      <span className="text-[#333037]/60 ml-2">
+                        {event.time}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
               
-              {/* КОНТЕНТ - вирівняний з кругом */}
-              <div className="ml-0">
-                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between">
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-[#333037] mb-1 leading-tight">
-                      {event.status}
-                    </h3>
-                    <p className="text-[#333037]/70 text-sm mb-2 leading-relaxed">
-                      {formatDescription(event.description)}
-                    </p>
-                    {event.location && (
-                      <p className="text-[#333037]/60 text-sm flex items-center leading-tight">
-                        <svg className="w-4 h-4 mr-1 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                                d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                                d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                        {event.location}
-                      </p>
-                    )}
-                  </div>
-                  
-                  {/* ДАТА та ЧАС */}
-                  <div className="text-sm text-[#333037]/60 mt-2 sm:mt-0 sm:text-right sm:ml-4 flex-shrink-0">
-                    <p className="font-medium">
-                      {event.displayDate || event.date}
-                    </p>
-                    {event.time && <p className="leading-tight">{event.time}</p>}
-                  </div>
-                </div>
-              </div>
+              {/* Spacing between events */}
+              {!isLastEvent && <div className="h-4"></div>}
             </div>
-          ))}
-        </div>
+          )
+        })}
       </div>
-      
-      {/* Help text for timeline */}
+
+      {/* Help Section */}
       <div className="mt-6 pt-6 border-t border-gray-200">
-        <div className="bg-[#f0e5d9] rounded-lg p-4">
-          <h4 className="font-semibold text-[#333037] mb-2">Допомога з відстеженням</h4>
-          <p className="text-[#333037]/70 text-sm">
-            Якщо статус не оновлювався більше тижня, рекомендуємо звернутися до служби підтримки перевізника. 
-            Деякі міжнародні відправлення можуть мати затримки через митні процедури.
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <h4 className="font-semibold text-blue-900 mb-2">Допомога з відстеженням</h4>
+          <p className="text-blue-800 text-sm">
+            Якщо статус не оновлювався більше тижня, рекомендуємо звернутися до служби 
+            підтримки перевізника. Деякі міжнародні відправлення можуть мати затримки 
+            через митні процедури.
           </p>
         </div>
       </div>
