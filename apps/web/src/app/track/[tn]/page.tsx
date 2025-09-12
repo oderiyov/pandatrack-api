@@ -1,4 +1,4 @@
-// app/track/[tn]/page.tsx - ПОВНИЙ ФАЙЛ З ВИПРАВЛЕННЯМИ
+// app/track/[tn]/page.tsx - ПОВНИЙ ФАЙЛ З УСІМА ВИПРАВЛЕННЯМИ
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
@@ -142,12 +142,17 @@ export default function TrackingPage() {
     return diffDays
   }
 
-  // Detect countries from tracking data
+  // ВИПРАВЛЕНО: Detect countries from tracking data
   const detectCountries = (events: TrackingEvent[], trackingNumber: string) => {
-    let originCountry = 'Невідомо'
-    const destinationCountry = 'Україна' // Default for Ukrainian service
+    let originCountry = 'Україна' // Default для Nova Poshta
+    const destinationCountry = 'Україна'
     
-    // Detect from tracking number format
+    // Nova Poshta номери завжди внутрішні українські
+    if (/^20\d{12,13}$/.test(trackingNumber) || /^59\d{12,13}$/.test(trackingNumber)) {
+      return { originCountry: 'Україна', destinationCountry: 'Україна' }
+    }
+    
+    // Міжнародні номери UPU формату
     if (trackingNumber.length >= 13) {
       const countryCode = trackingNumber.slice(-2).toUpperCase()
       const countryCodes: Record<string, string> = {
@@ -357,11 +362,18 @@ export default function TrackingPage() {
     }
   }
 
-  // Check if delivered
+  // ВИПРАВЛЕНО: Check if delivered - покращена логіка
   const isDelivered = Boolean(
     trackingData?.status?.toLowerCase().includes('delivered') || 
     trackingData?.status?.toLowerCase().includes('вручено') ||
-    trackingData?.status?.toLowerCase().includes('отримано')
+    trackingData?.status?.toLowerCase().includes('отримано') ||
+    trackingData?.status?.toLowerCase().includes('доставлено') ||  // ДОДАНО
+    trackingData?.events?.some(event => 
+      event.status?.toLowerCase().includes('доставлено') ||
+      event.status?.toLowerCase().includes('отримано') ||
+      event.status?.toLowerCase().includes('delivered') ||
+      event.status?.toLowerCase().includes('вручено')
+    )
   )
 
   if (loading) {
