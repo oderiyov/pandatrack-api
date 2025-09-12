@@ -20,6 +20,7 @@ interface TrackingEvent {
   description: string | string[]
   location?: string
   statusCode?: string
+  displayDate?: string // Додаємо для нового формату
 }
 
 interface TrackingData {
@@ -57,6 +58,37 @@ interface ApiResponse {
   }
   error?: string
   message?: string
+}
+
+// Функція для форматування дат в українському форматі
+const formatUkrainianDate = (dateString: string): { displayDate: string; time: string } => {
+  try {
+    const date = new Date(dateString)
+    if (isNaN(date.getTime())) {
+      console.warn('Invalid date:', dateString)
+      return { displayDate: 'Невідома дата', time: '' }
+    }
+
+    // Українські назви місяців (скорочені)
+    const months = [
+      'січ.', 'лют.', 'бер.', 'квіт.', 'трав.', 'черв.',
+      'лип.', 'серп.', 'вер.', 'жовт.', 'лист.', 'груд.'
+    ]
+
+    const day = date.getDate()
+    const month = months[date.getMonth()]
+    const year = date.getFullYear()
+    const hours = date.getHours().toString().padStart(2, '0')
+    const minutes = date.getMinutes().toString().padStart(2, '0')
+
+    return {
+      displayDate: `${day} ${month} ${year} р.`,
+      time: `${hours}:${minutes}`
+    }
+  } catch (error) {
+    console.warn('Date formatting error:', error)
+    return { displayDate: 'Невідома дата', time: '' }
+  }
 }
 
 export default function TrackingPage() {
@@ -198,7 +230,7 @@ export default function TrackingPage() {
         throw new Error('Дані про посилку не знайдено')
       }
 
-      // ВИПРАВЛЕНО: Process events with better date handling
+      // ВИПРАВЛЕНО: Process events with Ukrainian date formatting
       const processedEvents = (primarySource.events || []).map(event => {
         // Handle different date formats from API
         let eventDate: Date
@@ -218,13 +250,13 @@ export default function TrackingPage() {
           ? event.description.join(', ') 
           : event.description
 
+        // ВИКОРИСТОВУЄМО НОВУ ФУНКЦІЮ для форматування дат
+        const { displayDate, time } = formatUkrainianDate(eventDate.toISOString())
+
         return {
           date: eventDate.toISOString(),
-          displayDate: eventDate.toLocaleDateString('uk-UA'),
-          time: eventDate.toLocaleTimeString('uk-UA', { 
-            hour: '2-digit', 
-            minute: '2-digit' 
-          }),
+          displayDate, // Тепер буде "24 черв. 2025 р."
+          time,        // Тепер буде "14:31"
           status: event.status,
           description: description || event.status,
           location: event.location,
@@ -502,7 +534,7 @@ export default function TrackingPage() {
               {/* Package Metadata */}
               <TrackingMetadata trackingData={trackingData} />
               
-              {/* Action Buttons - QR код видалено як запитували */}
+              {/* Action Buttons */}
               <TrackingActions 
                 trackingNumber={trackingData.trackingNumber}
                 trackingUrl={`https://pandatrack.com.ua/track/${trackingData.trackingNumber}`}

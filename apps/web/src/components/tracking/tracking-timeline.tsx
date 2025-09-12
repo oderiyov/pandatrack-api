@@ -8,6 +8,7 @@ interface TrackingEvent {
   description: string | string[]
   location?: string
   statusCode?: string
+  displayDate?: string
 }
 
 interface TrackingTimelineProps {
@@ -81,33 +82,35 @@ export default function TrackingTimeline({ events, isDelivered }: TrackingTimeli
     <div className="bg-white rounded-lg shadow-sm p-6">
       <h2 className="text-xl font-bold mb-6 text-[#333037]">Історія відправлення</h2>
       
-      <div className="relative">
-        {/* Timeline line */}
-        <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-gray-200"></div>
+      <div className="relative pl-8">
+        {/* ГОЛОВНА лінія - проходить через центри всіх кругів */}
+        <div className="absolute left-[15px] top-0 bottom-0 w-0.5 bg-gray-200"></div>
         
         <div className="space-y-6">
           {events.map((event, index) => (
-            <div key={index} className="relative flex items-start space-x-4">
-              {/* Timeline dot */}
-              <div className={`relative z-10 flex-shrink-0 w-3 h-3 rounded-full mt-2 ${getStatusColor(event, index)}`}>
-                {index === 0 && !isDelivered && (
-                  <div className="absolute inset-0 rounded-full bg-blue-500 animate-ping opacity-75"></div>
-                )}
+            <div key={index} className="relative">
+              {/* КРУГ - позиціонується точно на лінії */}
+              <div className="absolute -left-[21px] top-1">
+                <div className={`w-4 h-4 rounded-full border-2 border-white shadow-sm ${getStatusColor(event, index)}`}>
+                  {index === 0 && !isDelivered && (
+                    <div className="absolute inset-0 rounded-full bg-blue-500 animate-ping opacity-75"></div>
+                  )}
+                </div>
               </div>
               
-              {/* Event content */}
-              <div className="flex-1 min-w-0 pb-6">
+              {/* КОНТЕНТ - вирівняний з кругом */}
+              <div className="ml-0">
                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between">
                   <div className="flex-1">
-                    <h3 className="font-semibold text-[#333037] mb-1">
+                    <h3 className="font-semibold text-[#333037] mb-1 leading-tight">
                       {event.status}
                     </h3>
-                    <p className="text-[#333037]/70 text-sm mb-2">
+                    <p className="text-[#333037]/70 text-sm mb-2 leading-relaxed">
                       {formatDescription(event.description)}
                     </p>
                     {event.location && (
-                      <p className="text-[#333037]/60 text-sm flex items-center">
-                        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <p className="text-[#333037]/60 text-sm flex items-center leading-tight">
+                        <svg className="w-4 h-4 mr-1 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
                                 d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
@@ -118,9 +121,12 @@ export default function TrackingTimeline({ events, isDelivered }: TrackingTimeli
                     )}
                   </div>
                   
-                  <div className="text-sm text-[#333037]/60 mt-2 sm:mt-0 sm:text-right sm:ml-4">
-                    <p className="font-medium">{event.date}</p>
-                    {event.time && <p>{event.time}</p>}
+                  {/* ДАТА та ЧАС */}
+                  <div className="text-sm text-[#333037]/60 mt-2 sm:mt-0 sm:text-right sm:ml-4 flex-shrink-0">
+                    <p className="font-medium">
+                      {event.displayDate || event.date}
+                    </p>
+                    {event.time && <p className="leading-tight">{event.time}</p>}
                   </div>
                 </div>
               </div>
