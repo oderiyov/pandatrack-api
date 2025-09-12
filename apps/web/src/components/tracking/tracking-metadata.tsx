@@ -1,4 +1,4 @@
-// components/tracking/tracking-metadata.tsx
+// components/tracking/tracking-metadata.tsx - ВИПРАВЛЕНЕ ВИРІВНЮВАННЯ
 'use client'
 
 interface TrackingData {
@@ -70,16 +70,16 @@ export default function TrackingMetadata({ trackingData }: TrackingMetadataProps
       
       <div className="space-y-4">
         {/* Tracking Number */}
-        <div className="flex justify-between items-start">
+        <div className="flex justify-between items-center">
           <span className="text-[#333037]/60 text-sm">Трек-номер</span>
-          <span className="font-mono text-sm font-medium text-[#333037] break-all">
+          <span className="font-mono text-sm font-medium text-[#333037] break-all text-right">
             {trackingData.trackingNumber}
           </span>
         </div>
 
         {/* Origin */}
         {trackingData.originCountry && (
-          <div className="flex justify-between items-start">
+          <div className="flex justify-between items-center">
             <span className="text-[#333037]/60 text-sm">Країна відправлення</span>
             <span className="text-sm text-[#333037]">{trackingData.originCountry}</span>
           </div>
@@ -87,7 +87,7 @@ export default function TrackingMetadata({ trackingData }: TrackingMetadataProps
 
         {/* Destination */}
         {trackingData.destinationCountry && (
-          <div className="flex justify-between items-start">
+          <div className="flex justify-between items-center">
             <span className="text-[#333037]/60 text-sm">Країна отримання</span>
             <span className="text-sm text-[#333037]">{trackingData.destinationCountry}</span>
           </div>
@@ -95,7 +95,7 @@ export default function TrackingMetadata({ trackingData }: TrackingMetadataProps
 
         {/* Days in transit */}
         {trackingData.daysInTransit !== undefined && (
-          <div className="flex justify-between items-start">
+          <div className="flex justify-between items-center">
             <span className="text-[#333037]/60 text-sm">Днів в дорозі</span>
             <span className="text-sm font-medium text-[#333037]">
               {trackingData.daysInTransit}
@@ -104,7 +104,7 @@ export default function TrackingMetadata({ trackingData }: TrackingMetadataProps
         )}
 
         {/* Delivery Company */}
-        <div className="flex justify-between items-start">
+        <div className="flex justify-between items-center">
           <span className="text-[#333037]/60 text-sm">Перевізник</span>
           <span className="text-sm text-[#333037]">{trackingData.carrier}</span>
         </div>
@@ -124,8 +124,8 @@ export default function TrackingMetadata({ trackingData }: TrackingMetadataProps
           </div>
         </div>
 
-        {/* Last Updated */}
-        <div className="flex justify-between items-start">
+        {/* Last Updated - ВИПРАВЛЕНО ВИРІВНЮВАННЯ */}
+        <div className="flex justify-between items-center">
           <span className="text-[#333037]/60 text-sm">Останнє оновлення</span>
           <span className="text-xs text-[#333037]/70 text-right">
             {formatDate(trackingData.lastUpdated)}

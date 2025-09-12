@@ -1,4 +1,4 @@
-// components/tracking/tracking-timeline.tsx - ОПТИМІЗОВАНА ВЕРСІЯ
+// components/tracking/tracking-timeline.tsx - ВИПРАВЛЕНЕ ВИРІВНЮВАННЯ
 'use client'
 
 interface TrackingEvent {
@@ -88,20 +88,17 @@ export default function TrackingTimeline({ events, isDelivered }: TrackingTimeli
           const getStatusColor = () => {
             if (isFirstEvent && isDelivered) {
               return {
-                dot: 'bg-green-500',
-                ring: 'ring-green-500 ring-opacity-30',
+                dot: 'bg-green-500 border-green-500',
                 line: 'bg-gray-300'
               }
             } else if (index < 3) {
               return {
-                dot: 'bg-blue-500',
-                ring: 'ring-blue-500 ring-opacity-30',
+                dot: 'bg-blue-500 border-blue-500',
                 line: 'bg-gray-300'
               }
             } else {
               return {
-                dot: 'bg-gray-400',
-                ring: 'ring-gray-400 ring-opacity-30',
+                dot: 'bg-gray-400 border-gray-400',
                 line: 'bg-gray-300'
               }
             }
@@ -110,60 +107,57 @@ export default function TrackingTimeline({ events, isDelivered }: TrackingTimeli
           const colors = getStatusColor()
 
           return (
-            <div key={index} className="relative">
-              <div className="flex items-start">
-                {/* Timeline візуальний елемент */}
-                <div className="flex flex-col items-center">
-                  {/* Dot/Circle з кільцем */}
-                  <div className={`relative w-3 h-3 ${colors.dot} rounded-full ${colors.ring} ring-4`}>
-                  </div>
-                  
-                  {/* Vertical Line - показується тільки якщо не останній елемент */}
-                  {!isLastEvent && (
-                    <div className={`w-0.5 h-16 mt-2 ${colors.line}`}></div>
-                  )}
+            <div key={index} className="relative flex">
+              {/* Timeline візуальний елемент */}
+              <div className="flex flex-col items-center mr-4 pt-1">
+                {/* Dot/Circle - вирівняний з H3 */}
+                <div className={`w-3 h-3 rounded-full border-2 ${colors.dot} flex-shrink-0`}>
                 </div>
+                
+                {/* Vertical Line - показується тільки якщо не останній елемент */}
+                {!isLastEvent && (
+                  <div className={`w-0.5 flex-1 mt-2 ${colors.line} min-h-[80px]`}></div>
+                )}
+              </div>
 
-                {/* Event Content */}
-                <div className="ml-6 flex-1 min-w-0">
-                  {/* Основний текст статусу */}
-                  <h3 className="font-semibold text-[#333037] text-base leading-snug">
+              {/* Event Content */}
+              <div className="flex-1 pb-8">
+                {/* Status Header - H3 тепер вирівняний з кружком */}
+                <div className="mb-2">
+                  <h3 className="font-bold text-[#333037] text-lg leading-tight">
                     {mainText}
                   </h3>
                   
-                  {/* Додаткова інформація */}
+                  {/* Додаткова інформація - показуємо тільки якщо є */}
                   {subText && (
-                    <p className="text-[#333037]/70 text-sm mt-1 leading-relaxed">
+                    <p className="text-[#333037]/80 text-sm mt-1">
                       {subText}
                     </p>
                   )}
+                </div>
 
-                  {/* Date and Time */}
-                  <div className="flex items-center mt-2 text-sm">
-                    <span className="font-medium text-[#333037]">
-                      {event.displayDate || new Date(event.date).toLocaleDateString('uk-UA', {
-                        day: 'numeric',
-                        month: 'short',
-                        year: 'numeric'
-                      }) + ' р.'}
-                    </span>
-                    {event.time && (
-                      <span className="text-[#333037]/60 ml-2">
-                        {event.time}
-                      </span>
-                    )}
+                {/* Date and Time */}
+                <div className="text-sm text-[#333037]/70">
+                  <div className="font-semibold">
+                    {event.displayDate || new Date(event.date).toLocaleDateString('uk-UA', {
+                      day: 'numeric',
+                      month: 'short',
+                      year: 'numeric'
+                    }) + ' р.'}
                   </div>
+                  {event.time && (
+                    <div className="mt-1">
+                      {event.time}
+                    </div>
+                  )}
                 </div>
               </div>
-              
-              {/* Spacing between events */}
-              {!isLastEvent && <div className="h-4"></div>}
             </div>
           )
         })}
       </div>
 
-      {/* Help Section */}
+      {/* Help Section - ПОВЕРНЕНО ОРИГІНАЛЬНИЙ */}
       <div className="mt-6 pt-6 border-t border-gray-200">
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <h4 className="font-semibold text-blue-900 mb-2">Допомога з відстеженням</h4>

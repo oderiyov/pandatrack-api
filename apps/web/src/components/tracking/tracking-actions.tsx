@@ -100,10 +100,10 @@ export default function TrackingActions({ trackingNumber, trackingUrl }: Trackin
           </button>
         </div>
 
-        {/* Share Section */}
+        {/* Share Section - ПОВЕРНЕНО ОРИГІНАЛЬНИЙ ФОРМАТ */}
         <div className="pt-4 border-t border-gray-200">
           <h4 className="font-semibold text-[#333037] mb-3">Поділитися</h4>
-          <div className="grid grid-cols-4 gap-3">
+          <div className="flex space-x-3">
             {/* Telegram */}
             <a
               href={shareUrls.telegram}
