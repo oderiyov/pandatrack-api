@@ -1,4 +1,4 @@
-// components/tracking/tracking-timeline.tsx - ПОВНІСТЮ ВИПРАВЛЕНИЙ
+// components/tracking/tracking-timeline.tsx - ОЧИЩЕНИЙ ВІД CARRIER
 'use client'
 
 interface TrackingEvent {
@@ -14,10 +14,9 @@ interface TrackingEvent {
 interface TrackingTimelineProps {
   events: TrackingEvent[]
   isDelivered: boolean
-  carrier?: string
 }
 
-export default function TrackingTimeline({ events, isDelivered, carrier }: TrackingTimelineProps) {
+export default function TrackingTimeline({ events, isDelivered }: TrackingTimelineProps) {
   if (!events || events.length === 0) {
     return (
       <div className="bg-white rounded-lg shadow-sm p-6">
@@ -33,31 +32,6 @@ export default function TrackingTimeline({ events, isDelivered, carrier }: Track
     const dateB = new Date(b.date).getTime()
     return dateB - dateA // Newest first
   })
-
-  // Функція для отримання логотипу перевізника
-  const getCarrierLogo = (carrierName?: string) => {
-    if (!carrierName) return '📦';
-    
-    const carrierLower = carrierName.toLowerCase();
-    
-    if (carrierLower.includes('nova') || carrierLower.includes('нова')) {
-      return '📦'; // Nova Poshta
-    } else if (carrierLower.includes('ukr') || carrierLower.includes('укр')) {
-      return '🏣'; // Ukrposhta  
-    } else if (carrierLower.includes('dhl')) {
-      return '✈️'; // DHL
-    } else if (carrierLower.includes('meest') || carrierLower.includes('міст')) {
-      return '🚚'; // Meest
-    } else if (carrierLower.includes('sat')) {
-      return '🚛'; // SAT
-    } else if (carrierLower.includes('delivery')) {
-      return '🚐'; // Delivery Auto
-    } else if (carrierLower.includes('cainiao')) {
-      return '🐧'; // Cainiao
-    } else {
-      return '📦'; // Default
-    }
-  }
 
   // Функція для очищення тексту від дублювання
   const cleanStatusText = (status: string, description: string | string[], location?: string) => {
@@ -167,23 +141,18 @@ export default function TrackingTimeline({ events, isDelivered, carrier }: Track
 
               {/* Event Content */}
               <div className="flex-1 pb-8">
-                {/* Status Header з логотипом */}
+                {/* Status Header */}
                 <div className="mb-2">
-                  <div className="flex items-start space-x-2">
-                    <span className="text-lg flex-shrink-0">{getCarrierLogo(carrier)}</span>
-                    <div>
-                      <h3 className="font-bold text-[#333037] text-lg leading-tight">
-                        {mainText}
-                      </h3>
-                      
-                      {/* Додаткова інформація - показуємо тільки якщо є */}
-                      {subText && (
-                        <p className="text-[#333037]/80 text-sm mt-1">
-                          {subText}
-                        </p>
-                      )}
-                    </div>
-                  </div>
+                  <h3 className="font-bold text-[#333037] text-lg leading-tight">
+                    {mainText}
+                  </h3>
+                  
+                  {/* Додаткова інформація - показуємо тільки якщо є */}
+                  {subText && (
+                    <p className="text-[#333037]/80 text-sm mt-1">
+                      {subText}
+                    </p>
+                  )}
                 </div>
 
                 {/* Date and Time */}
@@ -207,7 +176,7 @@ export default function TrackingTimeline({ events, isDelivered, carrier }: Track
         })}
       </div>
 
-      {/* Help Section - ПОВЕРНЕНО ОРИГІНАЛЬНИЙ */}
+      {/* Help Section */}
       <div className="mt-6 pt-6 border-t border-gray-200">
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <h4 className="font-semibold text-blue-900 mb-2">Допомога з відстеженням</h4>

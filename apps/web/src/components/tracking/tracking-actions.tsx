@@ -99,48 +99,6 @@ export default function TrackingActions({ trackingNumber, trackingUrl }: Trackin
             </svg>
           </button>
         </div>
-
-        {/* Share Section - ПОВЕРНУТИЙ ДО КНОПОК */}
-        <div className="pt-4 border-t border-gray-200">
-          <h4 className="font-semibold text-[#333037] mb-3">Поділитися</h4>
-          <div className="flex space-x-1">
-            <a
-              href={shareUrls.telegram}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-3 py-2 bg-[#0088cc] text-white text-sm rounded hover:bg-[#0088cc]/90 transition-colors"
-            >
-              Telegram
-            </a>
-            
-            <a
-              href={shareUrls.viber}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-3 py-2 bg-[#665CAC] text-white text-sm rounded hover:bg-[#665CAC]/90 transition-colors"
-            >
-              Viber
-            </a>
-            
-            <a
-              href={shareUrls.whatsapp}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-3 py-2 bg-[#25D366] text-white text-sm rounded hover:bg-[#25D366]/90 transition-colors"
-            >
-              WhatsApp
-            </a>
-            
-            <a
-              href={shareUrls.facebook}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-3 py-2 bg-[#1877F2] text-white text-sm rounded hover:bg-[#1877F2]/90 transition-colors"
-            >
-              Facebook
-            </a>
-          </div>
-        </div>
       </div>
     </div>
   )
