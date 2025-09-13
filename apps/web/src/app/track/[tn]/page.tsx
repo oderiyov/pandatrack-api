@@ -1,7 +1,7 @@
-// app/track/[tn]/page.tsx - ПОВНИЙ ФАЙЛ З УСІМА ВИПРАВЛЕННЯМИ
+// app/track/[tn]/page.tsx - З автоскролл та carrier параметром
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import { Header } from '@/components/header'
 import { Footer } from '@/components/footer'
@@ -20,7 +20,7 @@ interface TrackingEvent {
   description: string | string[]
   location?: string
   statusCode?: string
-  displayDate?: string // Додаємо для нового формату
+  displayDate?: string
 }
 
 interface TrackingData {
@@ -99,11 +99,27 @@ export default function TrackingPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [retryCount, setRetryCount] = useState(0)
+  
+  // Ref для автоскролл до контенту
+  const contentRef = useRef<HTMLDivElement>(null)
 
   // Detect browser/device for better error handling
   const isIOS = typeof window !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent)
   const isSafari = typeof window !== 'undefined' && /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
   const isAndroid = typeof window !== 'undefined' && /Android/.test(navigator.userAgent)
+
+  // Автоскролл до контенту після завантаження даних
+  useEffect(() => {
+    if (trackingData && contentRef.current) {
+      // Затримка для завершення рендерінга
+      setTimeout(() => {
+        contentRef.current?.scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'start' 
+        })
+      }, 500)
+    }
+  }, [trackingData])
 
   // ВИПРАВЛЕНО: Calculate days in transit using real event dates
   const calculateDaysInTransit = (events: TrackingEvent[]): number => {
@@ -367,7 +383,7 @@ export default function TrackingPage() {
     trackingData?.status?.toLowerCase().includes('delivered') || 
     trackingData?.status?.toLowerCase().includes('вручено') ||
     trackingData?.status?.toLowerCase().includes('отримано') ||
-    trackingData?.status?.toLowerCase().includes('доставлено') ||  // ДОДАНО
+    trackingData?.status?.toLowerCase().includes('доставлено') ||
     trackingData?.events?.some(event => 
       event.status?.toLowerCase().includes('доставлено') ||
       event.status?.toLowerCase().includes('отримано') ||
@@ -522,7 +538,8 @@ export default function TrackingPage() {
         </div>
       </section>
 
-      <main className="container mx-auto px-4 py-8">
+      {/* Main Content - АВТОСКРОЛЛ ЯКІР */}
+      <main className="container mx-auto px-4 py-8" ref={contentRef}>
         <div className="max-w-6xl mx-auto">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             
@@ -534,10 +551,11 @@ export default function TrackingPage() {
                 isDelivered={isDelivered}
               />
               
-              {/* Tracking Timeline */}
+              {/* Tracking Timeline - З carrier параметром */}
               <TrackingTimeline 
                 events={trackingData.events}
                 isDelivered={isDelivered}
+                carrier={trackingData.carrier}
               />
             </div>
 

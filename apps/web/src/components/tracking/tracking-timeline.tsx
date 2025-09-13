@@ -1,5 +1,7 @@
-// components/tracking/tracking-timeline.tsx - ОЧИЩЕНИЙ ВІД CARRIER
+// components/tracking/tracking-timeline.tsx - З CarrierBadge
 'use client'
+
+import { CarrierBadge } from '@/components/ui/carrier-badge'
 
 interface TrackingEvent {
   date: string
@@ -14,9 +16,10 @@ interface TrackingEvent {
 interface TrackingTimelineProps {
   events: TrackingEvent[]
   isDelivered: boolean
+  carrier?: string
 }
 
-export default function TrackingTimeline({ events, isDelivered }: TrackingTimelineProps) {
+export default function TrackingTimeline({ events, isDelivered, carrier }: TrackingTimelineProps) {
   if (!events || events.length === 0) {
     return (
       <div className="bg-white rounded-lg shadow-sm p-6">
@@ -155,9 +158,9 @@ export default function TrackingTimeline({ events, isDelivered }: TrackingTimeli
                   )}
                 </div>
 
-                {/* Date and Time */}
-                <div className="text-sm text-[#333037]/70">
-                  <div className="font-semibold">
+                {/* Date and Time на одному рядку */}
+                <div className="flex items-center text-sm text-[#333037]/70 mb-2">
+                  <div className="font-semibold mr-2">
                     {event.displayDate || new Date(event.date).toLocaleDateString('uk-UA', {
                       day: 'numeric',
                       month: 'short',
@@ -165,11 +168,16 @@ export default function TrackingTimeline({ events, isDelivered }: TrackingTimeli
                     }) + ' р.'}
                   </div>
                   {event.time && (
-                    <div className="mt-1">
+                    <div className="font-semibold">
                       {event.time}
                     </div>
                   )}
                 </div>
+
+                {/* Carrier Badge */}
+                {carrier && (
+                  <CarrierBadge carrier={carrier} />
+                )}
               </div>
             </div>
           )
