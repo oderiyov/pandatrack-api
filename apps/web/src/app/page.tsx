@@ -7,6 +7,7 @@ import { PopularStores } from '@/components/popular-stores'
 import { Features } from '@/components/features'
 import { Header } from '@/components/header'
 import { Footer } from '@/components/footer'
+import ArtalkComments from '@/components/artalk-comments'
 
 export const metadata: Metadata = {
   title: 'PandaTrack - відстежити посилку з будь-якого перевізника | Україна',
@@ -62,15 +63,18 @@ export default function HomePage() {
         </section>
       </main>
 
-      {/* Comments System - тимчасово відключено */}
+      {/* Comments System - ARTALK ГЛОБАЛЬНІ КОМЕНТАРІ */}
       <section className="bg-[#f5f5f5] py-8">
         <div className="container mx-auto px-4">
           <h2 className="text-2xl font-bold mb-6 text-center">Знайти свою посилку</h2>
           <p className="text-center text-[#333037]/70 mb-8">
             Якщо маєш труднощі з трекінгом чи хочеш уточнити статус відправлення, напиши про це в коментарях — ми допоможемо розібратися  .
           </p>
-          <div className="bg-white rounded-lg p-6 border border-gray-200 text-center">
-            <p className="text-gray-500">Система коментарів незабаром буде доступна</p>
+          <div className="max-w-4xl mx-auto bg-white rounded-lg p-6 border border-gray-200">
+            <ArtalkComments
+              pageKey="global-tracking-chat"
+              pageTitle="Питання про відстеження посилок"
+            />
           </div>
         </div>
       </section>

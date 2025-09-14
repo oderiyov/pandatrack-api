@@ -12,6 +12,7 @@ import TrackingMetadata from '@/components/tracking/tracking-metadata'
 import TrackingActions from '@/components/tracking/tracking-actions'
 import RelatedCarriers from '@/components/tracking/related-carriers'
 import TrackingFAQ from '@/components/tracking/tracking-faq'
+import ArtalkComments from '@/components/artalk-comments'
 
 interface TrackingEvent {
   date: string
@@ -587,15 +588,14 @@ export default function TrackingPage() {
           <section className="bg-white rounded-lg shadow-sm p-6 mt-8">
             <h2 className="text-xl font-bold mb-4">Питання про відстеження</h2>
             <p className="text-[#333037]/70 mb-6">
-              В коментарях ви можете запитати про своє відправлення або поділитися досвідом
+              Загальний чат для всіх питань про відстеження посилок.
+              Діліться досвідом та допомагайте іншим користувачам.
             </p>
             
-            {/* Placeholder for Artalk - will be implemented separately */}
-            <div className="bg-gray-50 rounded-lg p-8 text-center">
-              <p className="text-[#333037]/60">
-                Система коментарів буде доступна незабаром
-              </p>
-            </div>
+            <ArtalkComments
+              pageKey="global-tracking-chat"
+              pageTitle="Питання про відстеження посилок"
+            />
           </section>
 
           {/* Educational Content */}
