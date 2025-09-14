@@ -1,4 +1,4 @@
-// app/track/[tn]/page.tsx - З автоскролл та carrier параметром
+// app/track/[tn]/page.tsx - ОНОВЛЕНА TRACKING СТОРІНКА
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
@@ -122,26 +122,24 @@ export default function TrackingPage() {
     }
   }, [trackingData])
 
-  // ВИПРАВЛЕНО: Calculate days in transit using real event dates
+  // Calculate days in transit using real event dates
   const calculateDaysInTransit = (events: TrackingEvent[]): number => {
     if (!events || events.length === 0) return 0
     
-    // Sort events by date to find actual first and last events
     const sortedEvents = [...events].sort((a, b) => {
       const dateA = new Date(a.date).getTime()
       const dateB = new Date(b.date).getTime()
-      return dateA - dateB // Oldest first
+      return dateA - dateB
     })
     
     if (sortedEvents.length === 0) return 0
     
-    const firstEvent = sortedEvents[0] // Oldest event
-    const lastEvent = sortedEvents[sortedEvents.length - 1] // Newest event
+    const firstEvent = sortedEvents[0]
+    const lastEvent = sortedEvents[sortedEvents.length - 1]
     
     const firstDate = new Date(firstEvent.date)
     const lastDate = new Date(lastEvent.date)
     
-    // Validate dates
     if (isNaN(firstDate.getTime()) || isNaN(lastDate.getTime())) {
       console.warn('Invalid dates in events:', { firstDate, lastDate })
       return 0
@@ -150,7 +148,6 @@ export default function TrackingPage() {
     const diffTime = Math.abs(lastDate.getTime() - firstDate.getTime())
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
     
-    // Sanity check - if more than 365 days, something is wrong
     if (diffDays > 365) {
       console.warn('Calculated days in transit seems too high:', diffDays)
       return 0
@@ -159,9 +156,9 @@ export default function TrackingPage() {
     return diffDays
   }
 
-  // ВИПРАВЛЕНО: Detect countries from tracking data
+  // Detect countries from tracking data
   const detectCountries = (events: TrackingEvent[], trackingNumber: string) => {
-    let originCountry = 'Україна' // Default для Nova Poshta
+    let originCountry = 'Україна'
     const destinationCountry = 'Україна'
     
     // Nova Poshta номери завжди внутрішні українські
@@ -206,7 +203,7 @@ export default function TrackingPage() {
       
       // Create abort controller with timeout based on device
       const controller = new AbortController()
-      const timeout = isIOS || isSafari ? 15000 : 10000 // Longer timeout for iOS
+      const timeout = isIOS || isSafari ? 15000 : 10000
       const timeoutId = setTimeout(() => controller.abort(), timeout)
       
       const headers: Record<string, string> = {
@@ -214,7 +211,7 @@ export default function TrackingPage() {
         'Content-Type': 'application/json'
       }
       
-      // Add User-Agent only for non-mobile browsers (mobile browsers restrict this)
+      // Add User-Agent only for non-mobile browsers
       if (!isIOS && !isAndroid) {
         headers['User-Agent'] = 'PandaTrack-Web/1.0'
       }
@@ -225,7 +222,6 @@ export default function TrackingPage() {
         mode: 'cors',
         credentials: 'omit',
         signal: controller.signal,
-        // Add cache busting for mobile browsers
         cache: 'no-cache'
       })
       
@@ -235,7 +231,6 @@ export default function TrackingPage() {
         throw new Error(`Помилка ${response.status}: ${response.statusText}`)
       }
 
-      // Verify response content type
       const contentType = response.headers.get('content-type')
       if (!contentType || !contentType.includes('application/json')) {
         throw new Error('Сервер повернув невірний формат даних')
@@ -252,40 +247,36 @@ export default function TrackingPage() {
         throw new Error('Дані про посилку не знайдено')
       }
 
-      // ВИПРАВЛЕНО: Process events with Ukrainian date formatting
+      // Process events with Ukrainian date formatting
       const processedEvents = (primarySource.events || []).map(event => {
-        // Handle different date formats from API
         let eventDate: Date
         try {
           eventDate = new Date(event.date)
-          // Validate the date
           if (isNaN(eventDate.getTime())) {
             console.warn('Invalid event date:', event.date)
-            eventDate = new Date() // Fallback to current date
+            eventDate = new Date()
           }
         } catch (error) {
           console.warn('Date parsing error for event:', event.date, error)
-          eventDate = new Date() // Fallback to current date
+          eventDate = new Date()
         }
 
         const description = Array.isArray(event.description) 
           ? event.description.join(', ') 
           : event.description
 
-        // ВИКОРИСТОВУЄМО НОВУ ФУНКЦІЮ для форматування дат
         const { displayDate, time } = formatUkrainianDate(eventDate.toISOString())
 
         return {
           date: eventDate.toISOString(),
-          displayDate, // Тепер буде "24 черв. 2025 р."
-          time,        // Тепер буде "14:31"
+          displayDate,
+          time,
           status: event.status,
           description: description || event.status,
           location: event.location,
           statusCode: event.statusCode
         }
       }).filter(event => {
-        // Filter out events with invalid dates
         const testDate = new Date(event.date)
         return !isNaN(testDate.getTime())
       })
@@ -308,12 +299,11 @@ export default function TrackingPage() {
       }
 
       setTrackingData(adaptedData)
-      setRetryCount(0) // Reset retry count on success
+      setRetryCount(0)
       
     } catch (err) {
       console.error('Tracking fetch error:', err)
       
-      // Enhanced error handling for different devices
       let errorMessage = 'Невідома помилка при відстеженні'
       
       if (err instanceof Error) {
@@ -323,11 +313,11 @@ export default function TrackingPage() {
                    err.message.includes('Failed to fetch') ||
                    err.message.includes('ERR_NETWORK')) {
           if (isIOS || isSafari) {
-            errorMessage = 'Проблема з мережею. Перевірте з&rsquo;єднання та спробуйте ще раз. Можливо, потрібно дозволити cross-site tracking в налаштуваннях Safari.'
+            errorMessage = 'Проблема з мережею. Перевірте з\'єднання та спробуйте ще раз. Можливо, потрібно дозволити cross-site tracking в налаштуваннях Safari.'
           } else if (isAndroid) {
-            errorMessage = 'Проблема з мережею. Перевірте з&rsquo;єднання та спробуйте ще раз.'
+            errorMessage = 'Проблема з мережею. Перевірте з\'єднання та спробуйте ще раз.'
           } else {
-            errorMessage = 'Проблема з мережею. Перевірте з&rsquo;єднання та спробуйте ще раз.'
+            errorMessage = 'Проблема з мережею. Перевірте з\'єднання та спробуйте ще раз.'
           }
         } else if (err.message.includes('CORS')) {
           errorMessage = 'Тимчасова проблема з безпекою. Спробуйте ще раз через хвилину.'
@@ -343,7 +333,7 @@ export default function TrackingPage() {
         setTimeout(() => {
           setRetryCount(attempt + 1)
           fetchTrackingData(attempt + 1)
-        }, 2000 * (attempt + 1)) // Exponential backoff
+        }, 2000 * (attempt + 1))
         return
       }
       
@@ -370,7 +360,6 @@ export default function TrackingPage() {
       setTrackingData(null)
       setLoading(true)
       setRetryCount(0)
-      // Use location.reload only as last resort for mobile
       if (isIOS || isSafari) {
         window.location.reload()
       } else {
@@ -379,7 +368,7 @@ export default function TrackingPage() {
     }
   }
 
-  // ВИПРАВЛЕНО: Check if delivered - покращена логіка
+  // Check if delivered - покращена логіка
   const isDelivered = Boolean(
     trackingData?.status?.toLowerCase().includes('delivered') || 
     trackingData?.status?.toLowerCase().includes('вручено') ||
@@ -441,13 +430,12 @@ export default function TrackingPage() {
                 </h2>
                 <p className="text-[#333037]/70 mb-6">{error}</p>
                 
-                {/* Device-specific help */}
                 {(isIOS || isSafari) && error.includes('мережею') && (
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 text-left">
                     <h3 className="font-semibold text-blue-900 mb-2">Для Safari iOS:</h3>
                     <ul className="text-sm text-blue-800 space-y-1">
                       <li>• Перевірте налаштування Safari → Конфіденційність</li>
-                      <li>• Вимкніть &ldquo;Запобігти міжсайтовому відстеженню&rdquo;</li>
+                      <li>• Вимкніть "Запобігти міжсайтовому відстеженню"</li>
                       <li>• Або спробуйте в приватному режимі</li>
                     </ul>
                   </div>
@@ -531,7 +519,6 @@ export default function TrackingPage() {
               Український сервіс відстеження посилок Нової Пошти, Укрпошти, DHL та інших перевізників
             </p>
             
-            {/* Quick search form */}
             <div className="max-w-md">
               <TrackingForm defaultValue="" placeholder="Введіть новий трек-номер..." />
             </div>
@@ -546,13 +533,11 @@ export default function TrackingPage() {
             
             {/* Left Column - Timeline */}
             <div className="lg:col-span-2 space-y-6">
-              {/* Delivery Estimation */}
               <DeliveryEstimation 
                 trackingData={trackingData}
                 isDelivered={isDelivered}
               />
               
-              {/* Tracking Timeline - З carrier параметром */}
               <TrackingTimeline 
                 events={trackingData.events}
                 isDelivered={isDelivered}
@@ -562,10 +547,8 @@ export default function TrackingPage() {
 
             {/* Right Column - Metadata & Actions */}
             <div className="space-y-6">
-              {/* Package Metadata */}
               <TrackingMetadata trackingData={trackingData} />
               
-              {/* Action Buttons */}
               <TrackingActions 
                 trackingNumber={trackingData.trackingNumber}
                 trackingUrl={`https://pandatrack.com.ua/track/${trackingData.trackingNumber}`}
@@ -584,17 +567,41 @@ export default function TrackingPage() {
             currentCarriers={trackingData.sourcesChecked}
           />
 
-          {/* Community Section - Future Artalk Integration */}
-          <section className="bg-white rounded-lg shadow-sm p-6 mt-8">
-            <h2 className="text-xl font-bold mb-4">Питання про відстеження</h2>
-            <p className="text-[#333037]/70 mb-6">
-              Загальний чат для всіх питань про відстеження посилок.
-              Діліться досвідом та допомагайте іншим користувачам.
-            </p>
-            
+          {/* НОВА СЕКЦІЯ: Коментарі для конкретної посилки */}
+          <section className="mt-8">
+            <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+              <h2 className="text-xl font-bold mb-4">Обговорення посилки {trackingData.trackingNumber}</h2>
+              <p className="text-[#333037]/70 mb-4">
+                Маєте питання про цю конкретну посилку? Поділіться досвідом з іншими користувачами 
+                або запитайте пораду щодо доставки через {trackingData.carrier}.
+              </p>
+              
+              {/* Статистика посилки */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 text-sm">
+                <div className="bg-blue-50 rounded-lg p-3 text-center">
+                  <div className="font-semibold text-blue-600">{trackingData.daysInTransit || 0}</div>
+                  <div className="text-blue-800">Днів в дорозі</div>
+                </div>
+                <div className="bg-green-50 rounded-lg p-3 text-center">
+                  <div className="font-semibold text-green-600">{trackingData.events.length}</div>
+                  <div className="text-green-800">Подій</div>
+                </div>
+                <div className="bg-yellow-50 rounded-lg p-3 text-center">
+                  <div className="font-semibold text-yellow-600">{trackingData.sourcesChecked.length}</div>
+                  <div className="text-yellow-800">Джерел</div>
+                </div>
+                <div className="bg-purple-50 rounded-lg p-3 text-center">
+                  <div className="font-semibold text-purple-600">{isDelivered ? 'Доставлено' : 'В дорозі'}</div>
+                  <div className="text-purple-800">Статус</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Artalk коментарі для конкретної посилки */}
             <ArtalkComments
-              pageKey="global-tracking-chat"
-              pageTitle="Питання про відстеження посилок"
+              pageKey={`tracking-${trackingData.trackingNumber}`}
+              pageTitle={`Відстеження посилки ${trackingData.trackingNumber} (${trackingData.carrier})`}
+              showInfoBlock={true}
             />
           </section>
 

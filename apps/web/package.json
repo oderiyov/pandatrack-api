@@ -6,7 +6,8 @@
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint --fix .",
+    "lint:check": "eslint ."
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
@@ -32,5 +33,20 @@
     "eslint-config-next": "15.5.2",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "eslintConfig": {
+    "extends": ["next/core-web-vitals"],
+    "rules": {
+      "@typescript-eslint/no-unused-vars": ["warn", { 
+        "vars": "all", 
+        "args": "after-used", 
+        "ignoreRestSiblings": true,
+        "argsIgnorePattern": "^_",
+        "varsIgnorePattern": "^_"
+      }],
+      "react-hooks/exhaustive-deps": "warn",
+      "prefer-const": "warn",
+      "no-console": ["warn", { "allow": ["warn", "error"] }]
+    }
   }
 }

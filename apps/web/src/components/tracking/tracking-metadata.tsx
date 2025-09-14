@@ -1,4 +1,4 @@
-// components/tracking/tracking-metadata.tsx - З CarrierIcon та виправленим border-radius
+// components/tracking/tracking-metadata.tsx - ВИПРАВЛЕНО ESLint
 'use client'
 
 import { CarrierIcon } from '@/components/ui/carrier-icon'
@@ -33,7 +33,8 @@ export default function TrackingMetadata({ trackingData }: TrackingMetadataProps
     }
   }
 
-  const getCarrierOfficialLinks = (carrier: string, trackingNumber: string) => {
+  // ВИПРАВЛЕНО: видалено unused trackingNumber parameter
+  const getCarrierOfficialLinks = (carrier: string) => {
     const carrierData: Record<string, { name: string; url: string }> = {
       'ukrposhta': {
         name: 'Укрпошта',
@@ -152,7 +153,8 @@ export default function TrackingMetadata({ trackingData }: TrackingMetadataProps
         <h4 className="font-semibold text-[#333037] mb-3">Перевірити на офіційних сайтах</h4>
         <div className="space-y-2">
           {trackingData.sourcesChecked.map((carrier, index) => {
-            const carrierInfo = getCarrierOfficialLinks(carrier, trackingData.trackingNumber)
+            // ВИПРАВЛЕНО: видалено unused trackingNumber parameter
+            const carrierInfo = getCarrierOfficialLinks(carrier)
             if (!carrierInfo) return null
 
             return (

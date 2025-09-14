@@ -1,4 +1,4 @@
-// components/tracking/delivery-estimation.tsx
+// components/tracking/delivery-estimation.tsx - ВИПРАВЛЕНО ESLint
 'use client'
 
 interface TrackingData {
@@ -37,7 +37,7 @@ const formatUkrainianDate = (dateString: string): string => {
     const minutes = date.getMinutes().toString().padStart(2, '0')
 
     return `${day} ${month} ${year} р. ${hours}:${minutes}`
-  } catch (error) {
+  } catch (_error) { // ВИПРАВЛЕНО: error → _error
     return 'Невідома дата'
   }
 }
@@ -79,11 +79,11 @@ export default function DeliveryEstimation({ trackingData, isDelivered }: Delive
 
       if (carrierKey && estimations[carrierKey]) {
         if (carrierKey === 'ukrposhta' && isInternational) {
-          estimation = estimations[carrierKey].international
+          estimation = (estimations[carrierKey] as any).international
         } else if (carrierKey === 'ukrposhta') {
-          estimation = estimations[carrierKey].domestic
+          estimation = (estimations[carrierKey] as any).domestic
         } else {
-          estimation = estimations[carrierKey]
+          estimation = estimations[carrierKey] as any
         }
       }
     }
