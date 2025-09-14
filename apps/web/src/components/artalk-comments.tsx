@@ -1,4 +1,4 @@
-// components/artalk-comments.tsx - ВИПРАВЛЕНИЙ КОМПОНЕНТ
+// components/artalk-comments.tsx - ОСТАТОЧНО ВИПРАВЛЕНО
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
@@ -6,15 +6,15 @@ import { useEffect, useRef, useState } from 'react'
 interface ArtalkCommentsProps {
   pageKey: string
   pageTitle: string
-  showInfoBlock?: boolean // Опція для показу інформаційного блоку
+  showInfoBlock?: boolean
 }
 
-// Інформаційний блок перед чатом (як у vidstezhyty)
+// Інформаційний блок перед чатом
 function CommentsInfoBlock() {
-  const [onlineCount, setOnlineCount] = useState(12) // Мок значення
-  const [totalComments, setTotalComments] = useState(0)
+  const [onlineCount, setOnlineCount] = useState(12)
+  const [totalComments] = useState(0) // ВИПРАВЛЕНО: видалено setTotalComments
 
-  // Симуляція лічильників (в реальності отримувати з API)
+  // Симуляція лічильників
   useEffect(() => {
     const interval = setInterval(() => {
       setOnlineCount(prev => Math.max(8, prev + Math.floor(Math.random() * 3) - 1))
@@ -91,7 +91,7 @@ export default function ArtalkComments({ pageKey, pageTitle, showInfoBlock = tru
             pageTitle: pageTitle,
             server: 'https://api.pandatrack.com.ua/api/artalk',
             site: 'PandaTrack',
-            locale: 'en', // Використовуємо 'en' бо 'uk' ще не підтримується
+            locale: 'en',
             placeholder: 'Залишити коментар про відстеження...',
             noComment: 'Коментарів поки немає. Будьте першим!',
             sendBtn: 'Відправити',
@@ -105,7 +105,7 @@ export default function ArtalkComments({ pageKey, pageTitle, showInfoBlock = tru
             heightLimit: {
               content: 300,
               children: 400,
-              scrollable: false // Це виправляє TypeScript помилку
+              scrollable: false
             },
             
             pagination: {
@@ -114,17 +114,14 @@ export default function ArtalkComments({ pageKey, pageTitle, showInfoBlock = tru
               autoLoad: true
             },
             
-            // Performance налаштування
             reqTimeout: 15000,
             imgLazyLoad: 'native',
-            versionCheck: false, // Вимикаємо перевірку версій для швидшості
+            versionCheck: false,
             
-            // Емоції та UI
             emoticons: 'https://cdn.jsdelivr.net/gh/ArtalkJS/Emoticons/grps/default.json',
-            nestMax: 3, // Максимум 3 рівні вкладеності
+            nestMax: 3,
             nestSort: 'DATE_ASC',
             
-            // Gravatar налаштування для українських користувачів
             gravatar: {
               mirror: 'https://www.gravatar.com/avatar/',
               params: 'sha256=1&d=mp&s=80'
@@ -190,10 +187,8 @@ export default function ArtalkComments({ pageKey, pageTitle, showInfoBlock = tru
 
   return (
     <div className="space-y-6">
-      {/* Інформаційний блок перед чатом */}
       {showInfoBlock && <CommentsInfoBlock />}
       
-      {/* Artalk коментарі */}
       <div className="bg-white rounded-lg shadow-sm">
         <div ref={artalkRef} className="artalk-container p-6"></div>
       </div>
@@ -205,7 +200,6 @@ export default function ArtalkComments({ pageKey, pageTitle, showInfoBlock = tru
           line-height: 1.6;
         }
         
-        /* Основні стилі Artalk */
         .atk-comment-wrap {
           font-family: inherit;
         }
@@ -226,7 +220,6 @@ export default function ArtalkComments({ pageKey, pageTitle, showInfoBlock = tru
           box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
         }
         
-        /* Кнопки */
         .atk-btn {
           background-color: #3b82f6;
           border-color: #3b82f6;
@@ -242,7 +235,6 @@ export default function ArtalkComments({ pageKey, pageTitle, showInfoBlock = tru
           transform: translateY(-1px);
         }
         
-        /* Коментарі */
         .atk-item {
           border-radius: 8px;
           margin-bottom: 16px;
@@ -256,17 +248,15 @@ export default function ArtalkComments({ pageKey, pageTitle, showInfoBlock = tru
           border-color: #e9ecef;
         }
         
-        /* Аватарки */
         .atk-avatar img {
           border-radius: 50%;
           width: 40px;
           height: 40px;
         }
         
-        /* Мобільна адаптація */
         @media (max-width: 768px) {
           .atk-main-editor .atk-textarea {
-            font-size: 16px; /* Запобігаємо zoom на iOS */
+            font-size: 16px;
           }
           
           .atk-item {
@@ -275,7 +265,6 @@ export default function ArtalkComments({ pageKey, pageTitle, showInfoBlock = tru
           }
         }
         
-        /* Dark mode підтримка */
         @media (prefers-color-scheme: dark) {
           .atk-item {
             background: #1f2937;
@@ -290,7 +279,6 @@ export default function ArtalkComments({ pageKey, pageTitle, showInfoBlock = tru
           }
         }
         
-        /* Анімації для лайків */
         .atk-vote-btn {
           transition: all 0.2s ease;
         }
@@ -299,13 +287,11 @@ export default function ArtalkComments({ pageKey, pageTitle, showInfoBlock = tru
           transform: scale(1.1);
         }
         
-        /* Покращення читабельності */
         .atk-content {
           line-height: 1.7;
           word-wrap: break-word;
         }
         
-        /* Стилі для цитат */
         .atk-content blockquote {
           border-left: 4px solid #3b82f6;
           padding-left: 16px;
@@ -314,7 +300,6 @@ export default function ArtalkComments({ pageKey, pageTitle, showInfoBlock = tru
           color: #6b7280;
         }
         
-        /* Стилі для кодів та посилань */
         .atk-content code {
           background: #f3f4f6;
           padding: 2px 6px;

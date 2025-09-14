@@ -1,4 +1,4 @@
-// components/tracking/tracking-actions.tsx - ВИПРАВЛЕНО ESLint
+// components/tracking/tracking-actions.tsx - ОСТАТОЧНО ВИПРАВЛЕНО
 'use client'
 
 import { useState } from 'react'
@@ -22,7 +22,7 @@ export default function TrackingActions({ trackingNumber, trackingUrl }: Trackin
         setCopiedUrl(true)
         setTimeout(() => setCopiedUrl(false), 2000)
       }
-    } catch (_err) { // ВИПРАВЛЕНО: err → _err
+    } catch {
       // Fallback for older browsers
       const textArea = document.createElement('textarea')
       textArea.value = text
@@ -41,7 +41,6 @@ export default function TrackingActions({ trackingNumber, trackingUrl }: Trackin
     }
   }
 
-  // ВИПРАВЛЕНО: видалено unused shareUrls variable, використовуємо inline
   const handleShare = (platform: string) => {
     const urls: Record<string, string> = {
       telegram: `https://t.me/share/url?url=${encodeURIComponent(trackingUrl)}&text=${encodeURIComponent(`Відстеження посилки: ${trackingNumber}`)}`,

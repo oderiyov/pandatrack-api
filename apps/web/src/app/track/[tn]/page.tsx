@@ -435,7 +435,7 @@ export default function TrackingPage() {
                     <h3 className="font-semibold text-blue-900 mb-2">Для Safari iOS:</h3>
                     <ul className="text-sm text-blue-800 space-y-1">
                       <li>• Перевірте налаштування Safari → Конфіденційність</li>
-                      <li>• Вимкніть "Запобігти міжсайтовому відстеженню"</li>
+                      <li>• Вимкніть &ldquo;Запобігти міжсайтовому відстеженню&rdquo;</li>
                       <li>• Або спробуйте в приватному режимі</li>
                     </ul>
                   </div>
