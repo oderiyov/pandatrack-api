@@ -1,4 +1,4 @@
-// components/artalk-comments.tsx - Простий CDN підхід
+// components/artalk-comments.tsx - З правильною типізацією
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
@@ -7,6 +7,53 @@ interface ArtalkCommentsProps {
   pageKey: string
   pageTitle: string
   showInfoBlock?: boolean
+}
+
+// Типізація для глобального Artalk
+declare global {
+  interface Window {
+    Artalk?: {
+      init: (config: ArtalkConfig) => void
+    }
+  }
+}
+
+// Основні типи для Artalk конфігурації
+interface ArtalkConfig {
+  el: HTMLElement
+  pageKey: string
+  pageTitle: string
+  server: string
+  site: string
+  locale?: string
+  placeholder?: string
+  noComment?: string
+  sendBtn?: string
+  darkMode?: 'auto' | boolean
+  vote?: boolean
+  voteDown?: boolean
+  preview?: boolean
+  flatMode?: 'auto' | boolean
+  heightLimit?: {
+    content: number
+    children: number
+    scrollable: boolean
+  }
+  pagination?: {
+    pageSize: number
+    readMore: boolean
+    autoLoad: boolean
+  }
+  reqTimeout?: number
+  imgLazyLoad?: 'native' | false
+  versionCheck?: boolean
+  emoticons?: string
+  nestMax?: number
+  nestSort?: 'DATE_ASC' | 'DATE_DESC'
+  gravatar?: {
+    mirror: string
+    params: string
+  }
 }
 
 // Інформаційний блок перед чатом
@@ -81,11 +128,11 @@ export default function ArtalkComments({ pageKey, pageTitle, showInfoBlock = tru
     
     const initializeArtalk = () => {
       // Перевірити чи Artalk доступний глобально
-      if (typeof window !== 'undefined' && (window as any).Artalk && artalkRef.current) {
+      if (typeof window !== 'undefined' && window.Artalk && artalkRef.current) {
         console.log('Artalk CDN found, initializing...')
         
         try {
-          (window as any).Artalk.init({
+          const config: ArtalkConfig = {
             el: artalkRef.current,
             pageKey: pageKey,
             pageTitle: pageTitle,
@@ -125,7 +172,9 @@ export default function ArtalkComments({ pageKey, pageTitle, showInfoBlock = tru
               mirror: 'https://www.gravatar.com/avatar/',
               params: 'sha256=1&d=mp&s=80'
             }
-          })
+          }
+
+          window.Artalk.init(config)
           
           console.log('Artalk initialized successfully')
           setLoading(false)
@@ -137,7 +186,7 @@ export default function ArtalkComments({ pageKey, pageTitle, showInfoBlock = tru
         }
       } else {
         console.log('Artalk CDN not ready yet, checking availability...')
-        console.log('window.Artalk:', typeof (window as any)?.Artalk)
+        console.log('window.Artalk:', typeof window?.Artalk)
         console.log('artalkRef.current:', !!artalkRef.current)
         
         // Спробувати знову через 500ms, максимум 10 спроб (5 секунд)
@@ -146,7 +195,7 @@ export default function ArtalkComments({ pageKey, pageTitle, showInfoBlock = tru
           attempts++
           console.log(`Attempt ${attempts} to find Artalk CDN`)
           
-          if ((window as any).Artalk && artalkRef.current) {
+          if (window.Artalk && artalkRef.current) {
             console.log('Artalk CDN found on attempt', attempts)
             clearInterval(checkInterval)
             initializeArtalk()
