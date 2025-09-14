@@ -110,11 +110,6 @@ export default function RootLayout({
         <script 
           src="https://unpkg.com/artalk@2.9.1/dist/Artalk.js"
           async
-          onLoad={() => {
-            if (typeof window !== 'undefined') {
-              console.log('Artalk CDN loaded successfully')
-            }
-          }}
         ></script>
       </body>
     </html>
