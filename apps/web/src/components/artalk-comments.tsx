@@ -1,4 +1,4 @@
-// components/artalk-comments.tsx - ОСТАТОЧНО ВИПРАВЛЕНО
+// components/artalk-comments.tsx - ВИПРАВЛЕНО без styled-jsx
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
@@ -12,7 +12,7 @@ interface ArtalkCommentsProps {
 // Інформаційний блок перед чатом
 function CommentsInfoBlock() {
   const [onlineCount, setOnlineCount] = useState(12)
-  const [totalComments] = useState(0) // ВИПРАВЛЕНО: видалено setTotalComments
+  const [totalComments] = useState(0)
 
   // Симуляція лічильників
   useEffect(() => {
@@ -82,26 +82,35 @@ export default function ArtalkComments({ pageKey, pageTitle, showInfoBlock = tru
       setLoading(true)
       setError(null)
 
-      // Динамічний імпорт Artalk з кращою обробкою помилок
-      import('artalk').then(({ default: Artalk }) => {
+      // Покращений динамічний імпорт з детальною діагностикою
+      const loadArtalk = async () => {
         try {
-          Artalk.init({
+          console.log('Starting Artalk import...')
+          const ArtalkModule = await import('artalk')
+          const Artalk = ArtalkModule.default
+          
+          console.log('Artalk loaded successfully:', Artalk)
+          
+          if (!Artalk || typeof Artalk.init !== 'function') {
+            throw new Error('Artalk не має функції init')
+          }
+
+          const config = {
             el: artalkRef.current!,
             pageKey: pageKey,
             pageTitle: pageTitle,
             server: 'https://api.pandatrack.com.ua/api/artalk',
             site: 'PandaTrack',
-            locale: 'en',
+            locale: 'en' as const,
             placeholder: 'Залишити коментар про відстеження...',
             noComment: 'Коментарів поки немає. Будьте першим!',
             sendBtn: 'Відправити',
-            darkMode: 'auto',
+            darkMode: 'auto' as const,
             vote: true,
             voteDown: false,
             preview: true,
-            flatMode: 'auto',
+            flatMode: 'auto' as const,
             
-            // ВИПРАВЛЕНО: додано scrollable параметр
             heightLimit: {
               content: 300,
               children: 400,
@@ -115,86 +124,46 @@ export default function ArtalkComments({ pageKey, pageTitle, showInfoBlock = tru
             },
             
             reqTimeout: 15000,
-            imgLazyLoad: 'native',
+            imgLazyLoad: 'native' as const,
             versionCheck: false,
             
             emoticons: 'https://cdn.jsdelivr.net/gh/ArtalkJS/Emoticons/grps/default.json',
             nestMax: 3,
-            nestSort: 'DATE_ASC',
+            nestSort: 'DATE_ASC' as const,
             
             gravatar: {
               mirror: 'https://www.gravatar.com/avatar/',
               params: 'sha256=1&d=mp&s=80'
             }
-          })
+          }
+
+          console.log('Initializing Artalk with config:', config)
           
+          Artalk.init(config)
+          
+          console.log('Artalk initialized successfully')
           setLoading(false)
+          
         } catch (initError) {
           console.error('Artalk initialization error:', initError)
-          setError('Помилка ініціалізації коментарів')
+          setError(`Помилка ініціалізації: ${initError instanceof Error ? initError.message : 'Невідома помилка'}`)
           setLoading(false)
         }
-      }).catch((importError) => {
+      }
+
+      loadArtalk().catch((importError) => {
         console.error('Failed to load Artalk:', importError)
-        setError('Не вдалося завантажити систему коментарів')
+        setError(`Не вдалося завантажити Artalk: ${importError instanceof Error ? importError.message : 'Невідома помилка'}`)
         setLoading(false)
       })
     }
   }, [pageKey, pageTitle])
 
-  // Loading state
-  if (loading) {
-    return (
-      <div className="space-y-6">
-        {showInfoBlock && <CommentsInfoBlock />}
-        <div className="bg-white rounded-lg shadow-sm p-8">
-          <div className="animate-pulse space-y-4">
-            <div className="h-4 bg-gray-200 rounded w-1/4"></div>
-            <div className="h-20 bg-gray-200 rounded"></div>
-            <div className="h-8 bg-gray-200 rounded w-24"></div>
-          </div>
-          <p className="text-center text-gray-500 mt-4">Завантаження коментарів...</p>
-        </div>
-      </div>
-    )
-  }
-
-  // Error state
-  if (error) {
-    return (
-      <div className="space-y-6">
-        {showInfoBlock && <CommentsInfoBlock />}
-        <div className="bg-white rounded-lg shadow-sm p-8">
-          <div className="text-center">
-            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
-              <svg className="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L3.232 16.5c-.77.833.192 2.5 1.732 2.5z" />
-              </svg>
-            </div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Коментарі тимчасово недоступні</h3>
-            <p className="text-gray-600 mb-4">{error}</p>
-            <button
-              onClick={() => window.location.reload()}
-              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              Оновити сторінку
-            </button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div className="space-y-6">
-      {showInfoBlock && <CommentsInfoBlock />}
-      
-      <div className="bg-white rounded-lg shadow-sm">
-        <div ref={artalkRef} className="artalk-container p-6"></div>
-      </div>
-      
-      {/* Кастомні стилі для українського контенту */}
-      <style jsx global>{`
+  // Додати CSS стилі через useEffect
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const style = document.createElement('style')
+      style.textContent = `
         .artalk-container {
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
           line-height: 1.6;
@@ -318,7 +287,65 @@ export default function ArtalkComments({ pageKey, pageTitle, showInfoBlock = tru
         .atk-content a:hover {
           border-bottom-color: #3b82f6;
         }
-      `}</style>
+      `
+      document.head.appendChild(style)
+      
+      return () => {
+        document.head.removeChild(style)
+      }
+    }
+  }, [])
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        {showInfoBlock && <CommentsInfoBlock />}
+        <div className="bg-white rounded-lg shadow-sm p-8">
+          <div className="animate-pulse space-y-4">
+            <div className="h-4 bg-gray-200 rounded w-1/4"></div>
+            <div className="h-20 bg-gray-200 rounded"></div>
+            <div className="h-8 bg-gray-200 rounded w-24"></div>
+          </div>
+          <p className="text-center text-gray-500 mt-4">Завантаження коментарів...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="space-y-6">
+        {showInfoBlock && <CommentsInfoBlock />}
+        <div className="bg-white rounded-lg shadow-sm p-8">
+          <div className="text-center">
+            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+              <svg className="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L3.232 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Коментарі тимчасово недоступні</h3>
+            <p className="text-gray-600 mb-4">{error}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Оновити сторінку
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      {showInfoBlock && <CommentsInfoBlock />}
+      
+      <div className="bg-white rounded-lg shadow-sm">
+        <div ref={artalkRef} className="artalk-container p-6"></div>
+      </div>
     </div>
   )
 }
