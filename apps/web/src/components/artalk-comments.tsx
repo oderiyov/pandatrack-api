@@ -1,4 +1,4 @@
-// components/artalk-comments.tsx - ВИПРАВЛЕНО без styled-jsx
+// components/artalk-comments.tsx - Простий CDN підхід
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
@@ -14,7 +14,6 @@ function CommentsInfoBlock() {
   const [onlineCount, setOnlineCount] = useState(12)
   const [totalComments] = useState(0)
 
-  // Симуляція лічильників
   useEffect(() => {
     const interval = setInterval(() => {
       setOnlineCount(prev => Math.max(8, prev + Math.floor(Math.random() * 3) - 1))
@@ -78,38 +77,29 @@ export default function ArtalkComments({ pageKey, pageTitle, showInfoBlock = tru
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && artalkRef.current) {
-      setLoading(true)
-      setError(null)
-
-      // Покращений динамічний імпорт з детальною діагностикою
-      const loadArtalk = async () => {
+    console.log('ArtalkComments useEffect triggered - start')
+    
+    const initializeArtalk = () => {
+      // Перевірити чи Artalk доступний глобально
+      if (typeof window !== 'undefined' && (window as any).Artalk && artalkRef.current) {
+        console.log('Artalk CDN found, initializing...')
+        
         try {
-          console.log('Starting Artalk import...')
-          const ArtalkModule = await import('artalk')
-          const Artalk = ArtalkModule.default
-          
-          console.log('Artalk loaded successfully:', Artalk)
-          
-          if (!Artalk || typeof Artalk.init !== 'function') {
-            throw new Error('Artalk не має функції init')
-          }
-
-          const config = {
-            el: artalkRef.current!,
+          (window as any).Artalk.init({
+            el: artalkRef.current,
             pageKey: pageKey,
             pageTitle: pageTitle,
             server: 'https://api.pandatrack.com.ua/api/artalk',
             site: 'PandaTrack',
-            locale: 'en' as const,
+            locale: 'en',
             placeholder: 'Залишити коментар про відстеження...',
             noComment: 'Коментарів поки немає. Будьте першим!',
             sendBtn: 'Відправити',
-            darkMode: 'auto' as const,
+            darkMode: 'auto',
             vote: true,
             voteDown: false,
             preview: true,
-            flatMode: 'auto' as const,
+            flatMode: 'auto',
             
             heightLimit: {
               content: 300,
@@ -124,22 +114,18 @@ export default function ArtalkComments({ pageKey, pageTitle, showInfoBlock = tru
             },
             
             reqTimeout: 15000,
-            imgLazyLoad: 'native' as const,
+            imgLazyLoad: 'native',
             versionCheck: false,
             
             emoticons: 'https://cdn.jsdelivr.net/gh/ArtalkJS/Emoticons/grps/default.json',
             nestMax: 3,
-            nestSort: 'DATE_ASC' as const,
+            nestSort: 'DATE_ASC',
             
             gravatar: {
               mirror: 'https://www.gravatar.com/avatar/',
               params: 'sha256=1&d=mp&s=80'
             }
-          }
-
-          console.log('Initializing Artalk with config:', config)
-          
-          Artalk.init(config)
+          })
           
           console.log('Artalk initialized successfully')
           setLoading(false)
@@ -149,152 +135,35 @@ export default function ArtalkComments({ pageKey, pageTitle, showInfoBlock = tru
           setError(`Помилка ініціалізації: ${initError instanceof Error ? initError.message : 'Невідома помилка'}`)
           setLoading(false)
         }
+      } else {
+        console.log('Artalk CDN not ready yet, checking availability...')
+        console.log('window.Artalk:', typeof (window as any)?.Artalk)
+        console.log('artalkRef.current:', !!artalkRef.current)
+        
+        // Спробувати знову через 500ms, максимум 10 спроб (5 секунд)
+        let attempts = 0
+        const checkInterval = setInterval(() => {
+          attempts++
+          console.log(`Attempt ${attempts} to find Artalk CDN`)
+          
+          if ((window as any).Artalk && artalkRef.current) {
+            console.log('Artalk CDN found on attempt', attempts)
+            clearInterval(checkInterval)
+            initializeArtalk()
+          } else if (attempts >= 10) {
+            console.error('Artalk CDN not loaded after 10 attempts')
+            clearInterval(checkInterval)
+            setError('Не вдалося завантажити систему коментарів')
+            setLoading(false)
+          }
+        }, 500)
       }
-
-      loadArtalk().catch((importError) => {
-        console.error('Failed to load Artalk:', importError)
-        setError(`Не вдалося завантажити Artalk: ${importError instanceof Error ? importError.message : 'Невідома помилка'}`)
-        setLoading(false)
-      })
     }
+    
+    // Почати ініціалізацію
+    initializeArtalk()
+    
   }, [pageKey, pageTitle])
-
-  // Додати CSS стилі через useEffect
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const style = document.createElement('style')
-      style.textContent = `
-        .artalk-container {
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-          line-height: 1.6;
-        }
-        
-        .atk-comment-wrap {
-          font-family: inherit;
-        }
-        
-        .atk-main-editor .atk-textarea {
-          font-size: 14px;
-          line-height: 1.5;
-          border-radius: 8px;
-          border: 2px solid #e5e7eb;
-          padding: 12px;
-          resize: vertical;
-          min-height: 80px;
-        }
-        
-        .atk-main-editor .atk-textarea:focus {
-          border-color: #3b82f6;
-          outline: none;
-          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-        }
-        
-        .atk-btn {
-          background-color: #3b82f6;
-          border-color: #3b82f6;
-          border-radius: 6px;
-          padding: 8px 16px;
-          font-weight: 500;
-          transition: all 0.2s;
-        }
-        
-        .atk-btn:hover {
-          background-color: #2563eb;
-          border-color: #2563eb;
-          transform: translateY(-1px);
-        }
-        
-        .atk-item {
-          border-radius: 8px;
-          margin-bottom: 16px;
-          padding: 16px;
-          background: #fafafa;
-          border: 1px solid #f0f0f0;
-        }
-        
-        .atk-item:hover {
-          background: #f8f9fa;
-          border-color: #e9ecef;
-        }
-        
-        .atk-avatar img {
-          border-radius: 50%;
-          width: 40px;
-          height: 40px;
-        }
-        
-        @media (max-width: 768px) {
-          .atk-main-editor .atk-textarea {
-            font-size: 16px;
-          }
-          
-          .atk-item {
-            padding: 12px;
-            margin-bottom: 12px;
-          }
-        }
-        
-        @media (prefers-color-scheme: dark) {
-          .atk-item {
-            background: #1f2937;
-            border-color: #374151;
-            color: #f9fafb;
-          }
-          
-          .atk-main-editor .atk-textarea {
-            background: #374151;
-            border-color: #4b5563;
-            color: #f9fafb;
-          }
-        }
-        
-        .atk-vote-btn {
-          transition: all 0.2s ease;
-        }
-        
-        .atk-vote-btn:hover {
-          transform: scale(1.1);
-        }
-        
-        .atk-content {
-          line-height: 1.7;
-          word-wrap: break-word;
-        }
-        
-        .atk-content blockquote {
-          border-left: 4px solid #3b82f6;
-          padding-left: 16px;
-          margin: 16px 0;
-          font-style: italic;
-          color: #6b7280;
-        }
-        
-        .atk-content code {
-          background: #f3f4f6;
-          padding: 2px 6px;
-          border-radius: 4px;
-          font-family: 'Monaco', 'Menlo', monospace;
-          font-size: 0.9em;
-        }
-        
-        .atk-content a {
-          color: #3b82f6;
-          text-decoration: none;
-          border-bottom: 1px solid transparent;
-          transition: border-color 0.2s;
-        }
-        
-        .atk-content a:hover {
-          border-bottom-color: #3b82f6;
-        }
-      `
-      document.head.appendChild(style)
-      
-      return () => {
-        document.head.removeChild(style)
-      }
-    }
-  }, [])
 
   // Loading state
   if (loading) {
