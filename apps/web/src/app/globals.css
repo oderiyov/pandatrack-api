@@ -1,4 +1,4 @@
-/* src/app/globals.css */
+/* src/app/globals.css - БЕЗПЕЧНА ВЕРСІЯ */
 @import "tailwindcss";
 
 :root {
@@ -31,80 +31,33 @@ body {
   max-width: 1200px;
 }
 
-/* ========== ARTALK КАСТОМІЗАЦІЯ ========== */
+/* ========== ARTALK БАЗОВІ СТИЛІ ========== */
 
-/* Artalk базові стилі для українського контенту */
 .artalk-container {
   font-family: inherit;
   line-height: 1.6;
 }
 
-/* Українські шрифти для Artalk */
 .atk-main {
   font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-size: 14px;
 }
 
-/* ========== АГРЕСИВНЕ ПРИХОВУВАННЯ ЗАЙВИХ ЕЛЕМЕНТІВ ========== */
-
-/* Приховати Website поле - ВСІ МОЖЛИВІ СЕЛЕКТОРИ */
-.atk-field-wrap:has(.atk-input[placeholder*="website" i]),
-.atk-field-wrap:has(.atk-input[placeholder*="Website" i]),
-.atk-field-wrap:has(.atk-input[name="website"]),
-.atk-field-wrap:has(.atk-input[name="Website"]),
-.atk-field-wrap:nth-child(3), /* Зазвичай Website третє поле */
-input[placeholder*="Website" i],
-input[name="website"],
-.atk-input[placeholder*="Website" i],
-.atk-input[name="website"] {
-  display: none !important;
-  visibility: hidden !important;
-  height: 0 !important;
-  padding: 0 !important;
-  margin: 0 !important;
-  border: none !important;
-}
-
-/* Приховати кнопки завантаження зображень */
-.atk-plug-kit-img,
-.atk-img-upload,
-.atk-plug-kit .atk-btn[data-action="image"],
-.atk-editor-toolbar .atk-btn[title*="image" i],
-.atk-editor-toolbar .atk-btn[title*="зображення" i],
-button[data-action="image"],
-.atk-editor .atk-btn:has(svg[fill*="image"]),
-.atk-plug-kit > *:nth-child(2) /* Зазвичай друга кнопка - зображення */ {
-  display: none !important;
-  visibility: hidden !important;
-}
-
-/* Приховати Powered by Artalk - ВСІ ВАРІАНТИ */
+/* ПРОСТE ПРИХОВУВАННЯ ЕЛЕМЕНТІВ */
 .atk-footer,
 .atk-powered,
-.atk-copyright,
-[data-artalk-powered],
-.atk-main > div:last-child:has-text("Powered"),
-.atk-main > *:contains("Powered by"),
-.atk-main > *:contains("Artalk"),
-a[href*="artalk.js.org"],
-a[href*="github.com/ArtalkJS"] {
-  display: none !important;
-  visibility: hidden !important;
-}
-
-/* Приховати емодзі панель якщо не потрібна */
-.atk-plug-kit-emoticons,
-.atk-emoji-picker,
-.atk-plug-kit .atk-btn[data-action="emoticons"] {
+.atk-copyright {
   display: none !important;
 }
 
-/* ========== ПОКРАЩЕННЯ ВИГЛЯДУ КНОПОК ========== */
+/* Website поле - простий селектор */
+input[name="website"],
+.atk-input[name="website"] {
+  display: none !important;
+}
 
-/* Стилізація кнопки "Опублікувати" */
+/* Стилізація кнопки відправки */
 .atk-send-btn,
-.atk-btn-submit,
-.atk-editor .atk-btn[type="submit"],
 button[type="submit"] {
   background-color: #333037 !important;
   color: white !important;
@@ -113,22 +66,16 @@ button[type="submit"] {
   padding: 8px 16px !important;
   font-weight: 500 !important;
   cursor: pointer !important;
-  transition: all 0.2s ease !important;
 }
 
 .atk-send-btn:hover,
-.atk-btn-submit:hover,
 button[type="submit"]:hover {
   background-color: #1f1f1f !important;
-  border-color: #1f1f1f !important;
 }
 
 /* Стилізація полів вводу */
 .atk-input,
-.atk-textarea,
-input[type="text"],
-input[type="email"],
-textarea {
+.atk-textarea {
   border: 1px solid #e5e7eb !important;
   border-radius: 6px !important;
   padding: 8px 12px !important;
@@ -137,170 +84,29 @@ textarea {
 }
 
 .atk-input:focus,
-.atk-textarea:focus,
-input[type="text"]:focus,
-input[type="email"]:focus,
-textarea:focus {
+.atk-textarea:focus {
   border-color: #2563eb !important;
   outline: none !important;
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1) !important;
 }
 
-/* ========== ПОКРАЩЕННЯ LAYOUT ========== */
-
-/* Зробити поля горизонтальними */
-.atk-field-wrap {
-  margin-bottom: 12px !important;
-}
-
-.atk-editor-wrap {
-  border: 1px solid #e5e7eb !important;
-  border-radius: 8px !important;
-  padding: 16px !important;
-  background-color: white !important;
-}
-
-/* Приховати зайві елементи панелі інструментів */
-.atk-editor-toolbar {
-  border-bottom: 1px solid #f3f4f6 !important;
-  padding-bottom: 8px !important;
-  margin-bottom: 12px !important;
-}
-
-/* Стилізація текстової області */
-.atk-editor-area,
-.atk-textarea {
-  min-height: 100px !important;
-  resize: vertical !important;
-  border: none !important;
-  outline: none !important;
-  font-family: inherit !important;
-  line-height: 1.5 !important;
-}
-
-/* ========== ФОРСУВАННЯ УКРАЇНСЬКОЇ МОВИ ========== */
-
-/* Стили для "No Comment" тексту */
-.atk-no-comment {
-  font-size: 0 !important;
-}
-
-.atk-no-comment::before {
-  content: "Поки що немає коментарів" !important;
-  font-size: 14px !important;
-}
-
-/* ========== БАЗОВІ ARTALK СТИЛІ ========== */
-
-/* Кастомні кольори для PandaTrack теми */
+/* Кольорова схема */
 .atk-main {
   --atk-color-bg: #ffffff;
   --atk-color-bg-grey: #f5f5f5;
-  --atk-color-bg-transl: rgba(255, 255, 255, 0.9);
   --atk-color-border: #e5e7eb;
-  --atk-color-meta: #6b7280;
   --atk-color-text: #333037;
   --atk-color-link: #2563eb;
   --atk-color-main: #333037;
-  --atk-color-sub: #6b7280;
 }
 
-/* Стилі для завантаження */
-.artalk-container .loading {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 200px;
-  color: #6b7280;
-}
-
-/* Анімації для плавного з'являння */
-.atk-main {
-  animation: fadeIn 0.3s ease-in-out;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* Кастомізація кнопок для PandaTrack стилю */
-.atk-btn {
-  border-radius: 6px;
-  font-weight: 500;
-  transition: all 0.2s ease;
-}
-
-.atk-btn-main {
-  background-color: #333037;
-  border-color: #333037;
-}
-
-.atk-btn-main:hover {
-  background-color: #1f1f1f;
-  border-color: #1f1f1f;
-}
-
-/* Стилі для коментарів */
-.atk-comment {
-  border-radius: 8px;
-  margin-bottom: 16px;
-}
-
-/* Покращення читабельності */
-.atk-comment-content {
-  line-height: 1.6;
-}
-
-/* Українська типографіка */
-.atk-comment-content,
-.atk-editor-area {
-  font-feature-settings: "kern" 1, "liga" 1, "clig" 1;
-  text-rendering: optimizeLegibility;
-}
-
-/* ========== МОБІЛЬНІ ПОКРАЩЕННЯ ========== */
+/* Мобільні покращення */
 @media (max-width: 768px) {
   .atk-main {
     font-size: 13px;
   }
   
-  .atk-comment-wrap {
-    padding: 12px;
-  }
-  
-  .atk-editor {
-    padding: 10px;
-  }
-
-  .atk-editor-wrap {
-    padding: 12px !important;
-  }
-  
   .atk-send-btn {
     width: 100% !important;
     margin-top: 12px !important;
-  }
-  
-  .atk-field-wrap {
-    margin-bottom: 10px !important;
-  }
-}
-
-/* Dark mode підтримка */
-@media (prefers-color-scheme: dark) {
-  .atk-main {
-    --atk-color-bg: #1f2937;
-    --atk-color-bg-grey: #111827;
-    --atk-color-border: #374151;
-    --atk-color-text: #f9fafb;
-    --atk-color-meta: #9ca3af;
-    --atk-color-link: #60a5fa;
   }
 }
