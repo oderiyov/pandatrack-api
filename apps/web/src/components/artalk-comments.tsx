@@ -60,9 +60,7 @@ export default function ArtalkComments({
           sendBtn: 'Опублікувати',
           
           // ВІДКЛЮЧИТИ ЗАЙВІ ФУНКЦІЇ
-          imgUpload: {
-            enabled: false  // Відключити завантаження зображень
-          },
+          imgUpload: false,
           
           // Features
           vote: true,
