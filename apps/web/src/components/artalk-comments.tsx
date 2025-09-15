@@ -66,11 +66,6 @@ export default function ArtalkComments({
             sendBtn: 'Опублікувати'
           },
           
-          // ВІДКЛЮЧИТИ ЗАЙВІ ФУНКЦІЇ
-          imgUpload: {
-            enabled: false  // Відключити завантаження зображень
-          },
-          
           // Features
           vote: true,
           voteDown: false,
