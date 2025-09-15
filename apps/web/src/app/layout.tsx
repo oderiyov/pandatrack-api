@@ -1,4 +1,4 @@
-// app/layout.tsx - З Artalk CDN інтеграцією
+// src/app/layout.tsx - БЕЗ CDN, використовуємо npm пакет
 import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
@@ -99,18 +99,12 @@ export default function RootLayout({
         {/* Disable automatic link detection */}
         <meta name="format-detection" content="telephone=no, date=no, email=no, address=no" />
         
-        {/* Artalk CDN - ДОДАНО */}
-        <link rel="preconnect" href="https://unpkg.com" />
-        <link href="https://unpkg.com/artalk@2.9.1/dist/Artalk.css" rel="stylesheet" />
+        {/* ВИДАЛЕНО CDN залежності - використовуємо npm пакет artalk */}
       </head>
       <body className="antialiased bg-[#f5f5f5] text-[#333037]">
         {children}
         
-        {/* Artalk JavaScript - завантажується в кінці body */}
-        <script 
-          src="https://unpkg.com/artalk@2.9.1/dist/Artalk.js"
-          async
-        ></script>
+        {/* ВИДАЛЕНО Artalk CDN скрипт - використовуємо динамічний імпорт */}
       </body>
     </html>
   )
