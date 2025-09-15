@@ -112,7 +112,7 @@ export default function HomePage() {
 
             {/* Artalk Comments з інформаційним блоком */}
             <ArtalkComments
-              pageKey="homepage-global-chat"
+              pageKey="pandatrack-homepage"
               pageTitle="Загальні питання про відстеження посилок"
               showInfoBlock={true}
             />

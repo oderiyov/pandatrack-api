@@ -53,11 +53,23 @@ export default function ArtalkComments({
           pageKey: pageKey,
           pageTitle: pageTitle,
           
-          // УКРАЇНСЬКА ЛОКАЛІЗАЦІЯ
+          // УКРАЇНСЬКА ЛОКАЛІЗАЦІЯ - ФОРСОВАНА
           locale: 'uk',
           placeholder: 'Написати коментар...',
           noComment: 'Поки що немає коментарів',
           sendBtn: 'Опублікувати',
+          
+          // ПОВНА ЛОКАЛІЗАЦІЯ UI
+          frontend: {
+            placeholder: 'Написати коментар...',
+            noComment: 'Поки що немає коментарів',
+            sendBtn: 'Опублікувати'
+          },
+          
+          // ВІДКЛЮЧИТИ ЗАЙВІ ФУНКЦІЇ
+          imgUpload: {
+            enabled: false  // Відключити завантаження зображень
+          },
           
           // Features
           vote: true,

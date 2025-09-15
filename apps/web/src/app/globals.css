@@ -43,7 +43,7 @@ body {
   font-size: 14px;
 }
 
-/* ПРИХОВАТИ ЗАЙВІ ЕЛЕМЕНТИ */
+/* ПРИХОВАТИ ЗАЙВІ ЕЛЕМЕНТИ - АГРЕСИВНО */
 .atk-footer,
 .atk-powered,
 .atk-copyright {
@@ -57,22 +57,35 @@ input[name="website"],
   display: none !important;
 }
 
-/* Приховати кнопки файлів та зображень */
+/* Приховати кнопки файлів та зображень - ВСІ ВАРІАНТИ */
 .atk-plug-kit-img,
 .atk-img-upload,
 button[data-action="image"],
-.atk-editor-toolbar button:nth-child(2) {
+.atk-editor-toolbar button:nth-child(2),
+.atk-plug-kit button:first-child,
+[title*="image"],
+[title*="зображення"],
+.atk-btn[data-action*="img"] {
   display: none !important;
 }
 
-/* Приховати зайві розділи емодзі */
+/* Приховати зайві розділи емодзі - КОНКРЕТНІ НАЗВИ */
+.atk-emoticons .atk-grp-item:not([title="default"]),
+.atk-emoticons .atk-grp-title:not(:contains("Emoji")) + .atk-grp-list {
+  display: none !important;
+}
+
+/* Альтернативний спосіб приховати емодзі групи */
 .atk-emoticons .atk-grp-item:first-child,
-.atk-emoticons .atk-grp-item:last-child {
+.atk-emoticons .atk-grp-item:last-child,
+.atk-emoticons .atk-grp-item:nth-child(1),
+.atk-emoticons .atk-grp-item:nth-child(3) {
   display: none !important;
 }
 
 /* Приховати сортування коментарів */
-.atk-list-sort {
+.atk-list-sort,
+.atk-list-sort-item {
   display: none !important;
 }
 

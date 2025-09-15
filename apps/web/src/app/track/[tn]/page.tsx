@@ -599,8 +599,8 @@ export default function TrackingPage() {
 
             {/* Artalk коментарі для конкретної посилки */}
             <ArtalkComments
-              pageKey={`tracking-${trackingData.trackingNumber}`}
-              pageTitle={`Відстеження посилки ${trackingData.trackingNumber} (${trackingData.carrier})`}
+              pageKey={`track-${trackingData.trackingNumber}`}
+              pageTitle={`Коментарі до посилки ${trackingData.trackingNumber}`}
               showInfoBlock={true}
             />
           </section>
