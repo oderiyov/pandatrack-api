@@ -99,38 +99,6 @@ export default function ArtalkComments({
           nestMax: 3
         })
 
-        // Додати кастомні стилі після ініціалізації
-        setTimeout(() => {
-          if (artalkRef.current) {
-            // Приховати Website поле через JavaScript
-            const websiteInputs = artalkRef.current.querySelectorAll('input[placeholder*="Website"], input[name="website"]')
-            websiteInputs.forEach(input => {
-              const fieldWrap = input.closest('.atk-field-wrap')
-              if (fieldWrap) {
-                (fieldWrap as HTMLElement).style.display = 'none'
-              }
-            })
-
-            // Приховати Powered by
-            const poweredBy = artalkRef.current.querySelectorAll('.atk-footer, .atk-powered, [data-artalk-powered]')
-            poweredBy.forEach(el => {
-              (el as HTMLElement).style.display = 'none'
-            })
-
-            // Приховати кнопки завантаження зображень
-            const imgButtons = artalkRef.current.querySelectorAll('.atk-plug-kit-img, .atk-img-upload, [data-action="image"]')
-            imgButtons.forEach(el => {
-              (el as HTMLElement).style.display = 'none'
-            })
-
-            // Змінити текст кнопки на українську
-            const submitBtn = artalkRef.current.querySelector('.atk-send-btn, .atk-btn-submit, button[type="submit"]')
-            if (submitBtn) {
-              submitBtn.textContent = 'Опублікувати'
-            }
-          }
-        }, 1000)
-
         console.log('Artalk initialized successfully')
         setIsLoaded(true)
         setError(null)
