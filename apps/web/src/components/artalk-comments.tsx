@@ -1,4 +1,4 @@
-// src/components/artalk-comments.tsx - ПОКРАЩЕНА ВЕРСІЯ
+// src/components/artalk-comments.tsx - ФІНАЛЬНА РОБОЧА ВЕРСІЯ
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
@@ -26,13 +26,11 @@ export default function ArtalkComments({
 
     const initArtalk = async () => {
       try {
-        // Динамічний імпорт Artalk
         const ArtalkModule = await import('artalk')
         const Artalk = ArtalkModule.default
         
         if (!mounted || !artalkRef.current) return
 
-        // Знищити попередній екземпляр
         if (artalkInstance.current && typeof artalkInstance.current === 'object' && artalkInstance.current !== null) {
           const instance = artalkInstance.current as { destroy?: () => void }
           if (instance.destroy) {
@@ -41,64 +39,26 @@ export default function ArtalkComments({
           artalkInstance.current = null
         }
 
-        // Створити новий екземпляр Artalk
         artalkInstance.current = Artalk.init({
           el: artalkRef.current,
-          
-          // Server configuration
           server: 'https://api.pandatrack.com.ua/api/artalk/',
           site: 'PandaTrack',
-          
-          // Page configuration  
           pageKey: pageKey,
           pageTitle: pageTitle,
-          
-          // УКРАЇНСЬКА ЛОКАЛІЗАЦІЯ - ФОРСОВАНА
           locale: 'uk',
           placeholder: 'Написати коментар...',
           noComment: 'Поки що немає коментарів',
           sendBtn: 'Опублікувати',
-          
-          // ПОВНА ЛОКАЛІЗАЦІЯ UI
-          frontend: {
-            placeholder: 'Написати коментар...',
-            noComment: 'Поки що немає коментарів',
-            sendBtn: 'Опублікувати'
-          },
-          
-          // Features
           vote: true,
-          voteDown: false,
+          voteDown: true,
           preview: true,
-          countEl: '',
-          
-          // Mobile optimizations
-          heightLimit: {
-            content: 300,
-            children: 400,
-            scrollable: true
-          },
-          
-          // Gravatar
-          gravatar: {
-            mirror: 'https://www.gravatar.com/avatar/',
-            params: 'sha256=1&d=mp&s=240'
-          },
-          
-          // Pagination
+          nestMax: 3,
           pagination: {
-            pageSize: 15,
+            pageSize: 20,
             readMore: true,
             autoLoad: true
           },
-          
-          // Timeouts for mobile
-          reqTimeout: 10000,
-          
-          // Theme
-          darkMode: 'auto',
-          flatMode: 'auto',
-          nestMax: 3
+          reqTimeout: 10000
         })
 
         console.log('Artalk initialized successfully')
@@ -159,7 +119,6 @@ export default function ArtalkComments({
 
   return (
     <div className="space-y-6">
-      {/* Інформаційний блок */}
       {showInfoBlock && (
         <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
@@ -202,7 +161,6 @@ export default function ArtalkComments({
         </div>
       )}
 
-      {/* Loading state */}
       {isLoading && (
         <div className="bg-gray-50 border border-gray-200 rounded-lg p-8">
           <div className="text-center">
@@ -217,19 +175,15 @@ export default function ArtalkComments({
         </div>
       )}
 
-      {/* Artalk контейнер */}
       <div 
         ref={artalkRef}
         className={`artalk-container ${isLoading ? 'opacity-0' : 'opacity-100'} transition-opacity duration-300`}
         style={{ minHeight: isLoaded ? 'auto' : '200px' }}
       />
       
-      {/* Додаткова інформація - БЕЗ ARTALK ПОСИЛАННЯ */}
       {isLoaded && (
         <div className="text-center text-xs text-gray-500 border-t pt-4">
-          <p>
-            Ваші дані захищені та не передаються третім особам
-          </p>
+          <p>Ваші дані захищені та не передаються третім особам</p>
         </div>
       )}
     </div>
