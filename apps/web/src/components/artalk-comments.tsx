@@ -1,4 +1,4 @@
-// src/components/artalk-comments.tsx
+// src/components/artalk-comments.tsx - ПОКРАЩЕНА ВЕРСІЯ
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
@@ -53,11 +53,16 @@ export default function ArtalkComments({
           pageKey: pageKey,
           pageTitle: pageTitle,
           
-          // UI налаштування для українського контенту
+          // УКРАЇНСЬКА ЛОКАЛІЗАЦІЯ
           locale: 'uk',
           placeholder: 'Написати коментар...',
           noComment: 'Поки що немає коментарів',
-          sendBtn: 'Надіслати',
+          sendBtn: 'Опублікувати',
+          
+          // ВІДКЛЮЧИТИ ЗАЙВІ ФУНКЦІЇ
+          imgUpload: {
+            enabled: false  // Відключити завантаження зображень
+          },
           
           // Features
           vote: true,
@@ -94,6 +99,38 @@ export default function ArtalkComments({
           nestMax: 3
         })
 
+        // Додати кастомні стилі після ініціалізації
+        setTimeout(() => {
+          if (artalkRef.current) {
+            // Приховати Website поле через JavaScript
+            const websiteInputs = artalkRef.current.querySelectorAll('input[placeholder*="Website"], input[name="website"]')
+            websiteInputs.forEach(input => {
+              const fieldWrap = input.closest('.atk-field-wrap')
+              if (fieldWrap) {
+                (fieldWrap as HTMLElement).style.display = 'none'
+              }
+            })
+
+            // Приховати Powered by
+            const poweredBy = artalkRef.current.querySelectorAll('.atk-footer, .atk-powered, [data-artalk-powered]')
+            poweredBy.forEach(el => {
+              (el as HTMLElement).style.display = 'none'
+            })
+
+            // Приховати кнопки завантаження зображень
+            const imgButtons = artalkRef.current.querySelectorAll('.atk-plug-kit-img, .atk-img-upload, [data-action="image"]')
+            imgButtons.forEach(el => {
+              (el as HTMLElement).style.display = 'none'
+            })
+
+            // Змінити текст кнопки на українську
+            const submitBtn = artalkRef.current.querySelector('.atk-send-btn, .atk-btn-submit, button[type="submit"]')
+            if (submitBtn) {
+              submitBtn.textContent = 'Опублікувати'
+            }
+          }
+        }, 1000)
+
         console.log('Artalk initialized successfully')
         setIsLoaded(true)
         setError(null)
@@ -128,7 +165,6 @@ export default function ArtalkComments({
     setError(null)
     setIsLoading(true)
     setIsLoaded(false)
-    // Trigger re-initialization
     window.location.reload()
   }
 
@@ -190,7 +226,7 @@ export default function ArtalkComments({
           <div className="mt-4 pt-4 border-t border-blue-200">
             <div className="flex items-center justify-between text-xs text-blue-700">
               <span>У коментарях працює модерація контенту</span>
-              <span>Підтримуються емодзі та прикріплення зображень</span>
+              <span>Підтримуються емодзі</span>
             </div>
           </div>
         </div>
@@ -218,7 +254,7 @@ export default function ArtalkComments({
         style={{ minHeight: isLoaded ? 'auto' : '200px' }}
       />
       
-      {/* Додаткова інформація - ВИДАЛЕНО посилання на Artalk */}
+      {/* Додаткова інформація - БЕЗ ARTALK ПОСИЛАННЯ */}
       {isLoaded && (
         <div className="text-center text-xs text-gray-500 border-t pt-4">
           <p>
