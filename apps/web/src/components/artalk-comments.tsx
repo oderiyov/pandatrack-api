@@ -59,9 +59,6 @@ export default function ArtalkComments({
           noComment: 'Поки що немає коментарів',
           sendBtn: 'Опублікувати',
           
-          // ВІДКЛЮЧИТИ ЗАЙВІ ФУНКЦІЇ
-          imgUpload: false,
-          
           // Features
           vote: true,
           voteDown: false,
