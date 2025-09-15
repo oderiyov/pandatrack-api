@@ -31,7 +31,7 @@ body {
   max-width: 1200px;
 }
 
-/* Додати ці стилі в кінець src/app/globals.css */
+/* ========== ARTALK КАСТОМІЗАЦІЯ ========== */
 
 /* Artalk базові стилі для українського контенту */
 .artalk-container {
@@ -43,6 +43,32 @@ body {
 .atk-main {
   font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-size: 14px;
+}
+
+/* ПРИХОВАТИ НЕБАЖАНІ ЕЛЕМЕНТИ */
+
+/* Приховати "Powered by Artalk" */
+.atk-footer,
+.atk-powered {
+  display: none !important;
+}
+
+/* Приховати поле Website */
+.atk-field-wrap:has(.atk-input[placeholder*="website"]),
+.atk-field-wrap:has(.atk-input[placeholder*="Website"]),
+.atk-field-wrap:has(.atk-input[name="website"]) {
+  display: none !important;
+}
+
+/* Альтернативний селектор для Website поля */
+.atk-input[placeholder*="Website"],
+.atk-input[name="website"] {
+  display: none !important;
+}
+
+/* Приховати Website label */
+.atk-field-wrap .atk-field-label[for="website"] {
+  display: none !important;
 }
 
 /* Кастомні кольори для PandaTrack теми */

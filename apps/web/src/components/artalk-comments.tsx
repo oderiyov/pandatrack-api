@@ -2,6 +2,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import 'artalk/dist/Artalk.css'
 
 interface ArtalkCommentsProps {
   pageKey: string
@@ -217,20 +218,11 @@ export default function ArtalkComments({
         style={{ minHeight: isLoaded ? 'auto' : '200px' }}
       />
       
-      {/* Додаткова інформація */}
+      {/* Додаткова інформація - ВИДАЛЕНО посилання на Artalk */}
       {isLoaded && (
         <div className="text-center text-xs text-gray-500 border-t pt-4">
           <p>
-            Система коментарів працює на технології{' '}
-            <a 
-              href="https://artalk.js.org" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="text-blue-600 hover:underline"
-            >
-              Artalk
-            </a>
-            {' '}• Ваші дані захищені та не передаються третім особам
+            Ваші дані захищені та не передаються третім особам
           </p>
         </div>
       )}
