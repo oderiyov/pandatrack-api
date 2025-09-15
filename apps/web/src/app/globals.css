@@ -180,26 +180,14 @@ textarea:focus {
 
 /* ========== ФОРСУВАННЯ УКРАЇНСЬКОЇ МОВИ ========== */
 
-/* Замінити англійські тексти через CSS content */
-.atk-input[placeholder="Nickname"]::placeholder {
-  content: "Ім'я" !important;
-}
-
-.atk-input[placeholder="Email"]::placeholder {
-  content: "Email" !important;
-}
-
-.atk-textarea[placeholder="Leave a comment"]::placeholder {
-  content: "Написати коментар..." !important;
-}
-
 /* Стили для "No Comment" тексту */
-.atk-no-comment::before {
-  content: "Поки що немає коментарів" !important;
-}
-
 .atk-no-comment {
   font-size: 0 !important;
+}
+
+.atk-no-comment::before {
+  content: "Поки що немає коментарів" !important;
+  font-size: 14px !important;
 }
 
 /* ========== БАЗОВІ ARTALK СТИЛІ ========== */
