@@ -88,7 +88,7 @@ export function CommentForm({
         textareaRef.current.style.height = 'auto';
       }
 
-    } catch (error) {
+    } catch {
       // Помилка обробляється в батьківському компоненті
     }
   };

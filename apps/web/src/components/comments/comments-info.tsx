@@ -33,7 +33,7 @@ export function CommentsInfo({ className = '' }: CommentsInfoProps) {
         {/* Корисна інформація */}
         <div className="space-y-2">
           <div className="text-blue-700">
-            <strong>Якщо статус "Відправлення прямує до точки видачі/доставки"</strong> не змінюється протягом тижня, 
+            <strong>Якщо статус &quot;Відправлення прямує до точки видачі/доставки&quot;</strong> не змінюється протягом тижня, 
             рекомендуємо звернутися до вашого відділення.
           </div>
           

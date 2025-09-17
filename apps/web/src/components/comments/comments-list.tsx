@@ -119,7 +119,7 @@ function CommentItem({
       await onFlag(comment.id, flagReason);
       setShowFlagForm(false);
       setFlagReason('');
-    } catch (error) {
+    } catch {
       // Помилка обробляється в батьківському компоненті
     }
   };
