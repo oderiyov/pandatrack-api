@@ -1,4 +1,4 @@
-// src/app/admin/comments/page.tsx
+// src/app/secure-admin/comments/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -28,23 +28,39 @@ const API_BASE = process.env.NODE_ENV === 'production'
   : 'http://localhost:3003';
 
 export default function AdminCommentsPage() {
+  // Password захист
+  const [password, setPassword] = useState('');
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [attempts, setAttempts] = useState(0);
+  
+  // Основні стани
   const [pendingComments, setPendingComments] = useState<PendingComment[]>([]);
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState<string[]>([]);
-  const [adminToken, setAdminToken] = useState<string>('');
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-  // Перевірка аутентифікації
+  const correctPassword = 'PandaTrack2024Admin!'; // Змініть на свій
+  const maxAttempts = 3;
+
+  // Перевірка збереженої сесії при завантаженні
   useEffect(() => {
-    const token = localStorage.getItem('admin_token');
-    if (token) {
-      setAdminToken(token);
-      setIsAuthenticated(true);
+    const savedAuth = localStorage.getItem('admin_session');
+    const savedTime = localStorage.getItem('admin_session_time');
+    
+    if (savedAuth && savedTime) {
+      const sessionTime = parseInt(savedTime);
+      const now = Date.now();
+      // Сесія дійсна 8 годин
+      if (now - sessionTime < 8 * 60 * 60 * 1000) {
+        setIsAuthenticated(true);
+      } else {
+        localStorage.removeItem('admin_session');
+        localStorage.removeItem('admin_session_time');
+      }
     }
   }, []);
 
-  // Завантаження даних
+  // Завантаження даних при аутентифікації
   useEffect(() => {
     if (isAuthenticated) {
       loadPendingComments();
@@ -52,24 +68,40 @@ export default function AdminCommentsPage() {
     }
   }, [isAuthenticated]);
 
-  const handleLogin = async (email: string, password: string) => {
-    try {
-      // Тут має бути реальна аутентифікація
-      // Поки що використовуємо простий токен
-      const token = 'admin_token_' + Date.now();
-      localStorage.setItem('admin_token', token);
-      setAdminToken(token);
-      setIsAuthenticated(true);
-    } catch (error) {
-      alert('Помилка авторизації');
+  const handlePasswordSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (attempts >= maxAttempts) {
+      alert('Перевищено кількість спроб. Перезавантажте сторінку.');
+      return;
     }
+
+    if (password === correctPassword) {
+      setIsAuthenticated(true);
+      localStorage.setItem('admin_session', 'true');
+      localStorage.setItem('admin_session_time', Date.now().toString());
+      setPassword('');
+      setAttempts(0);
+    } else {
+      setAttempts(prev => prev + 1);
+      setPassword('');
+      alert(`Невірний пароль. Залишилось спроб: ${maxAttempts - attempts - 1}`);
+    }
+  };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    localStorage.removeItem('admin_session');
+    localStorage.removeItem('admin_session_time');
+    setPendingComments([]);
+    setStats(null);
   };
 
   const loadPendingComments = async () => {
     try {
       const response = await fetch(`${API_BASE}/api/admin/comments/pending`, {
         headers: {
-          'Authorization': `Bearer ${adminToken}`,
+          'Authorization': `Bearer fake_token`, // Backend поки не перевіряє токени
           'Accept': 'application/json',
         },
       });
@@ -89,7 +121,7 @@ export default function AdminCommentsPage() {
     try {
       const response = await fetch(`${API_BASE}/api/admin/stats`, {
         headers: {
-          'Authorization': `Bearer ${adminToken}`,
+          'Authorization': `Bearer fake_token`,
           'Accept': 'application/json',
         },
       });
@@ -109,14 +141,14 @@ export default function AdminCommentsPage() {
       const response = await fetch(`${API_BASE}/api/admin/comments/${commentId}/approve`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${adminToken}`,
+          'Authorization': `Bearer fake_token`,
           'Accept': 'application/json',
         },
       });
 
       if (response.ok) {
         setPendingComments(prev => prev.filter(c => c.id !== commentId));
-        loadStats(); // Оновити статистику
+        loadStats();
       } else {
         alert('Помилка схвалення коментаря');
       }
@@ -136,7 +168,7 @@ export default function AdminCommentsPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${adminToken}`,
+          'Authorization': `Bearer fake_token`,
           'Accept': 'application/json',
         },
         body: JSON.stringify({ reason: reason || 'Не вказано' }),
@@ -174,7 +206,7 @@ export default function AdminCommentsPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${adminToken}`,
+          'Authorization': `Bearer fake_token`,
           'Accept': 'application/json',
         },
         body: JSON.stringify({ commentIds: lowSpamComments }),
@@ -201,57 +233,51 @@ export default function AdminCommentsPage() {
     return 'text-red-600 bg-red-50';
   };
 
-  // Форма входу
+  // Форма входу з password захистом
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="max-w-md w-full bg-white rounded-lg shadow-md p-6">
-          <h1 className="text-2xl font-bold text-center mb-6">Адмін панель</h1>
-          <form onSubmit={(e) => {
-            e.preventDefault();
-            const formData = new FormData(e.currentTarget);
-            handleLogin(
-              formData.get('email') as string,
-              formData.get('password') as string
-            );
-          }}>
+          <h1 className="text-2xl font-bold text-center mb-6">Адмін панель PandaTrack</h1>
+          <form onSubmit={handlePasswordSubmit}>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Email
-                </label>
-                <input
-                  type="email"
-                  name="email"
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="admin@pandatrack.com.ua"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Пароль
+                  Пароль адміністратора
                 </label>
                 <input
                   type="password"
-                  name="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                   required
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Введіть пароль"
+                  disabled={attempts >= maxAttempts}
                 />
               </div>
               <button
                 type="submit"
-                className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors"
+                disabled={attempts >= maxAttempts}
+                className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors disabled:bg-gray-400"
               >
-                Увійти
+                {attempts >= maxAttempts ? 'Заблоковано' : 'Увійти'}
               </button>
+              {attempts > 0 && (
+                <p className="text-red-600 text-sm text-center">
+                  Спроб залишилось: {maxAttempts - attempts}
+                </p>
+              )}
             </div>
           </form>
+          <div className="mt-4 text-xs text-gray-500 text-center">
+            Сесія зберігається на 8 годин
+          </div>
         </div>
       </div>
     );
   }
 
+  // Головна адмін панель
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white shadow-sm border-b">
@@ -259,11 +285,8 @@ export default function AdminCommentsPage() {
           <div className="flex justify-between items-center h-16">
             <h1 className="text-xl font-semibold">PandaTrack - Адмін панель</h1>
             <button
-              onClick={() => {
-                localStorage.removeItem('admin_token');
-                setIsAuthenticated(false);
-              }}
-              className="text-gray-600 hover:text-gray-900"
+              onClick={handleLogout}
+              className="text-gray-600 hover:text-gray-900 px-3 py-1 rounded"
             >
               Вийти
             </button>
