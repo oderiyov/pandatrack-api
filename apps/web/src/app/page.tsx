@@ -7,7 +7,7 @@ import { PopularStores } from '@/components/popular-stores'
 import { Features } from '@/components/features'
 import { Header } from '@/components/header'
 import { Footer } from '@/components/footer'
-import ArtalkComments from '@/components/artalk-comments'
+import { PandaTrackComments } from '@/components/comments/pandatrack-comments'
 
 export const metadata: Metadata = {
   title: 'PandaTrack - відстежити посилку з будь-якого перевізника | Україна',
@@ -110,11 +110,12 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* Artalk Comments з інформаційним блоком */}
-            <ArtalkComments
-              pageKey="pandatrack-homepage"
-              pageTitle="Загальні питання про відстеження посилок"
-              showInfoBlock={true}
+            {/* PandaTrack Comments з інформаційним блоком */}
+            <PandaTrackComments
+              pageId="homepage"
+              title="Загальні питання про відстеження посилок"
+              showStats={false}
+              showInfo={true}
             />
           </div>
         </div>

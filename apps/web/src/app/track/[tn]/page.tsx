@@ -12,7 +12,7 @@ import TrackingMetadata from '@/components/tracking/tracking-metadata'
 import TrackingActions from '@/components/tracking/tracking-actions'
 import RelatedCarriers from '@/components/tracking/related-carriers'
 import TrackingFAQ from '@/components/tracking/tracking-faq'
-import ArtalkComments from '@/components/artalk-comments'
+import { PandaTrackComments } from '@/components/comments/pandatrack-comments'
 
 interface TrackingEvent {
   date: string
@@ -597,11 +597,12 @@ export default function TrackingPage() {
               </div>
             </div>
 
-            {/* Artalk коментарі для конкретної посилки */}
-            <ArtalkComments
-              pageKey={`track-${trackingData.trackingNumber}`}
-              pageTitle={`Коментарі до посилки ${trackingData.trackingNumber}`}
-              showInfoBlock={true}
+            {/* PandaTrack коментарі для конкретної посилки */}
+            <PandaTrackComments
+              pageId={`track-${trackingData.trackingNumber}`}
+              title={`Питання про посилку ${trackingData.trackingNumber}`}
+              showStats={true}
+              showInfo={true}
             />
           </section>
 
