@@ -1,4 +1,5 @@
-// src/components/comments/pandatrack-comments.tsx
+// src/components/comments/pandatrack-comments.tsx v2.0
+
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -20,6 +21,15 @@ interface Comment {
   replyCount: number;
   createdAt: string;
   replies: Comment[];
+  commentType?: string;
+}
+
+interface PendingComment {
+  id: string;
+  content: string;
+  authorName: string;
+  createdAt: string;
+  approved: boolean;
 }
 
 interface CommentsData {
@@ -43,6 +53,41 @@ const API_BASE = process.env.NODE_ENV === 'production'
   ? 'https://api.pandatrack.com.ua/comments' 
   : 'http://localhost:3003';
 
+// Context-aware placeholders
+const getContextualPlaceholder = (pageId: string): string => {
+  if (pageId.startsWith('track-')) {
+    const trackNumber = pageId.replace('track-', '');
+    return `Поділіться досвідом з посилкою ${trackNumber}: коли прийшла, чи були проблеми...`;
+  }
+  if (pageId === 'homepage') {
+    return 'Задайте питання про відстеження посилок або поділіться досвідом з доставкою...';
+  }
+  return 'Напишіть ваш коментар, питання або поділіться досвідом...';
+};
+
+// Local storage helpers для pending коментарів
+const PENDING_COMMENTS_KEY = 'pandatrack_pending_comments';
+
+const savePendingComment = (pageId: string, comment: PendingComment) => {
+  const existing = JSON.parse(localStorage.getItem(PENDING_COMMENTS_KEY) || '{}');
+  if (!existing[pageId]) existing[pageId] = [];
+  existing[pageId].push(comment);
+  localStorage.setItem(PENDING_COMMENTS_KEY, JSON.stringify(existing));
+};
+
+const getPendingComments = (pageId: string): PendingComment[] => {
+  const existing = JSON.parse(localStorage.getItem(PENDING_COMMENTS_KEY) || '{}');
+  return existing[pageId] || [];
+};
+
+const removePendingComment = (pageId: string, commentId: string) => {
+  const existing = JSON.parse(localStorage.getItem(PENDING_COMMENTS_KEY) || '{}');
+  if (existing[pageId]) {
+    existing[pageId] = existing[pageId].filter((c: PendingComment) => c.id !== commentId);
+    localStorage.setItem(PENDING_COMMENTS_KEY, JSON.stringify(existing));
+  }
+};
+
 export function PandaTrackComments({ 
   pageId, 
   className = '',
@@ -53,37 +98,73 @@ export function PandaTrackComments({
   autoRefresh = false
 }: CommentsProps) {
   const [comments, setComments] = useState<Comment[]>([]);
+  const [pendingComments, setPendingComments] = useState<PendingComment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [totalComments, setTotalComments] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
 
-  // Завантаження коментарів
-  const loadComments = useCallback(async () => {
+  const commentsPerPage = 20;
+
+  // Завантаження коментарів з pagination
+  const loadComments = useCallback(async (reset = true) => {
     try {
       setError(null);
-      const response = await fetch(`${API_BASE}/api/comments/${pageId}?limit=50`, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-        },
-      });
+      if (reset) {
+        setLoading(true);
+        setOffset(0);
+      } else {
+        setLoadingMore(true);
+      }
+
+      const currentOffset = reset ? 0 : offset;
+      const response = await fetch(
+        `${API_BASE}/api/comments/${pageId}?limit=${commentsPerPage}&offset=${currentOffset}`, 
+        {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+          },
+        }
+      );
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
       const data: CommentsData = await response.json();
-      setComments(data.comments || []);
+      
+      if (reset) {
+        setComments(data.comments || []);
+      } else {
+        setComments(prev => [...prev, ...(data.comments || [])]);
+      }
+      
       setTotalComments(data.total || 0);
+      setHasMore((data.comments || []).length === commentsPerPage);
+      setOffset(currentOffset + commentsPerPage);
+
+      // Завантажуємо pending коментарі з localStorage
+      setPendingComments(getPendingComments(pageId));
 
     } catch (err) {
       console.error('Помилка завантаження коментарів:', err);
       setError('Не вдалося завантажити коментарі. Спробуйте перезавантажити сторінку.');
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
-  }, [pageId]);
+  }, [pageId, offset]);
+
+  // Load more коментарів
+  const handleLoadMore = () => {
+    if (!loadingMore && hasMore) {
+      loadComments(false);
+    }
+  };
 
   // Додавання нового коментаря
   const handleCommentSubmit = async (commentData: {
@@ -91,6 +172,7 @@ export function PandaTrackComments({
     authorName?: string;
     authorEmail?: string;
     parentId?: string;
+    typingTime?: number;
   }) => {
     setSubmitting(true);
     try {
@@ -113,15 +195,27 @@ export function PandaTrackComments({
 
       const result = await response.json();
       
-      // Показуємо повідомлення користувачу
+      // Conditional pending status logic
       if (result.comment.approved) {
+        // Автосхвалений коментар - показуємо успіх
         alert('✅ Коментар додано успішно!');
+        await loadComments(true); // Перезавантажуємо коментарі
       } else {
+        // Коментар на модерації - показуємо pending status
         alert('⏳ Коментар відправлено на модерацію');
+        
+        // Додаємо в pending коментарі для показу автору
+        const pendingComment: PendingComment = {
+          id: result.comment.id,
+          content: result.comment.content,
+          authorName: result.comment.author_name || 'Анонім',
+          createdAt: result.comment.created_at,
+          approved: false
+        };
+        
+        savePendingComment(pageId, pendingComment);
+        setPendingComments(getPendingComments(pageId));
       }
-
-      // Перезавантажуємо коментарі
-      await loadComments();
 
     } catch (err) {
       console.error('Помилка додавання коментаря:', err);
@@ -213,19 +307,33 @@ export function PandaTrackComments({
 
   // Початкове завантаження
   useEffect(() => {
-    loadComments();
-  }, [loadComments]);
+    loadComments(true);
+  }, [pageId]);
 
   // Auto-refresh
   useEffect(() => {
     if (!autoRefresh) return;
 
     const interval = setInterval(() => {
-      loadComments();
+      loadComments(true);
     }, 60000); // Кожну хвилину
 
     return () => clearInterval(interval);
   }, [autoRefresh, loadComments]);
+
+  // Cleanup pending коментарів які вже схвалені
+  useEffect(() => {
+    const approvedIds = comments.map(c => c.id);
+    const filteredPending = pendingComments.filter(pc => !approvedIds.includes(pc.id));
+    
+    if (filteredPending.length !== pendingComments.length) {
+      setPendingComments(filteredPending);
+      // Оновлюємо localStorage
+      const existing = JSON.parse(localStorage.getItem(PENDING_COMMENTS_KEY) || '{}');
+      existing[pageId] = filteredPending;
+      localStorage.setItem(PENDING_COMMENTS_KEY, JSON.stringify(existing));
+    }
+  }, [comments, pendingComments, pageId]);
 
   // Render
   return (
@@ -251,8 +359,41 @@ export function PandaTrackComments({
       <CommentForm 
         onSubmit={handleCommentSubmit}
         submitting={submitting}
+        placeholder={getContextualPlaceholder(pageId)}
         className="mb-8"
       />
+
+      {/* Pending коментарі (тільки для автора) */}
+      {pendingComments.length > 0 && (
+        <div className="mb-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <h3 className="text-lg font-medium text-yellow-800 mb-3">
+            Ваші коментарі в очікуванні модерації ({pendingComments.length})
+          </h3>
+          <div className="space-y-3">
+            {pendingComments.map((comment) => (
+              <div key={comment.id} className="bg-white rounded-lg p-3 border border-yellow-300">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-medium text-gray-900">
+                    {comment.authorName} 
+                    <span className="ml-2 text-xs text-yellow-600 bg-yellow-100 px-2 py-1 rounded-full">
+                      в очікуванні
+                    </span>
+                  </span>
+                  <time className="text-sm text-gray-500">
+                    {new Date(comment.createdAt).toLocaleString('uk-UA')}
+                  </time>
+                </div>
+                <p className="text-gray-700 text-sm whitespace-pre-wrap">
+                  {comment.content}
+                </p>
+                <p className="text-xs text-yellow-700 mt-2">
+                  Ваш коментар буде опубліковано після утвердження модераторами.
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Список коментарів */}
       {loading && (
@@ -265,7 +406,7 @@ export function PandaTrackComments({
         <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
           <p className="text-red-800">{error}</p>
           <button 
-            onClick={loadComments}
+            onClick={() => loadComments(true)}
             className="mt-2 text-red-600 hover:text-red-800 underline"
           >
             Спробувати знову
@@ -274,17 +415,45 @@ export function PandaTrackComments({
       )}
 
       {!loading && !error && (
-        <CommentsList
-          comments={comments}
-          onVote={handleVote}
-          onFlag={handleFlag}
-          onReply={handleCommentSubmit}
-          maxRepliesDepth={maxRepliesDepth}
-          submittingReply={submitting}
-        />
+        <>
+          <CommentsList
+            comments={comments}
+            onVote={handleVote}
+            onFlag={handleFlag}
+            onReply={handleCommentSubmit}
+            maxRepliesDepth={maxRepliesDepth}
+            submittingReply={submitting}
+          />
+
+          {/* Load More кнопка */}
+          {hasMore && !loadingMore && comments.length > 0 && (
+            <div className="text-center mt-6">
+              <button
+                onClick={handleLoadMore}
+                className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              >
+                Завантажити більше коментарів
+              </button>
+            </div>
+          )}
+
+          {/* Loading more indicator */}
+          {loadingMore && (
+            <div className="flex justify-center py-4">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+            </div>
+          )}
+
+          {/* No more comments */}
+          {!hasMore && comments.length > 0 && (
+            <div className="text-center py-4 text-gray-500">
+              <p className="text-sm">Це всі коментарі</p>
+            </div>
+          )}
+        </>
       )}
 
-      {!loading && !error && comments.length === 0 && (
+      {!loading && !error && comments.length === 0 && pendingComments.length === 0 && (
         <div className="text-center py-8 text-gray-500">
           <p className="text-lg">Поки що коментарів немає</p>
           <p className="text-sm mt-2">Станьте першим, хто залишить коментар!</p>

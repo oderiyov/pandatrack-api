@@ -1,4 +1,5 @@
-// src/components/comments/comments-list.tsx
+// src/components/comments/comments-list.tsx v2.0
+
 'use client';
 
 import { useState } from 'react';
@@ -16,6 +17,7 @@ interface Comment {
   replyCount: number;
   createdAt: string;
   replies: Comment[];
+  commentType?: string; // Added for debug
 }
 
 interface CommentsListProps {
@@ -30,6 +32,18 @@ interface CommentsListProps {
   }) => Promise<void>;
   maxRepliesDepth?: number;
   submittingReply?: boolean;
+}
+
+// Debug component for showing comment type
+function DebugCommentType({ comment }: { comment: Comment }) {
+  if (process.env.NODE_ENV === 'development' && comment.commentType) {
+    return (
+      <span className="ml-2 text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">
+        {comment.commentType}
+      </span>
+    );
+  }
+  return null;
 }
 
 export function CommentsList({
@@ -151,10 +165,11 @@ function CommentItem({
                 {comment.authorName.charAt(0).toUpperCase()}
               </span>
             </div>
-            <div>
+            <div className="flex items-center">
               <span className="font-medium text-gray-900">
                 {comment.authorName}
               </span>
+              <DebugCommentType comment={comment} />
               {comment.isAnonymous && (
                 <span className="ml-1 text-xs text-gray-500">(анонім)</span>
               )}
