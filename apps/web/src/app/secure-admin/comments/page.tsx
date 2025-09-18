@@ -283,6 +283,33 @@ export default function AdminCommentsPage() {
     }
   };
 
+  const deleteComment = async (commentId: string) => {
+    if (!confirm('Ви впевнені? Коментар буде видалено назавжди.')) return;
+  
+    setProcessing(prev => [...prev, commentId]);
+    try {
+      const response = await fetch(`${API_BASE}/api/admin/comments/${commentId}/delete`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer fake_token`,
+          'Accept': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        setPendingComments(prev => prev.filter(c => c.id !== commentId));
+        setSelectedComments(prev => prev.filter(id => id !== commentId));
+        loadStats();
+      } else {
+        alert('Помилка видалення коментаря');
+      }
+    } catch (error) {
+      alert('Помилка: ' + (error instanceof Error ? error.message : 'Невідома помилка'));
+    } finally {
+      setProcessing(prev => prev.filter(id => id !== commentId));
+    }
+  };
+
   const bulkApprove = async (commentIds: string[]) => {
     if (commentIds.length === 0) return;
 
@@ -666,6 +693,13 @@ export default function AdminCommentsPage() {
                         >
                           {processing.includes(comment.id) ? 'Обробка...' : 'Відхилити'}
                         </button>
+                        <button
+                          onClick={() => deleteComment(comment.id)}
+                          disabled={processing.includes(comment.id)}
+                          className="bg-gray-600 text-white px-4 py-2 rounded text-sm hover:bg-gray-700 disabled:opacity-50"
+                        >
+                          {processing.includes(comment.id) ? 'Обробка...' : 'Видалити назавжди'}
+                        </button>  
                       </div>
                     </div>
                   </div>
