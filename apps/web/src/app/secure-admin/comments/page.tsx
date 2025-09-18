@@ -1,10 +1,10 @@
-// src/app/secure-admin/comments/page.tsx v2.0
+// src/app/secure-admin/comments/page.tsx v3.0
 
 'use client';
 
 import { useState, useEffect } from 'react';
 
-interface PendingComment {
+interface Comment {
   id: string;
   page_id: string;
   content: string;
@@ -13,8 +13,13 @@ interface PendingComment {
   spam_score: number;
   created_at: string;
   ip_hash: string;
-  vote_count: number;
+  vote_count?: number;
   comment_type: string;
+  approved: boolean;
+  flagged: boolean;
+  flagged_reason?: string;
+  approved_at?: string;
+  approved_by?: string;
 }
 
 interface AdminStats {
@@ -22,10 +27,11 @@ interface AdminStats {
   approvedToday: number;
   spam: number;
   flagged: number;
+  total: number;
   topPages: Array<{ pageId: string; count: number }>;
 }
 
-type FilterType = 'ALL' | 'QUESTIONS' | 'EXPERIENCES' | 'HIGH_RISK' | 'LOW_RISK' | 'SPAM';
+type TabType = 'PENDING' | 'ALL' | 'APPROVED' | 'FLAGGED';
 type SortBy = 'created_at' | 'spam_score' | 'comment_type';
 
 const API_BASE = process.env.NODE_ENV === 'production' 
@@ -39,14 +45,14 @@ export default function AdminCommentsPage() {
   const [attempts, setAttempts] = useState(0);
   
   // Data states
-  const [pendingComments, setPendingComments] = useState<PendingComment[]>([]);
-  const [filteredComments, setFilteredComments] = useState<PendingComment[]>([]);
+  const [allComments, setAllComments] = useState<Comment[]>([]);
+  const [filteredComments, setFilteredComments] = useState<Comment[]>([]);
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState<string[]>([]);
   
   // UI states
-  const [filterType, setFilterType] = useState<FilterType>('ALL');
+  const [activeTab, setActiveTab] = useState<TabType>('PENDING');
   const [sortBy, setSortBy] = useState<SortBy>('created_at');
   const [selectedComments, setSelectedComments] = useState<string[]>([]);
   const [showHelp, setShowHelp] = useState(false);
@@ -73,31 +79,28 @@ export default function AdminCommentsPage() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      loadPendingComments();
+      loadAllComments();
       loadStats();
     }
   }, [isAuthenticated]);
 
-  // Filtering and sorting
+  // Filter comments based on active tab
   useEffect(() => {
-    let filtered = [...pendingComments];
+    let filtered = [...allComments];
     
-    // Apply filters
-    switch (filterType) {
-      case 'QUESTIONS':
-        filtered = filtered.filter(c => c.comment_type === 'QUESTION');
+    switch (activeTab) {
+      case 'PENDING':
+        filtered = filtered.filter(c => !c.approved);
         break;
-      case 'EXPERIENCES':
-        filtered = filtered.filter(c => c.comment_type === 'EXPERIENCE');
+      case 'APPROVED':
+        filtered = filtered.filter(c => c.approved && !c.flagged);
         break;
-      case 'HIGH_RISK':
-        filtered = filtered.filter(c => c.spam_score > 0.5);
+      case 'FLAGGED':
+        filtered = filtered.filter(c => c.flagged);
         break;
-      case 'LOW_RISK':
-        filtered = filtered.filter(c => c.spam_score <= 0.3);
-        break;
-      case 'SPAM':
-        filtered = filtered.filter(c => c.comment_type === 'SPAM' || c.spam_score > 0.7);
+      case 'ALL':
+      default:
+        // Показуємо всі коментарі
         break;
     }
     
@@ -115,7 +118,7 @@ export default function AdminCommentsPage() {
     });
     
     setFilteredComments(filtered);
-  }, [pendingComments, filterType, sortBy]);
+  }, [allComments, activeTab, sortBy]);
 
   // Hotkeys
   useEffect(() => {
@@ -130,19 +133,23 @@ export default function AdminCommentsPage() {
             break;
           case 'r': // Ctrl+R - Refresh
             e.preventDefault();
-            loadPendingComments();
+            loadAllComments();
             break;
-          case 'q': // Ctrl+Q - Quick approve questions
+          case '1': // Ctrl+1 - Pending tab
             e.preventDefault();
-            smartBulkActions.approveSafeQuestions();
+            setActiveTab('PENDING');
             break;
-          case 's': // Ctrl+S - Reject obvious spam
+          case '2': // Ctrl+2 - All tab
             e.preventDefault();
-            smartBulkActions.rejectObviousSpam();
+            setActiveTab('ALL');
             break;
-          case 'e': // Ctrl+E - Approve experiences
+          case '3': // Ctrl+3 - Approved tab
             e.preventDefault();
-            smartBulkActions.approveExperiences();
+            setActiveTab('APPROVED');
+            break;
+          case '4': // Ctrl+4 - Flagged tab
+            e.preventDefault();
+            setActiveTab('FLAGGED');
             break;
           case 'h': // Ctrl+H - Toggle help
             e.preventDefault();
@@ -186,14 +193,15 @@ export default function AdminCommentsPage() {
     setIsAuthenticated(false);
     localStorage.removeItem('admin_session');
     localStorage.removeItem('admin_session_time');
-    setPendingComments([]);
+    setAllComments([]);
     setStats(null);
     setSelectedComments([]);
   };
 
-  const loadPendingComments = async () => {
+  const loadAllComments = async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/admin/comments/pending`, {
+      setLoading(true);
+      const response = await fetch(`${API_BASE}/api/admin/comments/all?limit=100`, {
         headers: {
           'Authorization': `Bearer fake_token`,
           'Accept': 'application/json',
@@ -202,7 +210,9 @@ export default function AdminCommentsPage() {
 
       if (response.ok) {
         const data = await response.json();
-        setPendingComments(data.comments || []);
+        setAllComments(data.comments || []);
+      } else {
+        console.error('Failed to load comments:', response.statusText);
       }
     } catch (error) {
       console.error('Помилка завантаження коментарів:', error);
@@ -222,7 +232,9 @@ export default function AdminCommentsPage() {
 
       if (response.ok) {
         const data = await response.json();
-        setStats(data);
+        // Додаємо загальну кількість коментарів
+        const total = allComments.length || 0;
+        setStats({ ...data, total });
       }
     } catch (error) {
       console.error('Помилка завантаження статистики:', error);
@@ -241,40 +253,18 @@ export default function AdminCommentsPage() {
       });
 
       if (response.ok) {
-        setPendingComments(prev => prev.filter(c => c.id !== commentId));
+        // Оновлюємо локальний стан
+        setAllComments(prev => 
+          prev.map(c => 
+            c.id === commentId 
+              ? { ...c, approved: true, approved_at: new Date().toISOString() }
+              : c
+          )
+        );
         setSelectedComments(prev => prev.filter(id => id !== commentId));
         loadStats();
       } else {
         alert('Помилка схвалення коментаря');
-      }
-    } catch (error) {
-      alert('Помилка: ' + (error instanceof Error ? error.message : 'Невідома помилка'));
-    } finally {
-      setProcessing(prev => prev.filter(id => id !== commentId));
-    }
-  };
-
-  const rejectComment = async (commentId: string) => {
-    const reason = prompt('Причина відхилення (опціонально):');
-    
-    setProcessing(prev => [...prev, commentId]);
-    try {
-      const response = await fetch(`${API_BASE}/api/admin/comments/${commentId}/reject`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer fake_token`,
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify({ reason: reason || 'Не вказано' }),
-      });
-
-      if (response.ok) {
-        setPendingComments(prev => prev.filter(c => c.id !== commentId));
-        setSelectedComments(prev => prev.filter(id => id !== commentId));
-        loadStats();
-      } else {
-        alert('Помилка відхилення коментаря');
       }
     } catch (error) {
       alert('Помилка: ' + (error instanceof Error ? error.message : 'Невідома помилка'));
@@ -297,7 +287,7 @@ export default function AdminCommentsPage() {
       });
 
       if (response.ok) {
-        setPendingComments(prev => prev.filter(c => c.id !== commentId));
+        setAllComments(prev => prev.filter(c => c.id !== commentId));
         setSelectedComments(prev => prev.filter(id => id !== commentId));
         loadStats();
       } else {
@@ -326,7 +316,14 @@ export default function AdminCommentsPage() {
 
       if (response.ok) {
         const data = await response.json();
-        setPendingComments(prev => prev.filter(c => !commentIds.includes(c.id)));
+        // Оновлюємо локальний стан
+        setAllComments(prev => 
+          prev.map(c => 
+            commentIds.includes(c.id) 
+              ? { ...c, approved: true, approved_at: new Date().toISOString() }
+              : c
+          )
+        );
         setSelectedComments([]);
         loadStats();
         alert(`Схвалено ${data.approvedCount} коментарів`);
@@ -336,54 +333,28 @@ export default function AdminCommentsPage() {
     }
   };
 
-  // Smart bulk actions
-  const smartBulkActions = {
-    approveSafeQuestions: () => {
-      const safeQuestions = pendingComments.filter(c => 
-        c.comment_type === 'QUESTION' && 
-        c.spam_score < 0.3
+  const resolveFlaggedComment = async (commentId: string, action: 'approve' | 'delete') => {
+    const comment = allComments.find(c => c.id === commentId);
+    if (!comment) return;
+
+    const confirmMsg = action === 'delete' 
+      ? `Видалити коментар зі скаргою "${comment.flagged_reason}"?`
+      : `Схвалити коментар попри скаргу "${comment.flagged_reason}"?`;
+      
+    if (!confirm(confirmMsg)) return;
+
+    if (action === 'delete') {
+      await deleteComment(commentId);
+    } else {
+      await approveComment(commentId);
+      // Також очищаємо flag
+      setAllComments(prev => 
+        prev.map(c => 
+          c.id === commentId 
+            ? { ...c, flagged: false, flagged_reason: undefined }
+            : c
+        )
       );
-      
-      if (safeQuestions.length === 0) {
-        alert('Немає безпечних питань для схвалення');
-        return;
-      }
-      
-      if (confirm(`Схвалити ${safeQuestions.length} безпечних питань?`)) {
-        bulkApprove(safeQuestions.map(c => c.id));
-      }
-    },
-    
-    rejectObviousSpam: async () => {
-      const obviousSpam = pendingComments.filter(c => 
-        c.comment_type === 'SPAM' || c.spam_score > 0.7
-      );
-      
-      if (obviousSpam.length === 0) {
-        alert('Немає очевидного спаму для відхилення');
-        return;
-      }
-      
-      if (confirm(`Відхилити ${obviousSpam.length} спам коментарів?`)) {
-        for (const comment of obviousSpam) {
-          await rejectComment(comment.id);
-        }
-      }
-    },
-    
-    approveExperiences: () => {
-      const experiences = pendingComments.filter(c => 
-        c.comment_type === 'EXPERIENCE' && c.spam_score < 0.2
-      );
-      
-      if (experiences.length === 0) {
-        alert('Немає безпечного досвіду для схвалення');
-        return;
-      }
-      
-      if (confirm(`Схвалити ${experiences.length} коментарів з досвідом?`)) {
-        bulkApprove(experiences.map(c => c.id));
-      }
     }
   };
 
@@ -407,14 +378,12 @@ export default function AdminCommentsPage() {
     }
   };
 
-  const getFilterCounts = () => {
+  const getTabCounts = () => {
     return {
-      ALL: pendingComments.length,
-      QUESTIONS: pendingComments.filter(c => c.comment_type === 'QUESTION').length,
-      EXPERIENCES: pendingComments.filter(c => c.comment_type === 'EXPERIENCE').length,
-      HIGH_RISK: pendingComments.filter(c => c.spam_score > 0.5).length,
-      LOW_RISK: pendingComments.filter(c => c.spam_score <= 0.3).length,
-      SPAM: pendingComments.filter(c => c.comment_type === 'SPAM' || c.spam_score > 0.7).length
+      PENDING: allComments.filter(c => !c.approved).length,
+      ALL: allComments.length,
+      APPROVED: allComments.filter(c => c.approved && !c.flagged).length,
+      FLAGGED: allComments.filter(c => c.flagged).length
     };
   };
 
@@ -462,7 +431,7 @@ export default function AdminCommentsPage() {
     );
   }
 
-  const filterCounts = getFilterCounts();
+  const tabCounts = getTabCounts();
 
   // Main admin panel
   return (
@@ -495,11 +464,12 @@ export default function AdminCommentsPage() {
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
             <h3 className="text-lg font-semibold mb-4">Гарячі клавіші</h3>
             <div className="space-y-2 text-sm">
+              <div><kbd className="bg-gray-100 px-2 py-1 rounded">Ctrl+1</kbd> - Вкладка "На модерації"</div>
+              <div><kbd className="bg-gray-100 px-2 py-1 rounded">Ctrl+2</kbd> - Вкладка "Всі"</div>
+              <div><kbd className="bg-gray-100 px-2 py-1 rounded">Ctrl+3</kbd> - Вкладка "Схвалені"</div>
+              <div><kbd className="bg-gray-100 px-2 py-1 rounded">Ctrl+4</kbd> - Вкладка "Скарги"</div>
               <div><kbd className="bg-gray-100 px-2 py-1 rounded">Ctrl+A</kbd> - Вибрати всі видимі</div>
               <div><kbd className="bg-gray-100 px-2 py-1 rounded">Ctrl+R</kbd> - Оновити</div>
-              <div><kbd className="bg-gray-100 px-2 py-1 rounded">Ctrl+Q</kbd> - Схвалити безпечні питання</div>
-              <div><kbd className="bg-gray-100 px-2 py-1 rounded">Ctrl+E</kbd> - Схвалити досвід</div>
-              <div><kbd className="bg-gray-100 px-2 py-1 rounded">Ctrl+S</kbd> - Відхилити спам</div>
               <div><kbd className="bg-gray-100 px-2 py-1 rounded">Esc</kbd> - Очистити вибір</div>
             </div>
             <button
@@ -515,7 +485,7 @@ export default function AdminCommentsPage() {
       <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
         {/* Statistics */}
         {stats && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
             <div className="bg-white p-6 rounded-lg shadow">
               <h3 className="text-sm font-medium text-gray-500">На модерації</h3>
               <p className="text-2xl font-bold text-orange-600">{stats.pending}</p>
@@ -532,33 +502,43 @@ export default function AdminCommentsPage() {
               <h3 className="text-sm font-medium text-gray-500">Скарги</h3>
               <p className="text-2xl font-bold text-red-600">{stats.flagged}</p>
             </div>
+            <div className="bg-white p-6 rounded-lg shadow">
+              <h3 className="text-sm font-medium text-gray-500">Всього коментарів</h3>
+              <p className="text-2xl font-bold text-blue-600">{stats.total}</p>
+            </div>
           </div>
         )}
 
-        {/* Filters and actions */}
+        {/* Tab navigation */}
         <div className="bg-white rounded-lg shadow mb-6">
           <div className="p-6">
-            {/* Filter tabs */}
+            {/* Tab buttons */}
             <div className="flex flex-wrap gap-2 mb-4">
-              {Object.entries(filterCounts).map(([filter, count]) => (
+              {[
+                { key: 'PENDING', label: 'На модерації', count: tabCounts.PENDING },
+                { key: 'ALL', label: 'Всі', count: tabCounts.ALL },
+                { key: 'APPROVED', label: 'Схвалені', count: tabCounts.APPROVED },
+                { key: 'FLAGGED', label: 'Скарги', count: tabCounts.FLAGGED }
+              ].map(tab => (
                 <button
-                  key={filter}
-                  onClick={() => setFilterType(filter as FilterType)}
-                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                    filterType === filter
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key as TabType)}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                    activeTab === tab.key
                       ? 'bg-blue-600 text-white'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
                 >
-                  {filter === 'ALL' ? 'Всі' :
-                   filter === 'QUESTIONS' ? 'Питання' :
-                   filter === 'EXPERIENCES' ? 'Досвід' :
-                   filter === 'HIGH_RISK' ? 'Високий ризик' :
-                   filter === 'LOW_RISK' ? 'Низький ризик' :
-                   'Спам'} ({count})
+                  {tab.label} ({tab.count})
                 </button>
               ))}
             </div>
+          )}
+        </div>
+      </main>
+    </div>
+  );
+}</div>
 
             {/* Sort and bulk actions */}
             <div className="flex justify-between items-center">
@@ -581,31 +561,26 @@ export default function AdminCommentsPage() {
               </div>
 
               <div className="flex space-x-2">
+                {selectedComments.length > 0 && activeTab !== 'APPROVED' && (
+                  <button
+                    onClick={() => bulkApprove(selectedComments)}
+                    className="bg-green-600 text-white px-4 py-2 rounded text-sm hover:bg-green-700"
+                  >
+                    Схвалити вибрані
+                  </button>
+                )}
+                
                 {selectedComments.length > 0 && (
-                  <>
-                    <button
-                      onClick={() => bulkApprove(selectedComments)}
-                      className="bg-green-600 text-white px-4 py-2 rounded text-sm hover:bg-green-700"
-                    >
-                      Схвалити вибрані
-                    </button>
-                    <button
-                      onClick={() => setSelectedComments([])}
-                      className="bg-gray-300 text-gray-700 px-4 py-2 rounded text-sm hover:bg-gray-400"
-                    >
-                      Очистити
-                    </button>
-                  </>
+                  <button
+                    onClick={() => setSelectedComments([])}
+                    className="bg-gray-300 text-gray-700 px-4 py-2 rounded text-sm hover:bg-gray-400"
+                  >
+                    Очистити
+                  </button>
                 )}
                 
                 <button
-                  onClick={smartBulkActions.approveSafeQuestions}
-                  className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700"
-                >
-                  Схвалити питання
-                </button>
-                <button
-                  onClick={loadPendingComments}
+                  onClick={loadAllComments}
                   className="bg-gray-600 text-white px-4 py-2 rounded text-sm hover:bg-gray-700"
                 >
                   Оновити
@@ -619,7 +594,11 @@ export default function AdminCommentsPage() {
         <div className="bg-white shadow rounded-lg">
           <div className="px-6 py-4 border-b border-gray-200">
             <h2 className="text-lg font-medium">
-              Коментарі ({filteredComments.length})
+              {activeTab === 'PENDING' && 'Коментарі на модерації'}
+              {activeTab === 'ALL' && 'Всі коментарі'}
+              {activeTab === 'APPROVED' && 'Схвалені коментарі'}
+              {activeTab === 'FLAGGED' && 'Коментарі зі скаргами'}
+              {' '}({filteredComments.length})
             </h2>
           </div>
 
@@ -636,6 +615,7 @@ export default function AdminCommentsPage() {
               {filteredComments.map((comment) => (
                 <div key={comment.id} className="p-6">
                   <div className="flex items-start space-x-4">
+                    {/* Checkbox для вибору */}
                     <input
                       type="checkbox"
                       checked={selectedComments.includes(comment.id)}
@@ -650,7 +630,8 @@ export default function AdminCommentsPage() {
                     />
                     
                     <div className="flex-1">
-                      <div className="flex justify-between items-start mb-4">
+                      {/* Заголовок коментаря */}
+                      <div className="flex justify-between items-start mb-3">
                         <div>
                           <div className="flex items-center space-x-2 mb-2">
                             <span className="font-medium">
@@ -665,6 +646,16 @@ export default function AdminCommentsPage() {
                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${getCommentTypeColor(comment.comment_type)}`}>
                               {comment.comment_type}
                             </span>
+                            {comment.approved && (
+                              <span className="px-2 py-1 rounded-full text-xs font-medium text-green-600 bg-green-50">
+                                Схвалено
+                              </span>
+                            )}
+                            {comment.flagged && (
+                              <span className="px-2 py-1 rounded-full text-xs font-medium text-red-600 bg-red-50">
+                                Скарга
+                              </span>
+                            )}
                           </div>
                           <p className="text-sm text-gray-500">
                             {formatDate(comment.created_at)} • IP: {comment.ip_hash.substring(0, 8)}...
@@ -672,34 +663,59 @@ export default function AdminCommentsPage() {
                         </div>
                       </div>
 
+                      {/* Текст коментаря */}
                       <div className="mb-4 bg-gray-50 rounded-lg p-3">
                         <p className="text-gray-800 whitespace-pre-wrap text-sm">
                           {comment.content}
                         </p>
                       </div>
 
+                      {/* Скарга (якщо є) */}
+                      {comment.flagged && comment.flagged_reason && (
+                        <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-3">
+                          <p className="text-sm font-medium text-red-800 mb-1">Причина скарги:</p>
+                          <p className="text-red-700 text-sm">{comment.flagged_reason}</p>
+                        </div>
+                      )}
+
+                      {/* Дії */}
                       <div className="flex space-x-2">
-                        <button
-                          onClick={() => approveComment(comment.id)}
-                          disabled={processing.includes(comment.id)}
-                          className="bg-green-600 text-white px-4 py-2 rounded text-sm hover:bg-green-700 disabled:opacity-50"
-                        >
-                          {processing.includes(comment.id) ? 'Обробка...' : 'Схвалити'}
-                        </button>
-                        <button
-                          onClick={() => rejectComment(comment.id)}
-                          disabled={processing.includes(comment.id)}
-                          className="bg-red-600 text-white px-4 py-2 rounded text-sm hover:bg-red-700 disabled:opacity-50"
-                        >
-                          {processing.includes(comment.id) ? 'Обробка...' : 'Відхилити'}
-                        </button>
+                        {!comment.approved && (
+                          <button
+                            onClick={() => approveComment(comment.id)}
+                            disabled={processing.includes(comment.id)}
+                            className="bg-green-600 text-white px-4 py-2 rounded text-sm hover:bg-green-700 disabled:opacity-50"
+                          >
+                            {processing.includes(comment.id) ? 'Обробка...' : 'Схвалити'}
+                          </button>
+                        )}
+                        
+                        {comment.flagged && (
+                          <>
+                            <button
+                              onClick={() => resolveFlaggedComment(comment.id, 'approve')}
+                              disabled={processing.includes(comment.id)}
+                              className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 disabled:opacity-50"
+                            >
+                              Схвалити попри скаргу
+                            </button>
+                            <button
+                              onClick={() => resolveFlaggedComment(comment.id, 'delete')}
+                              disabled={processing.includes(comment.id)}
+                              className="bg-red-600 text-white px-4 py-2 rounded text-sm hover:bg-red-700 disabled:opacity-50"
+                            >
+                              Видалити через скаргу
+                            </button>
+                          </>
+                        )}
+                        
                         <button
                           onClick={() => deleteComment(comment.id)}
                           disabled={processing.includes(comment.id)}
                           className="bg-gray-600 text-white px-4 py-2 rounded text-sm hover:bg-gray-700 disabled:opacity-50"
                         >
-                          {processing.includes(comment.id) ? 'Обробка...' : 'Видалити назавжди'}
-                        </button>  
+                          {processing.includes(comment.id) ? 'Обробка...' : 'Видалити'}
+                        </button>
                       </div>
                     </div>
                   </div>

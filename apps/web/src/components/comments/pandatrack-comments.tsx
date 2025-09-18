@@ -1,12 +1,14 @@
-// src/components/comments/pandatrack-comments.tsx v2.0
+// src/components/comments/pandatrack-comments.tsx v3.0
+// Інтеграція popup нотифікацій + покращений UX
 
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { CommentForm } from './comment-form';
 import { CommentsList } from './comments-list';
 import { CommentsStats } from './comments-stats';
 import { CommentsInfo } from './comments-info';
+import { CommentNotification } from './comment-notification';
 
 // Types
 interface Comment {
@@ -55,18 +57,18 @@ const API_BASE = process.env.NODE_ENV === 'production'
 
 // Context-aware placeholders
 const getContextualPlaceholder = (pageId: string): string => {
-  if (pageId.startsWith('track-')) {
-    const trackNumber = pageId.replace('track-', '');
-    return `Поділіться досвідом з посилкою ${trackNumber}: коли прийшла, чи були проблеми...`;
-  }
   if (pageId === 'homepage') {
     return 'Задайте питання про відстеження посилок або поділіться досвідом з доставкою...';
+  }
+  if (pageId === 'global-tracking') {
+    return 'Поділіться досвідом з відстеженням, задайте питання про доставку або розкажіть про проблеми...';
   }
   return 'Напишіть ваш коментар, питання або поділіться досвідом...';
 };
 
 // Local storage helpers для pending коментарів
 const PENDING_COMMENTS_KEY = 'pandatrack_pending_comments';
+const LAST_COMMENT_TIME_KEY = 'pandatrack_last_comment_time';
 
 const savePendingComment = (pageId: string, comment: PendingComment) => {
   const existing = JSON.parse(localStorage.getItem(PENDING_COMMENTS_KEY) || '{}');
@@ -107,7 +109,13 @@ export function PandaTrackComments({
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
 
+  // Popup нотифікації
+  const [newCommentNotification, setNewCommentNotification] = useState<Comment | null>(null);
+  const [lastCommentTime, setLastCommentTime] = useState<string>('');
+  
+  const commentsRef = useRef<HTMLDivElement>(null);
   const commentsPerPage = 20;
+  
   // Глобальна гілка коментарів - використовуємо фіксований pageId
   const globalPageId = pageId === 'homepage' ? 'homepage' : 'global-tracking';
 
@@ -139,8 +147,26 @@ export function PandaTrackComments({
 
       const data: CommentsData = await response.json();
       
+      // Detect new comments for popup notification
+      if (!reset && data.comments && data.comments.length > 0) {
+        const newestComment = data.comments[0];
+        const lastTime = localStorage.getItem(LAST_COMMENT_TIME_KEY);
+        
+        if (lastTime && new Date(newestComment.createdAt) > new Date(lastTime)) {
+          // Show notification only if user is not the author
+          const userName = localStorage.getItem('pandatrack_author_name');
+          if (!userName || userName !== newestComment.authorName) {
+            setNewCommentNotification(newestComment);
+          }
+        }
+      }
+      
       if (reset) {
         setComments(data.comments || []);
+        // Оновлюємо час останнього коментаря
+        if (data.comments && data.comments.length > 0) {
+          localStorage.setItem(LAST_COMMENT_TIME_KEY, data.comments[0].createdAt);
+        }
       } else {
         setComments(prev => [...prev, ...(data.comments || [])]);
       }
@@ -159,12 +185,30 @@ export function PandaTrackComments({
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [pageId, offset]);
+  }, [globalPageId, offset]);
 
   // Load more коментарів
   const handleLoadMore = () => {
     if (!loadingMore && hasMore) {
       loadComments(false);
+    }
+  };
+
+  // Navigation to specific comment
+  const handleNavigateToComment = (commentId: string) => {
+    const commentElement = document.querySelector(`[data-comment-id="${commentId}"]`);
+    if (commentElement) {
+      commentElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Highlight comment temporarily
+      commentElement.classList.add('ring-2', 'ring-blue-400', 'ring-opacity-75');
+      setTimeout(() => {
+        commentElement.classList.remove('ring-2', 'ring-blue-400', 'ring-opacity-75');
+      }, 3000);
+    } else {
+      // Comment not loaded yet, try to scroll to comments section
+      if (commentsRef.current) {
+        commentsRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
     }
   };
 
@@ -216,7 +260,7 @@ export function PandaTrackComments({
         };
         
         savePendingComment(globalPageId, pendingComment);
-        setPendingComments(getPendingComments(pageId));
+        setPendingComments(getPendingComments(globalPageId));
       }
 
     } catch (err) {
@@ -310,15 +354,16 @@ export function PandaTrackComments({
   // Початкове завантаження
   useEffect(() => {
     loadComments(true);
-  }, [pageId]);
+  }, [loadComments]);
 
-  // Auto-refresh
+  // Auto-refresh з перевіркою нових коментарів
   useEffect(() => {
     if (!autoRefresh) return;
 
     const interval = setInterval(() => {
-      loadComments(true);
-    }, 60000); // Кожну хвилину
+      // Load comments without reset для показу popup notifications
+      loadComments(false);
+    }, 30000); // Кожні 30 секунд
 
     return () => clearInterval(interval);
   }, [autoRefresh, loadComments]);
@@ -335,18 +380,25 @@ export function PandaTrackComments({
       existing[globalPageId] = filteredPending;
       localStorage.setItem(PENDING_COMMENTS_KEY, JSON.stringify(existing));
     }
-  }, [comments, pendingComments, pageId]);
+  }, [comments, pendingComments, globalPageId]);
 
   // Render
   return (
-    <div className={`pandatrack-comments ${className}`}>
+    <div className={`pandatrack-comments ${className}`} ref={commentsRef}>
+      {/* Popup нотифікація */}
+      <CommentNotification
+        newComment={newCommentNotification}
+        onNavigateToComment={handleNavigateToComment}
+        onDismiss={() => setNewCommentNotification(null)}
+      />
+
       {/* Заголовок */}
       <h2 className="text-2xl font-bold mb-4">{title}</h2>
 
       {/* Статистика */}
       {showStats && (
         <CommentsStats 
-          pageId={pageId} 
+          pageId={globalPageId} 
           totalComments={totalComments}
           className="mb-6"
         />
@@ -361,7 +413,7 @@ export function PandaTrackComments({
       <CommentForm 
         onSubmit={handleCommentSubmit}
         submitting={submitting}
-        placeholder={getContextualPlaceholder(pageId)}
+        placeholder={getContextualPlaceholder(globalPageId)}
         className="mb-8"
       />
 
@@ -429,36 +481,48 @@ export function PandaTrackComments({
 
           {/* Load More кнопка */}
           {hasMore && !loadingMore && comments.length > 0 && (
-            <div className="text-center mt-6">
+            <div className="text-center mt-8">
               <button
                 onClick={handleLoadMore}
-                className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                className="bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm inline-flex items-center space-x-2"
               >
-                Завантажити більше коментарів
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+                <span>Показати більше коментарів</span>
               </button>
             </div>
           )}
 
           {/* Loading more indicator */}
           {loadingMore && (
-            <div className="flex justify-center py-4">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+            <div className="flex justify-center py-6">
+              <div className="flex items-center space-x-2">
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                <span className="text-sm text-gray-600">Завантаження...</span>
+              </div>
             </div>
           )}
 
           {/* No more comments */}
           {!hasMore && comments.length > 0 && (
-            <div className="text-center py-4 text-gray-500">
+            <div className="text-center py-6 text-gray-500 border-t border-gray-200 mt-6">
               <p className="text-sm">Це всі коментарі</p>
+              <p className="text-xs mt-1">Станьте першим, хто залишить новий коментар!</p>
             </div>
           )}
         </>
       )}
 
       {!loading && !error && comments.length === 0 && pendingComments.length === 0 && (
-        <div className="text-center py-8 text-gray-500">
-          <p className="text-lg">Поки що коментарів немає</p>
-          <p className="text-sm mt-2">Станьте першим, хто залишить коментар!</p>
+        <div className="text-center py-12 bg-gray-50 rounded-lg">
+          <div className="w-16 h-16 mx-auto mb-4 text-gray-400">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+          </div>
+          <p className="text-lg font-medium text-gray-900 mb-2">Поки що коментарів немає</p>
+          <p className="text-sm text-gray-600">Станьте першим, хто поділиться досвідом або задасть питання!</p>
         </div>
       )}
     </div>

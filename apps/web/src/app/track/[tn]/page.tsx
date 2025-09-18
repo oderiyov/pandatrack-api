@@ -1,4 +1,5 @@
-// app/track/[tn]/page.tsx - ОНОВЛЕНА TRACKING СТОРІНКА
+// app/track/[tn]/page.tsx - ВИПРАВЛЕНА ВЕРСІЯ з Global comment threads
+
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
@@ -567,40 +568,40 @@ export default function TrackingPage() {
             currentCarriers={trackingData.sourcesChecked}
           />
 
-          {/* НОВА СЕКЦІЯ: Коментарі для конкретної посилки */}
+          {/* ✅ ВИПРАВЛЕНО: Global comment threads */}
           <section className="mt-8">
             <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-              <h2 className="text-xl font-bold mb-4">Обговорення посилки {trackingData.trackingNumber}</h2>
+              <h2 className="text-xl font-bold mb-4">Спільні питання про відстеження посилок</h2>
               <p className="text-[#333037]/70 mb-4">
-                Маєте питання про цю конкретну посилку? Поділіться досвідом з іншими користувачами 
-                або запитайте пораду щодо доставки через {trackingData.carrier}.
+                Маєте питання про відстеження? Поділіться досвідом з доставкою або запитайте пораду 
+                від інших користувачів. Ця гілка коментарів спільна для всіх сторінок відстеження.
               </p>
               
-              {/* Статистика посилки */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 text-sm">
-                <div className="bg-blue-50 rounded-lg p-3 text-center">
+              {/* Контекстна інформація про поточну посилку */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 text-sm bg-blue-50 rounded-lg p-4">
+                <div className="text-center">
                   <div className="font-semibold text-blue-600">{trackingData.daysInTransit || 0}</div>
                   <div className="text-blue-800">Днів в дорозі</div>
                 </div>
-                <div className="bg-green-50 rounded-lg p-3 text-center">
-                  <div className="font-semibold text-green-600">{trackingData.events.length}</div>
-                  <div className="text-green-800">Подій</div>
+                <div className="text-center">
+                  <div className="font-semibold text-blue-600">{trackingData.events.length}</div>
+                  <div className="text-blue-800">Подій</div>
                 </div>
-                <div className="bg-yellow-50 rounded-lg p-3 text-center">
-                  <div className="font-semibold text-yellow-600">{trackingData.sourcesChecked.length}</div>
-                  <div className="text-yellow-800">Джерел</div>
+                <div className="text-center">
+                  <div className="font-semibold text-blue-600">{trackingData.carrier}</div>
+                  <div className="text-blue-800">Перевізник</div>
                 </div>
-                <div className="bg-purple-50 rounded-lg p-3 text-center">
-                  <div className="font-semibold text-purple-600">{isDelivered ? 'Доставлено' : 'В дорозі'}</div>
-                  <div className="text-purple-800">Статус</div>
+                <div className="text-center">
+                  <div className="font-semibold text-blue-600">{isDelivered ? 'Доставлено' : 'В дорозі'}</div>
+                  <div className="text-blue-800">Статус</div>
                 </div>
               </div>
             </div>
 
-            {/* PandaTrack коментарі для конкретної посилки */}
+            {/* ✅ КЛЮЧОВЕ ВИПРАВЛЕННЯ: pageId = "global-tracking" для ВСІХ tracking сторінок */}
             <PandaTrackComments
               pageId="global-tracking"
-              title="Питання про відстеження посилок"
+              title="Питання та досвід з відстеження посилок"
               showStats={true}
               showInfo={true}
             />
