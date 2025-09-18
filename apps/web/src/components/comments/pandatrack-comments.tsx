@@ -108,6 +108,8 @@ export function PandaTrackComments({
   const [hasMore, setHasMore] = useState(true);
 
   const commentsPerPage = 20;
+  // Глобальна гілка коментарів - використовуємо фіксований pageId
+  const globalPageId = pageId === 'homepage' ? 'homepage' : 'global-tracking';
 
   // Завантаження коментарів з pagination
   const loadComments = useCallback(async (reset = true) => {
@@ -122,7 +124,7 @@ export function PandaTrackComments({
 
       const currentOffset = reset ? 0 : offset;
       const response = await fetch(
-        `${API_BASE}/api/comments/${pageId}?limit=${commentsPerPage}&offset=${currentOffset}`, 
+        `${API_BASE}/api/comments/${globalPageId}?limit=${commentsPerPage}&offset=${currentOffset}`, 
         {
           method: 'GET',
           headers: {
@@ -148,7 +150,7 @@ export function PandaTrackComments({
       setOffset(currentOffset + commentsPerPage);
 
       // Завантажуємо pending коментарі з localStorage
-      setPendingComments(getPendingComments(pageId));
+      setPendingComments(getPendingComments(globalPageId));
 
     } catch (err) {
       console.error('Помилка завантаження коментарів:', err);
@@ -183,7 +185,7 @@ export function PandaTrackComments({
           'Accept': 'application/json',
         },
         body: JSON.stringify({
-          pageId,
+          pageId: globalPageId,
           ...commentData
         }),
       });
@@ -213,7 +215,7 @@ export function PandaTrackComments({
           approved: false
         };
         
-        savePendingComment(pageId, pendingComment);
+        savePendingComment(globalPageId, pendingComment);
         setPendingComments(getPendingComments(pageId));
       }
 
@@ -330,7 +332,7 @@ export function PandaTrackComments({
       setPendingComments(filteredPending);
       // Оновлюємо localStorage
       const existing = JSON.parse(localStorage.getItem(PENDING_COMMENTS_KEY) || '{}');
-      existing[pageId] = filteredPending;
+      existing[globalPageId] = filteredPending;
       localStorage.setItem(PENDING_COMMENTS_KEY, JSON.stringify(existing));
     }
   }, [comments, pendingComments, pageId]);
