@@ -599,8 +599,8 @@ export default function TrackingPage() {
 
             {/* PandaTrack коментарі для конкретної посилки */}
             <PandaTrackComments
-              pageId={`track-${trackingData.trackingNumber}`}
-              title={`Питання про посилку ${trackingData.trackingNumber}`}
+              pageId="global-tracking"
+              title="Питання про відстеження посилок"
               showStats={true}
               showInfo={true}
             />
