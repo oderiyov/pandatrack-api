@@ -1,4 +1,4 @@
-// src/components/comments/comments-list.tsx v3.0
+// src/components/comments/comments-list.tsx v3.1
 
 'use client';
 

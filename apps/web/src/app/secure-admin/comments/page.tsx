@@ -1,4 +1,4 @@
-// src/app/secure-admin/comments/page.tsx v3.1 - ВИПРАВЛЕНИЙ ПОВНИЙ ФАЙЛ
+// src/app/secure-admin/comments/page.tsx v3.2 - ВИПРАВЛЕНИЙ ПОВНИЙ ФАЙЛ
 // fix
 
 'use client';

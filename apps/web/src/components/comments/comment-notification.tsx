@@ -1,4 +1,4 @@
-// src/components/comments/comment-notification.tsx v1.0
+// src/components/comments/comment-notification.tsx v1.1
 'use client';
 /* eslint-disable react-hooks/exhaustive-deps */
 

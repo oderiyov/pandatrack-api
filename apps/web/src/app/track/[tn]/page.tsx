@@ -1,4 +1,4 @@
-// app/track/[tn]/page.tsx - ВИПРАВЛЕНА ВЕРСІЯ з Global comment threads
+// app/track/[tn]/page.tsx - ВИПРАВЛЕНА ВЕРСІЯ з Global comment threads 1.0
 
 'use client'
 

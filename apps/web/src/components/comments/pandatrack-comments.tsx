@@ -1,4 +1,4 @@
-// src/components/comments/pandatrack-comments.tsx v3.0
+// src/components/comments/pandatrack-comments.tsx v3.1
 // Інтеграція popup нотифікацій + покращений UX
 
 'use client';
