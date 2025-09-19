@@ -1,5 +1,6 @@
 // src/components/comments/comment-notification.tsx v1.0
 'use client';
+/* eslint-disable react-hooks/exhaustive-deps */
 
 import { useState, useEffect } from 'react';
 
