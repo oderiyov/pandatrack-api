@@ -78,42 +78,14 @@ export default function HomePage() {
         </section>
       </main>
 
-      {/* Community Comments Section - ОСНОВНА ФІШКА */}
+      {/* Comments Section - СПРОЩЕНО БЕЗ СТАТИСТИКИ */}
       <section className="bg-white py-12">
         <div className="container mx-auto px-4">
           <div className="max-w-4xl mx-auto">
-            <div className="text-center mb-8">
-              <h2 className="text-3xl font-bold mb-4">Спільнота відстеження посилок</h2>
-              <p className="text-lg text-[#333037]/70 leading-relaxed">
-                Найактивніша спільнота в Україні для обговорення питань доставки. 
-                Задавайте питання, діліться досвідом та отримуйте допомогу від тисяч користувачів.
-              </p>
-            </div>
-
-            {/* Статистика спільноти */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-              <div className="bg-blue-50 rounded-lg p-4 text-center">
-                <div className="text-2xl font-bold text-blue-600">15K+</div>
-                <div className="text-sm text-blue-800">Користувачів</div>
-              </div>
-              <div className="bg-green-50 rounded-lg p-4 text-center">
-                <div className="text-2xl font-bold text-green-600">89K+</div>
-                <div className="text-sm text-green-800">Коментарів</div>
-              </div>
-              <div className="bg-yellow-50 rounded-lg p-4 text-center">
-                <div className="text-2xl font-bold text-yellow-600">2.3K+</div>
-                <div className="text-sm text-yellow-800">Питань вирішено</div>
-              </div>
-              <div className="bg-purple-50 rounded-lg p-4 text-center">
-                <div className="text-2xl font-bold text-purple-600">24/7</div>
-                <div className="text-sm text-purple-800">Підтримка</div>
-              </div>
-            </div>
-
-            {/* PandaTrack Comments з інформаційним блоком */}
+            {/* PandaTrack Comments БЕЗ зайвого контенту */}
             <PandaTrackComments
               pageId="homepage"
-              title="Загальні питання про відстеження посилок"
+              title="Пошук посилок"
               showStats={false}
               showInfo={true}
             />
