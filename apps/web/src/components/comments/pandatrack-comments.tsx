@@ -1,4 +1,6 @@
-// src/components/comments/pandatrack-comments.tsx v3.2 - ВИПРАВЛЕНА ВЕРСІЯ БЕЗ LOOP
+// src/components/comments/pandatrack-comments.tsx v4.0
+// ВИПРАВЛЕНО: pagination кнопка, pending cleanup після admin delete
+
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -53,7 +55,7 @@ const API_BASE = process.env.NODE_ENV === 'production'
   ? 'https://api.pandatrack.com.ua/comments' 
   : 'http://localhost:3003';
 
-// Context-aware placeholders (залишаємо без змін)
+// Context-aware placeholders
 const getContextualPlaceholder = (pageId: string): string => {
   if (pageId === 'homepage') {
     return 'Задайте питання про відстеження посилок або поділіться досвідом з доставкою...';
@@ -64,7 +66,7 @@ const getContextualPlaceholder = (pageId: string): string => {
   return 'Напишіть ваш коментар, питання або поділіться досвідом...';
 };
 
-// Local storage helpers (залишаємо без змін)
+// Local storage helpers для pending коментарів
 const PENDING_COMMENTS_KEY = 'pandatrack_pending_comments';
 const LAST_COMMENT_TIME_KEY = 'pandatrack_last_comment_time';
 
@@ -78,6 +80,15 @@ const savePendingComment = (pageId: string, comment: PendingComment) => {
 const getPendingComments = (pageId: string): PendingComment[] => {
   const existing = JSON.parse(localStorage.getItem(PENDING_COMMENTS_KEY) || '{}');
   return existing[pageId] || [];
+};
+
+// ВИПРАВЛЕННЯ: функція для очищення pending коментарів
+const removePendingComment = (pageId: string, commentId: string) => {
+  const existing = JSON.parse(localStorage.getItem(PENDING_COMMENTS_KEY) || '{}');
+  if (existing[pageId]) {
+    existing[pageId] = existing[pageId].filter((c: PendingComment) => c.id !== commentId);
+    localStorage.setItem(PENDING_COMMENTS_KEY, JSON.stringify(existing));
+  }
 };
 
 export function PandaTrackComments({ 
@@ -108,12 +119,11 @@ export function PandaTrackComments({
   const commentsRef = useRef<HTMLDivElement>(null);
   const commentsPerPage = 20;
   
-  // Глобальна гілка коментарів - використовуємо фіксований pageId
+  // Глобальна гілка коментарів
   const globalPageId = pageId === 'homepage' ? 'homepage' : 'global-tracking';
 
-  // ВИПРАВЛЕННЯ: Завантаження коментарів БЕЗ offset в dependencies
+  // Завантаження коментарів
   const loadComments = useCallback(async (reset = true) => {
-    // Запобігання одночасним запитам
     if (loadingRef.current) {
       console.log('Already loading, skipping request');
       return;
@@ -131,7 +141,6 @@ export function PandaTrackComments({
         currentOffset = 0;
       } else {
         setLoadingMore(true);
-        // Використовуємо поточний offset з state
         currentOffset = offset;
       }
 
@@ -176,9 +185,12 @@ export function PandaTrackComments({
       }
       
       setTotalComments(data.total || 0);
-      setHasMore((data.comments || []).length === commentsPerPage);
       
-      // ВИПРАВЛЕННЯ: Оновлюємо offset тільки для load more
+      // ВИПРАВЛЕННЯ: правильна логіка hasMore
+      const loadedCommentsCount = (data.comments || []).length;
+      setHasMore(loadedCommentsCount === commentsPerPage);
+      
+      // Оновлюємо offset тільки для load more
       if (!reset) {
         setOffset(prev => prev + commentsPerPage);
       }
@@ -194,7 +206,7 @@ export function PandaTrackComments({
       setLoadingMore(false);
       loadingRef.current = false;
     }
-  }, [globalPageId]); // ВИПРАВЛЕННЯ: Тільки globalPageId в dependencies
+  }, [globalPageId, offset]);
 
   // Load more коментарів
   const handleLoadMore = useCallback(() => {
@@ -203,7 +215,7 @@ export function PandaTrackComments({
     }
   }, [loadComments, loadingMore, hasMore]);
 
-  // Navigation to specific comment (залишаємо без змін)
+  // Navigation to specific comment
   const handleNavigateToComment = (commentId: string) => {
     const commentElement = document.querySelector(`[data-comment-id="${commentId}"]`);
     if (commentElement) {
@@ -219,7 +231,7 @@ export function PandaTrackComments({
     }
   };
 
-  // Додавання нового коментаря (залишаємо без змін)
+  // Додавання нового коментаря
   const handleCommentSubmit = async (commentData: {
     content: string;
     authorName?: string;
@@ -279,7 +291,7 @@ export function PandaTrackComments({
     }
   };
 
-  // Голосування за коментар (залишаємо без змін)
+  // Голосування за коментар
   const handleVote = async (commentId: string, voteType: number) => {
     try {
       const response = await fetch(`${API_BASE}/api/comments/${commentId}/vote`, {
@@ -312,7 +324,7 @@ export function PandaTrackComments({
     }
   };
 
-  // Скарга на коментар (залишаємо без змін)
+  // Скарга на коментар
   const handleFlag = async (commentId: string, reason: string) => {
     try {
       const response = await fetch(`${API_BASE}/api/comments/${commentId}/flag`, {
@@ -337,7 +349,7 @@ export function PandaTrackComments({
     }
   };
 
-  // Допоміжна функція для оновлення vote score (залишаємо без змін)
+  // Допоміжна функція для оновлення vote score
   const updateCommentVoteScore = (comments: Comment[], commentId: string, newScore: number): Comment[] => {
     return comments.map(comment => {
       if (comment.id === commentId) {
@@ -353,13 +365,50 @@ export function PandaTrackComments({
     });
   };
 
-  // ВИПРАВЛЕННЯ: Початкове завантаження ТІЛЬКИ один раз
+  // ВИПРАВЛЕННЯ: Функція для перевірки існування pending коментарів на сервері
+  const checkPendingCommentsStatus = useCallback(async () => {
+    const pendingIds = pendingComments.map(pc => pc.id);
+    if (pendingIds.length === 0) return;
+
+    try {
+      // Перевіряємо чи існують ці коментарі на сервері
+      const response = await fetch(`${API_BASE}/api/comments/check-status`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({ commentIds: pendingIds }),
+      });
+
+      if (response.ok) {
+        const { deletedIds, approvedIds } = await response.json();
+        
+        // Видаляємо deleted коментарі з pending списку
+        deletedIds.forEach((id: string) => {
+          removePendingComment(globalPageId, id);
+        });
+        
+        // Перезавантажуємо коментарі якщо щось схвалено
+        if (approvedIds.length > 0) {
+          loadComments(true);
+        }
+        
+        // Оновлюємо pending список
+        setPendingComments(getPendingComments(globalPageId));
+      }
+    } catch (error) {
+      console.error('Error checking pending status:', error);
+    }
+  }, [pendingComments, globalPageId, loadComments]);
+
+  // Початкове завантаження
   useEffect(() => {
     console.log('Initial load for pageId:', globalPageId);
     loadComments(true);
-  }, [globalPageId]); // ВИПРАВЛЕННЯ: Тільки globalPageId
+  }, [globalPageId]);
 
-  // ВИПРАВЛЕННЯ: Auto-refresh БЕЗ loadComments в dependencies
+  // Auto-refresh та перевірка pending статусу
   useEffect(() => {
     if (!autoRefresh) return;
 
@@ -367,13 +416,14 @@ export function PandaTrackComments({
       if (!loadingRef.current) {
         console.log('Auto-refresh triggered');
         loadComments(false);
+        checkPendingCommentsStatus();
       }
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [autoRefresh, globalPageId]); // ВИПРАВЛЕННЯ: Прибрали loadComments
+  }, [autoRefresh, globalPageId, checkPendingCommentsStatus]);
 
-  // Cleanup pending коментарів (залишаємо без змін)
+  // Cleanup pending коментарів які вже схвалені
   useEffect(() => {
     const approvedIds = comments.map(c => c.id);
     const filteredPending = pendingComments.filter(pc => !approvedIds.includes(pc.id));
@@ -386,7 +436,13 @@ export function PandaTrackComments({
     }
   }, [comments, pendingComments, globalPageId]);
 
-  // Render (залишаємо БЕЗ змін)
+  // Періодична перевірка pending коментарів (кожні 2 хвилини)
+  useEffect(() => {
+    const interval = setInterval(checkPendingCommentsStatus, 2 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [checkPendingCommentsStatus]);
+
+  // Render
   return (
     <div className={`pandatrack-comments ${className}`} ref={commentsRef}>
       {/* Popup нотифікація */}
@@ -483,7 +539,7 @@ export function PandaTrackComments({
             submittingReply={submitting}
           />
 
-          {/* Load More кнопка */}
+          {/* ВИПРАВЛЕННЯ: Load More кнопка з правильною логікою */}
           {hasMore && !loadingMore && comments.length > 0 && (
             <div className="text-center mt-8">
               <button
