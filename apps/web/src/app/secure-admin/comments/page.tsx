@@ -336,8 +336,8 @@ export default function AdminCommentsPage() {
     if (!comment) return;
 
     const confirmMsg = action === 'delete' 
-      ? `Видалити коментар зі скаргою &quot;${comment.flagged_reason}"?`
-      : `Схвалити коментар попри скаргу &quot;${comment.flagged_reason}"?`;
+      ? `Видалити коментар зі скаргою '${comment.flagged_reason}'?`
+      : `Схвалити коментар попри скаргу '${comment.flagged_reason}'?`;
       
     if (!confirm(confirmMsg)) return;
 
