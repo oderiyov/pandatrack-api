@@ -1,4 +1,4 @@
-// src/app/secure-admin/comments/page.tsx v3.0
+// src/app/secure-admin/comments/page.tsx v3.1 - ВИПРАВЛЕНИЙ ПОВНИЙ ФАЙЛ
 
 'use client';
 
@@ -232,9 +232,7 @@ export default function AdminCommentsPage() {
 
       if (response.ok) {
         const data = await response.json();
-        // Додаємо загальну кількість коментарів
-        const total = allComments.length || 0;
-        setStats({ ...data, total });
+        setStats(data);
       }
     } catch (error) {
       console.error('Помилка завантаження статистики:', error);
@@ -533,12 +531,6 @@ export default function AdminCommentsPage() {
                 </button>
               ))}
             </div>
-          )}
-        </div>
-      </main>
-    </div>
-  );
-}</div>
 
             {/* Sort and bulk actions */}
             <div className="flex justify-between items-center">
