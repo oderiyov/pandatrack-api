@@ -1,5 +1,4 @@
-// src/components/comments/comment-form.tsx v2.0
-
+// src/components/comments/comment-form.tsx v3.0 
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
@@ -62,13 +61,15 @@ export function CommentForm({
   submitting,
   className = '',
   parentId,
-  placeholder = 'Напишіть ваш коментар...',
+  placeholder = 'Напишіть свій коментар',
   showAuthorFields = true,
   buttonText = 'Коментувати'
 }: CommentFormProps) {
   const [content, setContent] = useState('');
   const [authorName, setAuthorName] = useState('');
   const [authorEmail, setAuthorEmail] = useState('');
+  const [isExpanded, setIsExpanded] = useState(false);
+  
   const [typingAnalytics, setTypingAnalytics] = useState<TypingAnalytics>({
     startTime: null,
     keystrokes: 0,
@@ -89,11 +90,33 @@ export function CommentForm({
     if (savedEmail) setAuthorEmail(savedEmail);
   }, []);
 
+  // Handle focus and expansion
+  const handleFocus = () => {
+    setIsExpanded(true);
+  };
+
+  // Mobile-safe click handler
+  const handleFieldClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsExpanded(true);
+    // Delayed focus for mobile compatibility
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+      }
+    }, 100);
+  };
+
   const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
     const now = Date.now();
     
     setContent(value);
+    
+    // Expand if user starts typing
+    if (value.length > 0 && !isExpanded) {
+      setIsExpanded(true);
+    }
 
     // Enhanced typing analytics
     setTypingAnalytics(prev => {
@@ -206,6 +229,7 @@ export function CommentForm({
 
       // Clear form після успішної відправки
       setContent('');
+      setIsExpanded(false);
       setTypingAnalytics({
         startTime: null,
         keystrokes: 0,
@@ -230,121 +254,129 @@ export function CommentForm({
 
   return (
     <form onSubmit={handleSubmit} className={`comment-form ${className}`}>
-      <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-4">
-        {/* Author fields */}
-        {showAuthorFields && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <input
-                type="text"
-                placeholder="Ваше ім'я (опціонально)"
-                value={authorName}
-                onChange={handleAuthorNameChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                maxLength={100}
-                disabled={submitting}
-              />
-            </div>
-            <div>
-              <input
-                type="email"
-                placeholder="Ваш email (не публікується)"
-                value={authorEmail}
-                onChange={handleAuthorEmailChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                maxLength={255}
-                disabled={submitting}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Content textarea */}
-        <div>
-          <textarea
-            ref={textareaRef}
-            placeholder={placeholder}
-            value={content}
-            onChange={handleContentChange}
-            rows={3}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-            maxLength={3000}
-            disabled={submitting}
-            style={{ minHeight: '80px', maxHeight: '200px' }}
-          />
-          
-          {/* Character counter */}
-          <div className="flex justify-between items-center mt-2 text-sm text-gray-500">
-            <span>
-              {content.length}/3000 символів
-            </span>
-            {content.length > 2500 && (
-              <span className="text-orange-600">
-                Залишилось: {3000 - content.length}
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Helpful hints */}
-        {helpfulHints.length > 0 && (
-          <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
-            <div className="space-y-1">
-              {helpfulHints.map((hint, index) => (
-                <p key={index} className="text-sm text-blue-700">
-                  {hint}
-                </p>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Form actions */}
-        <div className="flex justify-between items-center">
-          <div className="text-xs text-gray-500 space-y-1">
-            <p>Коментарі проходять модерацію</p>
-            {typingAnalytics.startTime && content.length > 10 && (
-              <p>
-                Час набору: {calculateTypingTime()}с, натискання: {typingAnalytics.keystrokes}
-              </p>
-            )}
-          </div>
-          
-          <button
-            type="submit"
-            disabled={submitting || !isFormValid}
-            className={`
-              px-6 py-2 rounded-md font-medium text-white transition-colors
-              ${submitting || !isFormValid
-                ? 'bg-gray-400 cursor-not-allowed' 
-                : 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500'
-              }
-            `}
+      {/* COLLAPSED STATE */}
+      {!isExpanded ? (
+        <div className="relative">
+          <div 
+            className="w-full p-4 border border-gray-300 rounded-lg bg-white cursor-text hover:border-blue-400 transition-colors focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500"
+            onClick={handleFieldClick}
           >
-            {submitting ? (
-              <span className="flex items-center">
-                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Відправка...
-              </span>
-            ) : buttonText}
-          </button>
+            <span className="text-gray-500 select-none">
+              {placeholder}
+            </span>
+          </div>
         </div>
-      </div>
+      ) : (
+        // EXPANDED STATE - повна форма
+        <div className="bg-white border border-gray-300 rounded-lg p-4 space-y-4 shadow-sm">
+          {/* Content textarea */}
+          <div>
+            <textarea
+              ref={textareaRef}
+              placeholder={placeholder}
+              value={content}
+              onChange={handleContentChange}
+              onFocus={handleFocus}
+              rows={3}
+              className="w-full px-0 py-2 border-none outline-none resize-none text-gray-900 placeholder-gray-500 focus:ring-0"
+              maxLength={3000}
+              disabled={submitting}
+              style={{ minHeight: '80px', maxHeight: '200px' }}
+            />
+            
+            {/* Character counter */}
+            <div className="flex justify-between items-center mt-2 text-sm text-gray-500">
+              <span>
+                {content.length}/3000 символів
+              </span>
+              {content.length > 2500 && (
+                <span className="text-orange-600">
+                  Залишилось: {3000 - content.length}
+                </span>
+              )}
+            </div>
+          </div>
 
-      {/* Usage guidelines */}
-      <div className="mt-3 text-xs text-gray-500 leading-relaxed">
-        Коментуючи, ви погоджуєтеся з правилами використання. 
-        Забороняється спам, реклама та образливі коментарі. 
-        Коментарі з посиланнями проходять додаткову модерацію.
-        {parentId && (
-          <span className="block mt-1">
-            Відповіді зазвичай схвалюються швидше.
-          </span>
-        )}
-      </div>
+          {/* Author fields та кнопка - з'являються тільки після введення тексту */}
+          {(content.length > 0 || authorName || authorEmail) && (
+            <>
+              {/* Author fields */}
+              {showAuthorFields && (
+                <div className="flex flex-col sm:flex-row gap-3 pt-3 border-t border-gray-200">
+                  <div className="flex-1">
+                    <input
+                      type="text"
+                      placeholder="Ваше ім'я (опціонально)"
+                      value={authorName}
+                      onChange={handleAuthorNameChange}
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                      maxLength={100}
+                      disabled={submitting}
+                    />
+                  </div>
+                  
+                  {/* Кнопка */}
+                  <button
+                    type="submit"
+                    disabled={submitting || !isFormValid}
+                    className={`
+                      px-6 py-2 rounded-md font-medium text-white text-sm transition-colors whitespace-nowrap
+                      ${submitting || !isFormValid
+                        ? 'bg-gray-400 cursor-not-allowed' 
+                        : 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500'
+                      }
+                    `}
+                  >
+                    {submitting ? (
+                      <span className="flex items-center">
+                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Відправка...
+                      </span>
+                    ) : buttonText}
+                  </button>
+                </div>
+              )}
+
+              {/* Helpful hints */}
+              {helpfulHints.length > 0 && (
+                <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+                  <div className="space-y-1">
+                    {helpfulHints.map((hint, index) => (
+                      <p key={index} className="text-sm text-blue-700">
+                        {hint}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Debug info */}
+              {process.env.NODE_ENV === 'development' && typingAnalytics.startTime && content.length > 10 && (
+                <div className="text-xs text-gray-500">
+                  Час набору: {calculateTypingTime()}с, натискання: {typingAnalytics.keystrokes}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Usage guidelines - показуємо тільки в expanded режимі */}
+      {isExpanded && (
+        <div className="mt-3 text-xs text-gray-500 leading-relaxed">
+          Коментуючи, ви погоджуєтеся з правилами використання. 
+          Забороняється спам, реклама та образливі коментарі. 
+          Коментарі з посиланнями проходять додаткову модерацію.
+          {parentId && (
+            <span className="block mt-1">
+              Відповіді зазвичай схвалюються швидше.
+            </span>
+          )}
+        </div>
+      )}
     </form>
   );
 }
