@@ -234,8 +234,8 @@ export default function AdminCommentsPage() {
         const data = await response.json();
         setStats(data);
       }
-    } catch (error) {
-      console.error('Помилка завантаження статистики:', error);
+    } catch {
+      console.error('Помилка завантаження статистики');
     }
   };
 
@@ -326,7 +326,7 @@ export default function AdminCommentsPage() {
         loadStats();
         alert(`Схвалено ${data.approvedCount} коментарів`);
       }
-    } catch (error) {
+    } catch {
       alert('Помилка масового схвалення');
     }
   };
@@ -336,8 +336,8 @@ export default function AdminCommentsPage() {
     if (!comment) return;
 
     const confirmMsg = action === 'delete' 
-      ? `Видалити коментар зі скаргою "${comment.flagged_reason}"?`
-      : `Схвалити коментар попри скаргу "${comment.flagged_reason}"?`;
+      ? `Видалити коментар зі скаргою &quot;${comment.flagged_reason}"?`
+      : `Схвалити коментар попри скаргу &quot;${comment.flagged_reason}"?`;
       
     if (!confirm(confirmMsg)) return;
 

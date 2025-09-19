@@ -36,7 +36,7 @@ export function CommentNotification({
 
       return () => clearTimeout(timer);
     }
-  }, [newComment]);
+  }, [newComment, onDismiss]);
 
   const handleDismiss = () => {
     setIsAnimating(false);

@@ -82,14 +82,6 @@ const getPendingComments = (pageId: string): PendingComment[] => {
   return existing[pageId] || [];
 };
 
-const removePendingComment = (pageId: string, commentId: string) => {
-  const existing = JSON.parse(localStorage.getItem(PENDING_COMMENTS_KEY) || '{}');
-  if (existing[pageId]) {
-    existing[pageId] = existing[pageId].filter((c: PendingComment) => c.id !== commentId);
-    localStorage.setItem(PENDING_COMMENTS_KEY, JSON.stringify(existing));
-  }
-};
-
 export function PandaTrackComments({ 
   pageId, 
   className = '',
@@ -111,7 +103,6 @@ export function PandaTrackComments({
 
   // Popup нотифікації
   const [newCommentNotification, setNewCommentNotification] = useState<Comment | null>(null);
-  const [lastCommentTime, setLastCommentTime] = useState<string>('');
   
   const commentsRef = useRef<HTMLDivElement>(null);
   const commentsPerPage = 20;
