@@ -1,5 +1,5 @@
-// src/components/comments/comments-list.tsx v6.0
-// ПОВНА ВЕРСІЯ: 👍👎, connecting lines, show more replies, proper reply addressee
+// src/components/comments/comments-list.tsx v7.0
+// ВИПРАВЛЕНО: правильні connecting lines, кнопки поряд, show more replies, аватари без кольорів
 
 'use client';
 
@@ -60,17 +60,9 @@ const formatTimeAgo = (dateString: string): string => {
   });
 };
 
-// Генерація кольору аватара на основі імені
-const getAvatarColor = (name: string): string => {
-  const colors = [
-    'bg-blue-500', 'bg-green-500', 'bg-yellow-500', 'bg-red-500', 
-    'bg-purple-500', 'bg-pink-500', 'bg-indigo-500', 'bg-teal-500'
-  ];
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return colors[Math.abs(hash) % colors.length];
+// ВИПРАВЛЕНО: Аватари без кольорів - тільки сірі
+const getAvatarStyle = (): string => {
+  return 'bg-gray-400'; // Єдиний сірий колір для всіх
 };
 
 // Функція для знаходження ім'я батьківського коментаря
@@ -207,36 +199,36 @@ function CommentItem({
     });
   };
 
-  const avatarColor = getAvatarColor(comment.authorName);
+  const avatarStyle = getAvatarStyle();
 
   // Знаходимо ім'я автора батьківського коментаря
   const parentAuthorName = comment.parentId ? findParentAuthorName(allComments, comment.parentId) : null;
 
-  // Replies показуємо обмежено
-  const REPLIES_LIMIT = 3;
+  // ВИПРАВЛЕНО: Show more replies логіка
+  const REPLIES_LIMIT = 2; // Показуємо тільки 2 replies, решта під кнопкою
   const hasMoreReplies = comment.replies.length > REPLIES_LIMIT;
   const visibleReplies = showAllReplies ? comment.replies : comment.replies.slice(0, REPLIES_LIMIT);
 
   return (
-    <div className={`comment-item relative ${comment.replyDepth > 0 ? 'ml-8 md:ml-12' : ''}`} data-comment-id={comment.id}>
-      {/* ВИПРАВЛЕНО: Connecting line для replies з закругленням */}
+    <div className={`comment-item ${comment.replyDepth > 0 ? 'ml-8 md:ml-12' : ''}`} data-comment-id={comment.id}>
+      {/* ВИПРАВЛЕНО: Правильні connecting lines */}
       {comment.replyDepth > 0 && (
-        <div className="absolute -left-8 md:-left-12 top-0 w-8 md:w-12 h-12 pointer-events-none">
-          {/* Вертикальна лінія */}
-          <div className="absolute left-4 md:left-6 top-0 w-0.5 h-full bg-gray-300"></div>
+        <div className="absolute -left-8 md:-left-12 top-0 bottom-0 flex items-start">
+          {/* Головна вертикальна лінія від батьківського коментаря */}
+          <div className="w-px bg-gray-300 h-12 ml-4 md:ml-6"></div>
           {/* Горизонтальна лінія до аватарки */}
-          <div className="absolute left-4 md:left-6 top-12 w-4 md:w-6 h-0.5 bg-gray-300"></div>
-          {/* Закруглений куток */}
-          <div className="absolute left-4 md:left-6 top-12 w-2 h-2 border-l-2 border-b-2 border-gray-300 rounded-bl-md transform -translate-x-0.5 -translate-y-0.5"></div>
+          <div className="w-4 md:w-6 h-px bg-gray-300 mt-12"></div>
+          {/* Закруглений кут */}
+          <div className="absolute left-4 md:left-6 top-12 w-3 h-3 border-l border-b border-gray-300 rounded-bl-lg transform -translate-x-px -translate-y-px"></div>
         </div>
       )}
       
-      <div className="bg-white rounded-lg border border-gray-200 p-3 md:p-4 hover:shadow-sm transition-shadow">
+      <div className="bg-white rounded-lg border border-gray-200 p-3 md:p-4 hover:shadow-sm transition-shadow relative">
         
         {/* Заголовок коментаря */}
         <div className="flex items-start space-x-3 mb-3">
-          {/* Аватар */}
-          <div className={`w-8 h-8 md:w-10 md:h-10 ${avatarColor} rounded-full flex items-center justify-center flex-shrink-0`}>
+          {/* ВИПРАВЛЕНО: Аватар без кольорів */}
+          <div className={`w-8 h-8 md:w-10 md:h-10 ${avatarStyle} rounded-full flex items-center justify-center flex-shrink-0`}>
             <span className="text-white font-medium text-xs md:text-sm">
               {comment.authorName.charAt(0).toUpperCase()}
             </span>
@@ -249,10 +241,10 @@ function CommentItem({
                 {comment.authorName}
               </span>
               
-              {/* ВИПРАВЛЕНО: Правильний reply addressee */}
+              {/* ВИПРАВЛЕНО: Правильний reply addressee без синього кольору */}
               {comment.replyDepth > 0 && parentAuthorName && (
                 <span className="text-xs md:text-sm text-gray-600">
-                  відповідь для <span className="font-medium text-blue-600">{parentAuthorName}</span>
+                  відповідь для <span className="font-medium text-gray-900">{parentAuthorName}</span>
                 </span>
               )}
               
@@ -280,10 +272,10 @@ function CommentItem({
               </p>
             </div>
 
-            {/* ВИПРАВЛЕНО: Дії з правильним порядком + 👍👎 іконками */}
-            <div className="flex items-center gap-2 md:gap-4 text-sm overflow-x-auto pb-1">
+            {/* ВИПРАВЛЕНО: Дії поряд одна з одною, без ml-auto */}
+            <div className="flex items-center gap-3 text-sm">
               
-              {/* 1. Голосування з 👍👎 іконками */}
+              {/* 1. Голосування з правильними іконками */}
               <div className="flex items-center gap-1 flex-shrink-0">
                 <button
                   onClick={() => handleVote(1)}
@@ -293,9 +285,9 @@ function CommentItem({
                   } ${voting === 'up' ? 'animate-pulse' : ''}`}
                   title="Подобається"
                 >
-                  {/* 👍 Thumb up icon */}
-                  <svg className="w-4 h-4" fill={userVote === 'up' ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L9 7m5 3v4M2 15V9a2 2 0 012-2h1l1 2v6h-3a1 1 0 01-1-1z" />
+                  {/* ВИПРАВЛЕНО: Правильна іконка thumb up */}
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M2 10.5a1.5 1.5 0 113 0v6a1.5 1.5 0 01-3 0v-6zM6 10.333v5.43a2 2 0 001.106 1.79l.05.025A4 4 0 008.943 18h5.416a2 2 0 001.962-1.608l1.2-6A2 2 0 0015.56 8H12V4a2 2 0 00-2-2 1 1 0 00-1 1v.667a4 4 0 01-.8 2.4L6.8 7.933a4 4 0 00-.8 2.4z"/>
                   </svg>
                 </button>
 
@@ -315,9 +307,9 @@ function CommentItem({
                   } ${voting === 'down' ? 'animate-pulse' : ''}`}
                   title="Не подобається"
                 >
-                  {/* 👎 Thumb down icon */}
-                  <svg className="w-4 h-4" fill={userVote === 'down' ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14H5.236a2 2 0 01-1.789-2.894l3.5-7A2 2 0 018.736 3h4.018c.163 0 .326.02.485.06L17 4m-7 10v2a2 2 0 002 2h.095c.5 0 .905-.405.905-.905 0-.714.211-1.412.608-2.006L15 17m-5-3v-4M22 9v6a2 2 0 01-2 2h-1l-1-2V9h3a1 1 0 011 1z" />
+                  {/* ВИПРАВЛЕНО: Правильна іконка thumb down */}
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M18 9.5a1.5 1.5 0 11-3 0v-6a1.5 1.5 0 013 0v6zM14 9.667v-5.43a2 2 0 00-1.106-1.79l-.05-.025A4 4 0 0011.057 2H5.641a2 2 0 00-1.962 1.608l-1.2 6A2 2 0 004.44 12H8v4a2 2 0 002 2 1 1 0 001-1v-.667a4 4 0 01.8-2.4l1.4-1.866a4 4 0 00.8-2.4z"/>
                   </svg>
                 </button>
               </div>
@@ -344,22 +336,22 @@ function CommentItem({
                 </svg>
               </button>
 
-              {/* 4. Reply праворуч */}
+              {/* 4. ВИПРАВЛЕНО: Reply поряд, не на краю */}
               {comment.replyDepth < maxRepliesDepth && (
                 <button
                   onClick={() => setShowReplyForm(!showReplyForm)}
-                  className="flex items-center gap-1 px-2 py-1 rounded-md hover:bg-blue-50 hover:text-blue-600 transition-colors text-gray-600 ml-auto flex-shrink-0"
+                  className="flex items-center gap-1 px-2 py-1 rounded-md hover:bg-blue-50 hover:text-blue-600 transition-colors text-gray-600 flex-shrink-0"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
                   </svg>
-                  <span className="hidden sm:inline">Відповісти</span>
+                  <span>Відповісти</span>
                 </button>
               )}
 
-              {/* Кількість відповідей - не показуємо на мобілі */}
+              {/* Кількість відповідей */}
               {comment.replyCount > 0 && (
-                <span className="text-gray-500 text-xs hidden md:inline">
+                <span className="text-gray-500 text-xs">
                   {comment.replyCount} відповід{comment.replyCount === 1 ? 'ь' : comment.replyCount < 5 ? 'і' : 'ей'}
                 </span>
               )}
@@ -425,7 +417,7 @@ function CommentItem({
         )}
       </div>
 
-      {/* ВИПРАВЛЕНО: Відповіді з "показати більше" функціональністю */}
+      {/* ВИПРАВЛЕНО: Відповіді з "показати більше коментарів" */}
       {comment.replies && comment.replies.length > 0 && (
         <div className="mt-4 space-y-4">
           {visibleReplies.map((reply) => (
@@ -441,7 +433,7 @@ function CommentItem({
             />
           ))}
           
-          {/* Кнопка "показати більше коментарів" для replies */}
+          {/* ВИПРАВЛЕНО: Кнопка "показати більше коментарів" для replies */}
           {hasMoreReplies && !showAllReplies && (
             <div className="ml-8 md:ml-12">
               <button

@@ -1,5 +1,5 @@
-// src/components/comments/comment-form.tsx v5.0 
-// ПОВНА ВЕРСІЯ: завжди розгорнута + обов'язкове ім'я + збережені всі функції
+// src/components/comments/comment-form.tsx v6.0 
+// ВИПРАВЛЕНО: без email поля та без підпису про обов'язковість
 
 'use client';
 
@@ -69,9 +69,8 @@ export function CommentForm({
 }: CommentFormProps) {
   const [content, setContent] = useState('');
   const [authorName, setAuthorName] = useState('');
-  const [authorEmail, setAuthorEmail] = useState('');
   
-  // ВИПРАВЛЕНО: Збережена collapsible логіка, але дефолт = true
+  // Збережена collapsible логіка, але дефолт = true
   const [isExpanded, setIsExpanded] = useState(true);
   
   const [typingAnalytics, setTypingAnalytics] = useState<TypingAnalytics>({
@@ -88,10 +87,7 @@ export function CommentForm({
   // Load saved author info
   useEffect(() => {
     const savedName = localStorage.getItem('pandatrack_author_name');
-    const savedEmail = localStorage.getItem('pandatrack_author_email');
-    
     if (savedName) setAuthorName(savedName);
-    if (savedEmail) setAuthorEmail(savedEmail);
   }, []);
 
   // Handle focus and expansion - збережена логіка
@@ -99,7 +95,7 @@ export function CommentForm({
     setIsExpanded(true);
   };
 
-  // ЗБЕРЕЖЕНА: Mobile-safe click handler
+  // Mobile-safe click handler
   const handleFieldClick = (e: React.MouseEvent) => {
     e.preventDefault();
     setIsExpanded(true);
@@ -171,18 +167,6 @@ export function CommentForm({
     }
   };
 
-  const handleAuthorEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setAuthorEmail(value);
-    
-    // Save для наступних коментарів
-    if (value.trim()) {
-      localStorage.setItem('pandatrack_author_email', value.trim());
-    } else {
-      localStorage.removeItem('pandatrack_author_email');
-    }
-  };
-
   const calculateTypingTime = (): number | undefined => {
     if (!typingAnalytics.startTime || content.length === 0) return undefined;
     
@@ -198,7 +182,7 @@ export function CommentForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // ВИПРАВЛЕНО: Client-side validation з обов'язковим ім'ям
+    // Client-side validation з обов'язковим ім'ям
     if (!content.trim()) {
       alert('Будь ласка, напишіть коментар');
       return;
@@ -214,20 +198,14 @@ export function CommentForm({
       return;
     }
 
-    // ВИПРАВЛЕНО: Обов'язкове поле імені
+    // Обов'язкове поле імені
     if (!authorName.trim()) {
       alert('Будь ласка, введіть ваше ім&apos;я');
       return;
     }
 
     if (authorName.trim().length < 2) {
-      alert('Ім\'я має містити принаймні 2 символи');
-      return;
-    }
-
-    // Email validation if provided
-    if (authorEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(authorEmail)) {
-      alert('Будь ласка, введіть правильний email або залиште поле порожнім');
+      alert('Ім&apos;я має містити принаймні 2 символи');
       return;
     }
 
@@ -237,14 +215,13 @@ export function CommentForm({
       await onSubmit({
         content: content.trim(),
         authorName: authorName.trim(),
-        authorEmail: authorEmail.trim() || undefined,
+        authorEmail: undefined, // ВИПРАВЛЕНО: email завжди undefined
         parentId,
         typingTime
       });
 
       // Clear form після успішної відправки
       setContent('');
-      // ВИПРАВЛЕНО: НЕ скидаємо isExpanded - залишаємо розгорнутим
       setTypingAnalytics({
         startTime: null,
         keystrokes: 0,
@@ -265,12 +242,12 @@ export function CommentForm({
     }
   };
 
-  // ВИПРАВЛЕНО: Перевірка валідності форми з обов'язковим ім'ям
+  // Перевірка валідності форми з обов'язковим ім'ям
   const isFormValid = content.trim().length >= 3 && content.length <= 3000 && authorName.trim().length >= 2;
 
   return (
     <form onSubmit={handleSubmit} className={`comment-form ${className}`}>
-      {/* ЗБЕРЕЖЕНА ЛОГІКА: Collapsed state але показуємо тільки коли isExpanded = false */}
+      {/* Collapsed state але показуємо тільки коли isExpanded = false */}
       {!isExpanded ? (
         <div className="relative">
           <div 
@@ -313,13 +290,13 @@ export function CommentForm({
             </div>
           </div>
 
-          {/* ВИПРАВЛЕНО: Author fields завжди видимі + обов'язкове ім'я */}
+          {/* ВИПРАВЛЕНО: Тільки поле імені, без email */}
           {showAuthorFields && (
             <div className="flex flex-col sm:flex-row gap-3 pt-3 border-t border-gray-200">
               <div className="flex-1">
                 <input
                   type="text"
-                  placeholder="Ваше ім'я *"
+                  placeholder="Ваше ім&apos;я *"
                   value={authorName}
                   onChange={handleAuthorNameChange}
                   className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
@@ -330,18 +307,6 @@ export function CommentForm({
                 {authorName.trim().length > 0 && authorName.trim().length < 2 && (
                   <p className="text-red-500 text-xs mt-1">Ім&apos;я має містити принаймні 2 символи</p>
                 )}
-              </div>
-              
-              <div className="flex-1">
-                <input
-                  type="email"
-                  placeholder="Email (опціонально)"
-                  value={authorEmail}
-                  onChange={handleAuthorEmailChange}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                  maxLength={100}
-                  disabled={submitting}
-                />
               </div>
               
               {/* Кнопка */}
@@ -391,7 +356,7 @@ export function CommentForm({
         </div>
       )}
 
-      {/* Usage guidelines - показуємо тільки в expanded режимі */}
+      {/* ВИПРАВЛЕНО: Usage guidelines без підпису про обов'язковість */}
       {isExpanded && (
         <div className="mt-3 text-xs text-gray-500 leading-relaxed">
           Коментуючи, ви погоджуєтеся з правилами використання. 
@@ -402,9 +367,6 @@ export function CommentForm({
               Відповіді зазвичай схвалюються швидше.
             </span>
           )}
-          <span className="block mt-1 text-red-500">
-            * Поле &quot;Ім&apos;я&quot; є обов&apos;язковим для заповнення
-          </span>
         </div>
       )}
     </form>

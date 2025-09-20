@@ -1,5 +1,5 @@
-// src/components/comments/pandatrack-comments.tsx v6.0
-// ПОВНА ВЕРСІЯ: правильна global логіка + popup нотифікації + всі функції
+// src/components/comments/pandatrack-comments.tsx v7.0
+// ВИПРАВЛЕНО: правильна load more кнопка + homepage pageId
 
 'use client';
 
@@ -119,25 +119,10 @@ export function PandaTrackComments({
   const commentsRef = useRef<HTMLDivElement>(null);
   const commentsPerPage = 20;
   
-  // ВИПРАВЛЕНО: Правильна логіка для global tracking
-  const getGlobalPageId = (inputPageId: string): string => {
-    console.log('Determining globalPageId for:', inputPageId);
-    
-    // Для tracking сторінок завжди використовуємо global-tracking
-    if (inputPageId === 'global-tracking' || 
-        inputPageId.includes('/track/') || 
-        inputPageId.includes('tracking') ||
-        typeof window !== 'undefined' && window.location.pathname.includes('/track/')) {
-      console.log('→ Using global-tracking');
-      return 'global-tracking';
-    }
-    
-    // Для інших сторінок використовуємо як є
-    console.log('→ Using original pageId:', inputPageId);
-    return inputPageId;
-  };
-  
-  const globalPageId = getGlobalPageId(pageId);
+  // ВИПРАВЛЕНО: Простіша логіка - homepage + tracking pages використовують homepage
+  const globalPageId = pageId;
+
+  console.log('PandaTrackComments rendered with pageId:', pageId, '→ globalPageId:', globalPageId);
 
   // Auto-refresh для нових коментарів
   const checkForNewComments = useCallback(async () => {
@@ -239,8 +224,9 @@ export function PandaTrackComments({
       
       setTotalComments(data.total || 0);
       
+      // ВИПРАВЛЕНО: Правильна логіка hasMore
       const loadedCommentsCount = (data.comments || []).length;
-      setHasMore(loadedCommentsCount === commentsPerPage);
+      setHasMore(loadedCommentsCount === commentsPerPage && (currentOffset + loadedCommentsCount) < (data.total || 0));
       
       if (!reset) {
         setOffset(prev => prev + commentsPerPage);
@@ -468,7 +454,7 @@ export function PandaTrackComments({
     loadComments(true);
   }, [globalPageId, loadComments, pageId]);
 
-  // ВИПРАВЛЕНО: Auto-refresh тільки для перевірки нових коментарів
+  // Auto-refresh тільки для перевірки нових коментарів
   useEffect(() => {
     if (!autoRefresh) return;
 
@@ -512,8 +498,8 @@ export function PandaTrackComments({
         onDismiss={() => setNewCommentNotification(null)}
       />
 
-      {/* Заголовок */}
-      <h2 className="text-2xl font-bold mb-4">{title}</h2>
+      {/* Заголовок - показуємо тільки якщо title не порожній */}
+      {title && <h2 className="text-2xl font-bold mb-4">{title}</h2>}
 
       {/* Статистика */}
       {showStats && (
@@ -599,7 +585,7 @@ export function PandaTrackComments({
             submittingReply={submitting}
           />
 
-          {/* Load More кнопка */}
+          {/* ВИПРАВЛЕНО: Load More кнопка завжди показується якщо є більше коментарів */}
           {hasMore && !loadingMore && comments.length > 0 && (
             <div className="text-center mt-8">
               <button

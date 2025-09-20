@@ -600,7 +600,7 @@ export default function TrackingPage() {
 
             {/* ✅ КЛЮЧОВЕ ВИПРАВЛЕННЯ: pageId = "global-tracking" для ВСІХ tracking сторінок */}
             <PandaTrackComments
-              pageId="global-tracking"
+              pageId="homepage"
               title="Питання та досвід з відстеження посилок"
               showStats={true}
               showInfo={true}
