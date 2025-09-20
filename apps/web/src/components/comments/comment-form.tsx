@@ -1,4 +1,6 @@
-// src/components/comments/comment-form.tsx v3.0 
+// src/components/comments/comment-form.tsx v5.0 
+// ПОВНА ВЕРСІЯ: завжди розгорнута + обов'язкове ім'я + збережені всі функції
+
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
@@ -68,7 +70,9 @@ export function CommentForm({
   const [content, setContent] = useState('');
   const [authorName, setAuthorName] = useState('');
   const [authorEmail, setAuthorEmail] = useState('');
-  const [isExpanded, setIsExpanded] = useState(false);
+  
+  // ВИПРАВЛЕНО: Збережена collapsible логіка, але дефолт = true
+  const [isExpanded, setIsExpanded] = useState(true);
   
   const [typingAnalytics, setTypingAnalytics] = useState<TypingAnalytics>({
     startTime: null,
@@ -90,12 +94,12 @@ export function CommentForm({
     if (savedEmail) setAuthorEmail(savedEmail);
   }, []);
 
-  // Handle focus and expansion
+  // Handle focus and expansion - збережена логіка
   const handleFocus = () => {
     setIsExpanded(true);
   };
 
-  // Mobile-safe click handler
+  // ЗБЕРЕЖЕНА: Mobile-safe click handler
   const handleFieldClick = (e: React.MouseEvent) => {
     e.preventDefault();
     setIsExpanded(true);
@@ -113,7 +117,7 @@ export function CommentForm({
     
     setContent(value);
     
-    // Expand if user starts typing
+    // Expand if user starts typing (збережена логіка)
     if (value.length > 0 && !isExpanded) {
       setIsExpanded(true);
     }
@@ -194,7 +198,7 @@ export function CommentForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Client-side validation
+    // ВИПРАВЛЕНО: Client-side validation з обов'язковим ім'ям
     if (!content.trim()) {
       alert('Будь ласка, напишіть коментар');
       return;
@@ -210,6 +214,17 @@ export function CommentForm({
       return;
     }
 
+    // ВИПРАВЛЕНО: Обов'язкове поле імені
+    if (!authorName.trim()) {
+      alert('Будь ласка, введіть ваше ім\'я');
+      return;
+    }
+
+    if (authorName.trim().length < 2) {
+      alert('Ім\'я має містити принаймні 2 символи');
+      return;
+    }
+
     // Email validation if provided
     if (authorEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(authorEmail)) {
       alert('Будь ласка, введіть правильний email або залиште поле порожнім');
@@ -221,7 +236,7 @@ export function CommentForm({
     try {
       await onSubmit({
         content: content.trim(),
-        authorName: authorName.trim() || undefined,
+        authorName: authorName.trim(),
         authorEmail: authorEmail.trim() || undefined,
         parentId,
         typingTime
@@ -229,7 +244,7 @@ export function CommentForm({
 
       // Clear form після успішної відправки
       setContent('');
-      setIsExpanded(false);
+      // ВИПРАВЛЕНО: НЕ скидаємо isExpanded - залишаємо розгорнутим
       setTypingAnalytics({
         startTime: null,
         keystrokes: 0,
@@ -250,11 +265,12 @@ export function CommentForm({
     }
   };
 
-  const isFormValid = content.trim().length >= 3 && content.length <= 3000;
+  // ВИПРАВЛЕНО: Перевірка валідності форми з обов'язковим ім'ям
+  const isFormValid = content.trim().length >= 3 && content.length <= 3000 && authorName.trim().length >= 2;
 
   return (
     <form onSubmit={handleSubmit} className={`comment-form ${className}`}>
-      {/* COLLAPSED STATE */}
+      {/* ЗБЕРЕЖЕНА ЛОГІКА: Collapsed state але показуємо тільки коли isExpanded = false */}
       {!isExpanded ? (
         <div className="relative">
           <div 
@@ -267,7 +283,7 @@ export function CommentForm({
           </div>
         </div>
       ) : (
-        // EXPANDED STATE - повна форма
+        // EXPANDED STATE - повна форма (дефолтний стан)
         <div className="bg-white border border-gray-300 rounded-lg p-4 space-y-4 shadow-sm">
           {/* Content textarea */}
           <div>
@@ -277,11 +293,11 @@ export function CommentForm({
               value={content}
               onChange={handleContentChange}
               onFocus={handleFocus}
-              rows={3}
+              rows={4}
               className="w-full px-0 py-2 border-none outline-none resize-none text-gray-900 placeholder-gray-500 focus:ring-0"
               maxLength={3000}
               disabled={submitting}
-              style={{ minHeight: '80px', maxHeight: '200px' }}
+              style={{ minHeight: '100px', maxHeight: '200px' }}
             />
             
             {/* Character counter */}
@@ -297,69 +313,80 @@ export function CommentForm({
             </div>
           </div>
 
-          {/* Author fields та кнопка - з'являються тільки після введення тексту */}
-          {(content.length > 0 || authorName || authorEmail) && (
-            <>
-              {/* Author fields */}
-              {showAuthorFields && (
-                <div className="flex flex-col sm:flex-row gap-3 pt-3 border-t border-gray-200">
-                  <div className="flex-1">
-                    <input
-                      type="text"
-                      placeholder="Ваше ім'я (опціонально)"
-                      value={authorName}
-                      onChange={handleAuthorNameChange}
-                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                      maxLength={100}
-                      disabled={submitting}
-                    />
-                  </div>
-                  
-                  {/* Кнопка */}
-                  <button
-                    type="submit"
-                    disabled={submitting || !isFormValid}
-                    className={`
-                      px-6 py-2 rounded-md font-medium text-white text-sm transition-colors whitespace-nowrap
-                      ${submitting || !isFormValid
-                        ? 'bg-gray-400 cursor-not-allowed' 
-                        : 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500'
-                      }
-                    `}
-                  >
-                    {submitting ? (
-                      <span className="flex items-center">
-                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Відправка...
-                      </span>
-                    ) : buttonText}
-                  </button>
-                </div>
-              )}
+          {/* ВИПРАВЛЕНО: Author fields завжди видимі + обов'язкове ім'я */}
+          {showAuthorFields && (
+            <div className="flex flex-col sm:flex-row gap-3 pt-3 border-t border-gray-200">
+              <div className="flex-1">
+                <input
+                  type="text"
+                  placeholder="Ваше ім'я *"
+                  value={authorName}
+                  onChange={handleAuthorNameChange}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                  maxLength={100}
+                  disabled={submitting}
+                  required
+                />
+                {authorName.trim().length > 0 && authorName.trim().length < 2 && (
+                  <p className="text-red-500 text-xs mt-1">Ім'я має містити принаймні 2 символи</p>
+                )}
+              </div>
+              
+              <div className="flex-1">
+                <input
+                  type="email"
+                  placeholder="Email (опціонально)"
+                  value={authorEmail}
+                  onChange={handleAuthorEmailChange}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                  maxLength={100}
+                  disabled={submitting}
+                />
+              </div>
+              
+              {/* Кнопка */}
+              <button
+                type="submit"
+                disabled={submitting || !isFormValid}
+                className={`
+                  px-6 py-2 rounded-md font-medium text-white text-sm transition-colors whitespace-nowrap
+                  ${submitting || !isFormValid
+                    ? 'bg-gray-400 cursor-not-allowed' 
+                    : 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500'
+                  }
+                `}
+              >
+                {submitting ? (
+                  <span className="flex items-center">
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Відправка...
+                  </span>
+                ) : buttonText}
+              </button>
+            </div>
+          )}
 
-              {/* Helpful hints */}
-              {helpfulHints.length > 0 && (
-                <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
-                  <div className="space-y-1">
-                    {helpfulHints.map((hint, index) => (
-                      <p key={index} className="text-sm text-blue-700">
-                        {hint}
-                      </p>
-                    ))}
-                  </div>
-                </div>
-              )}
+          {/* Helpful hints */}
+          {helpfulHints.length > 0 && (
+            <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+              <div className="space-y-1">
+                {helpfulHints.map((hint, index) => (
+                  <p key={index} className="text-sm text-blue-700">
+                    {hint}
+                  </p>
+                ))}
+              </div>
+            </div>
+          )}
 
-              {/* Debug info */}
-              {process.env.NODE_ENV === 'development' && typingAnalytics.startTime && content.length > 10 && (
-                <div className="text-xs text-gray-500">
-                  Час набору: {calculateTypingTime()}с, натискання: {typingAnalytics.keystrokes}
-                </div>
-              )}
-            </>
+          {/* Debug info */}
+          {process.env.NODE_ENV === 'development' && typingAnalytics.startTime && content.length > 10 && (
+            <div className="text-xs text-gray-500">
+              Час набору: {calculateTypingTime()}с, натискання: {typingAnalytics.keystrokes}
+            </div>
           )}
         </div>
       )}
@@ -375,6 +402,9 @@ export function CommentForm({
               Відповіді зазвичай схвалюються швидше.
             </span>
           )}
+          <span className="block mt-1 text-red-500">
+            * Поле "Ім'я" є обов'язковим для заповнення
+          </span>
         </div>
       )}
     </form>

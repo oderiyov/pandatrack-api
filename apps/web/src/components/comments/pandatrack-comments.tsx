@@ -1,5 +1,5 @@
-// src/components/comments/pandatrack-comments.tsx v4.0
-// ВИПРАВЛЕНО: pagination кнопка, pending cleanup після admin delete
+// src/components/comments/pandatrack-comments.tsx v6.0
+// ПОВНА ВЕРСІЯ: правильна global логіка + popup нотифікації + всі функції
 
 'use client';
 
@@ -82,7 +82,6 @@ const getPendingComments = (pageId: string): PendingComment[] => {
   return existing[pageId] || [];
 };
 
-// ВИПРАВЛЕННЯ: функція для очищення pending коментарів
 const removePendingComment = (pageId: string, commentId: string) => {
   const existing = JSON.parse(localStorage.getItem(PENDING_COMMENTS_KEY) || '{}');
   if (existing[pageId]) {
@@ -98,7 +97,7 @@ export function PandaTrackComments({
   showStats = true,
   showInfo = true,
   maxRepliesDepth = 3,
-  autoRefresh = false
+  autoRefresh = true
 }: CommentsProps) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [pendingComments, setPendingComments] = useState<PendingComment[]>([]);
@@ -115,12 +114,73 @@ export function PandaTrackComments({
 
   // Popup нотифікації
   const [newCommentNotification, setNewCommentNotification] = useState<Comment | null>(null);
+  const [lastKnownCommentTime, setLastKnownCommentTime] = useState<string | null>(null);
   
   const commentsRef = useRef<HTMLDivElement>(null);
   const commentsPerPage = 20;
   
-  // Глобальна гілка коментарів
-  const globalPageId = pageId === 'homepage' ? 'homepage' : 'global-tracking';
+  // ВИПРАВЛЕНО: Правильна логіка для global tracking
+  const getGlobalPageId = (inputPageId: string): string => {
+    console.log('Determining globalPageId for:', inputPageId);
+    
+    // Для tracking сторінок завжди використовуємо global-tracking
+    if (inputPageId === 'global-tracking' || 
+        inputPageId.includes('/track/') || 
+        inputPageId.includes('tracking') ||
+        typeof window !== 'undefined' && window.location.pathname.includes('/track/')) {
+      console.log('→ Using global-tracking');
+      return 'global-tracking';
+    }
+    
+    // Для інших сторінок використовуємо як є
+    console.log('→ Using original pageId:', inputPageId);
+    return inputPageId;
+  };
+  
+  const globalPageId = getGlobalPageId(pageId);
+
+  // Auto-refresh для нових коментарів
+  const checkForNewComments = useCallback(async () => {
+    if (loadingRef.current) return;
+    
+    try {
+      console.log('Checking for new comments...');
+      
+      const response = await fetch(
+        `${API_BASE}/api/comments/${globalPageId}?limit=1&offset=0`, 
+        {
+          method: 'GET',
+          headers: { 'Accept': 'application/json' },
+        }
+      );
+
+      if (response.ok) {
+        const data: CommentsData = await response.json();
+        
+        if (data.comments && data.comments.length > 0) {
+          const newestComment = data.comments[0];
+          const newestCommentTime = newestComment.createdAt;
+          
+          // Перевіряємо чи є новий коментар
+          if (lastKnownCommentTime && new Date(newestCommentTime) > new Date(lastKnownCommentTime)) {
+            const currentUserName = localStorage.getItem('pandatrack_author_name');
+            
+            // Показуємо нотифікацію тільки якщо коментар не від поточного користувача
+            if (!currentUserName || currentUserName !== newestComment.authorName) {
+              console.log('New comment detected for notification:', newestComment);
+              setNewCommentNotification(newestComment);
+            }
+            
+            // Оновлюємо lastKnownCommentTime
+            setLastKnownCommentTime(newestCommentTime);
+            localStorage.setItem(LAST_COMMENT_TIME_KEY, newestCommentTime);
+          }
+        }
+      }
+    } catch (error) {
+      console.log('Error checking for new comments:', error);
+    }
+  }, [globalPageId, lastKnownCommentTime]);
 
   // Завантаження коментарів
   const loadComments = useCallback(async (reset = true) => {
@@ -162,35 +222,26 @@ export function PandaTrackComments({
 
       const data: CommentsData = await response.json();
       
-      // Detect new comments for popup notification
-      if (!reset && data.comments && data.comments.length > 0) {
-        const newestComment = data.comments[0];
-        const lastTime = localStorage.getItem(LAST_COMMENT_TIME_KEY);
-        
-        if (lastTime && new Date(newestComment.createdAt) > new Date(lastTime)) {
-          const userName = localStorage.getItem('pandatrack_author_name');
-          if (!userName || userName !== newestComment.authorName) {
-            setNewCommentNotification(newestComment);
-          }
+      // Встановлюємо lastKnownCommentTime при першому завантаженні
+      if (reset && data.comments && data.comments.length > 0) {
+        const newestTime = data.comments[0].createdAt;
+        if (!lastKnownCommentTime) {
+          setLastKnownCommentTime(newestTime);
+          localStorage.setItem(LAST_COMMENT_TIME_KEY, newestTime);
         }
       }
       
       if (reset) {
         setComments(data.comments || []);
-        if (data.comments && data.comments.length > 0) {
-          localStorage.setItem(LAST_COMMENT_TIME_KEY, data.comments[0].createdAt);
-        }
       } else {
         setComments(prev => [...prev, ...(data.comments || [])]);
       }
       
       setTotalComments(data.total || 0);
       
-      // ВИПРАВЛЕННЯ: правильна логіка hasMore
       const loadedCommentsCount = (data.comments || []).length;
       setHasMore(loadedCommentsCount === commentsPerPage);
       
-      // Оновлюємо offset тільки для load more
       if (!reset) {
         setOffset(prev => prev + commentsPerPage);
       }
@@ -206,7 +257,7 @@ export function PandaTrackComments({
       setLoadingMore(false);
       loadingRef.current = false;
     }
-  }, [globalPageId, offset]);
+  }, [globalPageId, offset, lastKnownCommentTime]);
 
   // Load more коментарів
   const handleLoadMore = useCallback(() => {
@@ -217,18 +268,24 @@ export function PandaTrackComments({
 
   // Navigation to specific comment
   const handleNavigateToComment = (commentId: string) => {
-    const commentElement = document.querySelector(`[data-comment-id="${commentId}"]`);
-    if (commentElement) {
-      commentElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      commentElement.classList.add('ring-2', 'ring-blue-400', 'ring-opacity-75');
-      setTimeout(() => {
-        commentElement.classList.remove('ring-2', 'ring-blue-400', 'ring-opacity-75');
-      }, 3000);
-    } else {
-      if (commentsRef.current) {
-        commentsRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
+    console.log('Navigating to comment:', commentId);
+    
+    // Спочатку скролимо до блоку коментарів
+    if (commentsRef.current) {
+      commentsRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
+    
+    // Потім шукаємо конкретний коментар
+    setTimeout(() => {
+      const commentElement = document.querySelector(`[data-comment-id="${commentId}"]`);
+      if (commentElement) {
+        commentElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        commentElement.classList.add('ring-2', 'ring-blue-400', 'ring-opacity-75');
+        setTimeout(() => {
+          commentElement.classList.remove('ring-2', 'ring-blue-400', 'ring-opacity-75');
+        }, 3000);
+      }
+    }, 1000);
   };
 
   // Додавання нового коментаря
@@ -365,13 +422,12 @@ export function PandaTrackComments({
     });
   };
 
-  // ВИПРАВЛЕННЯ: Функція для перевірки існування pending коментарів на сервері
+  // Функція для перевірки існування pending коментарів на сервері
   const checkPendingCommentsStatus = useCallback(async () => {
     const pendingIds = pendingComments.map(pc => pc.id);
     if (pendingIds.length === 0) return;
 
     try {
-      // Перевіряємо чи існують ці коментарі на сервері
       const response = await fetch(`${API_BASE}/api/comments/check-status`, {
         method: 'POST',
         headers: {
@@ -384,17 +440,14 @@ export function PandaTrackComments({
       if (response.ok) {
         const { deletedIds, approvedIds } = await response.json();
         
-        // Видаляємо deleted коментарі з pending списку
         deletedIds.forEach((id: string) => {
           removePendingComment(globalPageId, id);
         });
         
-        // Перезавантажуємо коментарі якщо щось схвалено
         if (approvedIds.length > 0) {
           loadComments(true);
         }
         
-        // Оновлюємо pending список
         setPendingComments(getPendingComments(globalPageId));
       }
     } catch (error) {
@@ -402,26 +455,33 @@ export function PandaTrackComments({
     }
   }, [pendingComments, globalPageId, loadComments]);
 
-  // Початкове завантаження
+  // Початкове завантаження + завантаження lastKnownCommentTime
   useEffect(() => {
-    console.log('Initial load for pageId:', globalPageId);
+    console.log('Initial load for pageId:', pageId, '→ globalPageId:', globalPageId);
+    
+    // Завантажуємо збережений час останнього коментаря
+    const savedTime = localStorage.getItem(LAST_COMMENT_TIME_KEY);
+    if (savedTime) {
+      setLastKnownCommentTime(savedTime);
+    }
+    
     loadComments(true);
-  }, [globalPageId]);
+  }, [globalPageId, loadComments]);
 
-  // Auto-refresh та перевірка pending статусу
+  // ВИПРАВЛЕНО: Auto-refresh тільки для перевірки нових коментарів
   useEffect(() => {
     if (!autoRefresh) return;
 
     const interval = setInterval(() => {
       if (!loadingRef.current) {
-        console.log('Auto-refresh triggered');
-        loadComments(false);
+        console.log('Auto-refresh: checking for new comments');
+        checkForNewComments(); // Тільки перевіряємо нові, не перезавантажуємо список
         checkPendingCommentsStatus();
       }
-    }, 30000);
+    }, 30000); // кожні 30 секунд
 
     return () => clearInterval(interval);
-  }, [autoRefresh, globalPageId, checkPendingCommentsStatus]);
+  }, [autoRefresh, checkForNewComments, checkPendingCommentsStatus]);
 
   // Cleanup pending коментарів які вже схвалені
   useEffect(() => {
@@ -539,7 +599,7 @@ export function PandaTrackComments({
             submittingReply={submitting}
           />
 
-          {/* ВИПРАВЛЕННЯ: Load More кнопка з правильною логікою */}
+          {/* Load More кнопка */}
           {hasMore && !loadingMore && comments.length > 0 && (
             <div className="text-center mt-8">
               <button

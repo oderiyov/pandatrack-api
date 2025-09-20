@@ -1,4 +1,4 @@
-// src/app/page.tsx - ОНОВЛЕНА ГОЛОВНА СТОРІНКА
+// src/app/page.tsx - ВИПРАВЛЕНА ГОЛОВНА СТОРІНКА з об'єднаним контентом
 import { Metadata } from 'next'
 import Link from 'next/link'
 import { TrackingForm } from '@/components/tracking-form'
@@ -43,7 +43,7 @@ export default function HomePage() {
         <PopularStores />
         <Features />
         
-        {/* Info Section */}
+        {/* ВИПРАВЛЕНО: Об'єднаний інформаційний блок */}
         <section className="mt-16">
           <div className="bg-[#eaf0f5] rounded-[20px] p-8 mb-8">
             <h2 className="text-2xl font-bold mb-4">Що робити, якщо посилка не відстежується?</h2>
@@ -54,40 +54,62 @@ export default function HomePage() {
             </p>
           </div>
           
+          {/* ВИПРАВЛЕНО: Об'єднаний блок з допомогою - заголовок по центру */}
           <div className="bg-[#f7e2cc] rounded-[20px] p-8">
-            <h3 className="text-xl font-bold mb-4">Допомога з відстеженням посилок</h3>
-            <p className="text-[#333037]/80 mb-4">
-              Маєте питання про відстеження? Не можете знайти свою посилку? Потрібна допомога з трек-номером? 
-              Запитайте в коментарях нижче — спільнота користувачів завжди готова допомогти!
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-              <div className="bg-white/50 rounded-lg p-4">
+            <div className="text-center mb-6">
+              <h2 className="text-2xl font-bold text-[#333037]">
+                Допомога з відстеженням посилок
+              </h2>
+            </div>
+            
+            <div className="text-center mb-6">
+              <p className="text-[#333037]/80 leading-relaxed max-w-3xl mx-auto">
+                Маєте питання про відстеження? Не можете знайти свою посилку? Потрібна допомога з трек-номером? 
+                Запитайте в коментарях нижче — спільнота користувачів завжди готова допомогти! 
+                Досвідчені користувачі діляться секретами швидкого трекінгу та допомагають у визначенні перевізника за номером.
+              </p>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
+              <div className="bg-white/50 rounded-lg p-4 text-center">
                 <h4 className="font-semibold mb-2">💡 Поради користувачів</h4>
-                <p className="text-[#333037]/70">Досвідчені користувачі діляться секретами швидкого трекінгу</p>
+                <p className="text-[#333037]/70">Секрети швидкого трекінгу та лайфхаки для відстеження</p>
               </div>
-              <div className="bg-white/50 rounded-lg p-4">
-                <h4 className="font-semibold mb-2">🔍 Пошук посилок</h4>
-                <p className="text-[#333037]/70">Допомога у визначенні перевізника за номером</p>
+              <div className="bg-white/50 rounded-lg p-4 text-center">
+                <h4 className="font-semibold mb-2">🔍 Визначення перевізника</h4>
+                <p className="text-[#333037]/70">Допомога у розпізнаванні служби доставки за форматом номера</p>
               </div>
-              <div className="bg-white/50 rounded-lg p-4">
+              <div className="bg-white/50 rounded-lg p-4 text-center">
                 <h4 className="font-semibold mb-2">📞 Контакти служб</h4>
-                <p className="text-[#333037]/70">Актуальні телефони підтримки перевізників</p>
+                <p className="text-[#333037]/70">Актуальні телефони та email підтримки перевізників</p>
+              </div>
+            </div>
+
+            {/* Важлива інформація */}
+            <div className="mt-6 pt-6 border-t border-[#333037]/20">
+              <div className="bg-white/60 rounded-lg p-4">
+                <p className="text-[#333037]/70 text-sm leading-relaxed text-center">
+                  <span className="font-medium">⚠️ Важливо:</span> У коментарях відповідають звичайні користувачі, а не працівники поштових служб чи сайту. 
+                  Для офіційної підтримки звертайтеся напряму до служби доставки. 
+                  <span className="block mt-2">
+                    Наші контакти: <a href="mailto:help@pandatrack.com.ua" className="text-blue-600 hover:underline">help@pandatrack.com.ua</a>
+                  </span>
+                </p>
               </div>
             </div>
           </div>
         </section>
       </main>
 
-      {/* Comments Section - СПРОЩЕНО БЕЗ СТАТИСТИКИ */}
+      {/* Comments Section - БЕЗ СТАТИСТИКИ ДЛЯ ЧИСТОТИ */}
       <section className="bg-white py-12">
         <div className="container mx-auto px-4">
           <div className="max-w-4xl mx-auto">
-            {/* PandaTrack Comments БЕЗ зайвого контенту */}
             <PandaTrackComments
               pageId="homepage"
-              title="Пошук посилок"
+              title="Питання та досвід з відстеження посилок"
               showStats={false}
-              showInfo={true}
+              showInfo={false}
             />
           </div>
         </div>
