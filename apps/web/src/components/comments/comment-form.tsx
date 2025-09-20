@@ -216,7 +216,7 @@ export function CommentForm({
 
     // ВИПРАВЛЕНО: Обов'язкове поле імені
     if (!authorName.trim()) {
-      alert('Будь ласка, введіть ваше ім\'я');
+      alert('Будь ласка, введіть ваше ім&apos;я');
       return;
     }
 
@@ -403,7 +403,7 @@ export function CommentForm({
             </span>
           )}
           <span className="block mt-1 text-red-500">
-            * Поле "Ім'я" є обов'язковим для заповнення
+            * Поле &quot;Ім&apos;я&quot; є обов&apos;язковим для заповнення
           </span>
         </div>
       )}

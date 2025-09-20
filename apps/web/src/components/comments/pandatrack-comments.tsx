@@ -466,7 +466,7 @@ export function PandaTrackComments({
     }
     
     loadComments(true);
-  }, [globalPageId, loadComments]);
+  }, [globalPageId, loadComments, pageId]);
 
   // ВИПРАВЛЕНО: Auto-refresh тільки для перевірки нових коментарів
   useEffect(() => {
