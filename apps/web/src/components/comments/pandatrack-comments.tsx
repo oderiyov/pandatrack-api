@@ -1,5 +1,5 @@
-// src/components/comments/pandatrack-comments.tsx v8.0
-// ФІНАЛЬНА ВЕРСІЯ: правильна пагінація (20 коментарів), рахунок replies
+// src/components/comments/pandatrack-comments.tsx v9.0
+// ФІНАЛЬНА ВЕРСІЯ: правильна пагінація (load more після 20 top-level коментарів)
 
 'use client';
 
@@ -89,23 +89,6 @@ const removePendingComment = (pageId: string, commentId: string) => {
   }
 };
 
-// НОВА ФУНКЦІЯ: Підрахунок всіх коментарів включаючи replies
-const countAllComments = (comments: Comment[]): number => {
-  let count = 0;
-  
-  const countRecursive = (commentsArray: Comment[]) => {
-    commentsArray.forEach(comment => {
-      count++;
-      if (comment.replies && comment.replies.length > 0) {
-        countRecursive(comment.replies);
-      }
-    });
-  };
-  
-  countRecursive(comments);
-  return count;
-};
-
 export function PandaTrackComments({ 
   pageId, 
   className = '',
@@ -133,7 +116,7 @@ export function PandaTrackComments({
   const [lastKnownCommentTime, setLastKnownCommentTime] = useState<string | null>(null);
   
   const commentsRef = useRef<HTMLDivElement>(null);
-  const commentsPerPage = 20; // ВИПРАВЛЕНО: завжди 20 коментарів на сторінку
+  const commentsPerPage = 20; // 20 top-level коментарів на сторінку
   
   const globalPageId = pageId;
 
@@ -233,10 +216,10 @@ export function PandaTrackComments({
         setComments(prev => [...prev, ...(data.comments || [])]);
       }
       
-      // ВИПРАВЛЕНО: Підрахунок всіх коментарів включаючи replies
+      // ВИПРАВЛЕНО: Використовуємо data.total з API (це буде total top-level коментарів)
       setTotalComments(data.total || 0);
       
-      // ВИПРАВЛЕНО: hasMore логіка на основі top-level коментарів
+      // ВИПРАВЛЕНО: hasMore на основі завантажених top-level коментарів
       const loadedTopLevelCount = (data.comments || []).length;
       setHasMore(loadedTopLevelCount === commentsPerPage);
       
@@ -593,8 +576,8 @@ export function PandaTrackComments({
             submittingReply={submitting}
           />
 
-          {/* ВИПРАВЛЕНО: Load More кнопка з'являється коли є 20+ коментарів */}
-          {hasMore && !loadingMore && totalComments >= 20 && (
+          {/* ВИПРАВЛЕНО: Load More кнопка з'являється коли є 20+ TOP-LEVEL коментарів */}
+          {hasMore && !loadingMore && comments.length >= 20 && (
             <div className="text-center mt-8">
               <button
                 onClick={handleLoadMore}
