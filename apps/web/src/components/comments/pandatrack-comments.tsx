@@ -614,7 +614,7 @@ export function PandaTrackComments({
           />
 
           {/* ВИПРАВЛЕНО: Load More кнопка ЗАВЖДИ показується якщо є ще коментарі для завантаження */}
-          {hasMore && comments.length > 0 && (
+          {hasMore && comments.length >= 20 && (
             <div className="text-center mt-8">
               <button
                 onClick={handleLoadMore}
