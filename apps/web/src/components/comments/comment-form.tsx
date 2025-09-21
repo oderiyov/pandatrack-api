@@ -266,7 +266,7 @@ export function CommentForm({
                 required
               />
               {authorName.trim().length > 0 && authorName.trim().length < 2 && (
-                <p className="text-red-500 text-xs mt-1">Ім'я має містити принаймні 2 символи</p>
+                <p className="text-red-500 text-xs mt-1">Ім\'я має містити принаймні 2 символи</p>
               )}
             </div>
             

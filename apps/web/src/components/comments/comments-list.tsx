@@ -127,7 +127,7 @@ function CommentItem({
   maxRepliesDepth,
   submittingReply,
   allComments,
-  isLastInLevel = false
+  isLastInLevel = false // eslint-disable-line @typescript-eslint/no-unused-vars
 }: CommentItemProps) {
   const [showReplyForm, setShowReplyForm] = useState(false);
   const [showFlagForm, setShowFlagForm] = useState(false);
