@@ -234,9 +234,7 @@ export function PandaTrackComments({
       }
       
       // ВИПРАВЛЕНО: Підрахунок всіх коментарів включаючи replies
-      const loadedComments = reset ? (data.comments || []) : [...comments, ...(data.comments || [])];
-      const totalDisplayedComments = countAllComments(loadedComments);
-      setTotalComments(totalDisplayedComments);
+      setTotalComments(data.total || 0);
       
       // ВИПРАВЛЕНО: hasMore логіка на основі top-level коментарів
       const loadedTopLevelCount = (data.comments || []).length;
@@ -256,7 +254,7 @@ export function PandaTrackComments({
       setLoadingMore(false);
       loadingRef.current = false;
     }
-  }, [globalPageId, offset, lastKnownCommentTime, comments]);
+  }, [globalPageId, offset, lastKnownCommentTime]);
 
   // Load more коментарів
   const handleLoadMore = useCallback(() => {
