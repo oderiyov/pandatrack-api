@@ -1,5 +1,5 @@
-// src/components/comments/pandatrack-comments.tsx v7.0
-// ВИПРАВЛЕНО: правильна load more кнопка + homepage pageId
+// src/components/comments/pandatrack-comments.tsx v8.0
+// ФІНАЛЬНА ВЕРСІЯ: правильна пагінація (20 коментарів), рахунок replies
 
 'use client';
 
@@ -10,7 +10,6 @@ import { CommentsStats } from './comments-stats';
 import { CommentsInfo } from './comments-info';
 import { CommentNotification } from './comment-notification';
 
-// Types (залишаємо без змін)
 interface Comment {
   id: string;
   pageId: string;
@@ -90,6 +89,23 @@ const removePendingComment = (pageId: string, commentId: string) => {
   }
 };
 
+// НОВА ФУНКЦІЯ: Підрахунок всіх коментарів включаючи replies
+const countAllComments = (comments: Comment[]): number => {
+  let count = 0;
+  
+  const countRecursive = (commentsArray: Comment[]) => {
+    commentsArray.forEach(comment => {
+      count++;
+      if (comment.replies && comment.replies.length > 0) {
+        countRecursive(comment.replies);
+      }
+    });
+  };
+  
+  countRecursive(comments);
+  return count;
+};
+
 export function PandaTrackComments({ 
   pageId, 
   className = '',
@@ -117,9 +133,8 @@ export function PandaTrackComments({
   const [lastKnownCommentTime, setLastKnownCommentTime] = useState<string | null>(null);
   
   const commentsRef = useRef<HTMLDivElement>(null);
-  const commentsPerPage = 20;
+  const commentsPerPage = 20; // ВИПРАВЛЕНО: завжди 20 коментарів на сторінку
   
-  // ВИПРАВЛЕНО: Простіша логіка - homepage + tracking pages використовують homepage
   const globalPageId = pageId;
 
   console.log('PandaTrackComments rendered with pageId:', pageId, '→ globalPageId:', globalPageId);
@@ -146,17 +161,14 @@ export function PandaTrackComments({
           const newestComment = data.comments[0];
           const newestCommentTime = newestComment.createdAt;
           
-          // Перевіряємо чи є новий коментар
           if (lastKnownCommentTime && new Date(newestCommentTime) > new Date(lastKnownCommentTime)) {
             const currentUserName = localStorage.getItem('pandatrack_author_name');
             
-            // Показуємо нотифікацію тільки якщо коментар не від поточного користувача
             if (!currentUserName || currentUserName !== newestComment.authorName) {
               console.log('New comment detected for notification:', newestComment);
               setNewCommentNotification(newestComment);
             }
             
-            // Оновлюємо lastKnownCommentTime
             setLastKnownCommentTime(newestCommentTime);
             localStorage.setItem(LAST_COMMENT_TIME_KEY, newestCommentTime);
           }
@@ -207,7 +219,6 @@ export function PandaTrackComments({
 
       const data: CommentsData = await response.json();
       
-      // Встановлюємо lastKnownCommentTime при першому завантаженні
       if (reset && data.comments && data.comments.length > 0) {
         const newestTime = data.comments[0].createdAt;
         if (!lastKnownCommentTime) {
@@ -222,17 +233,19 @@ export function PandaTrackComments({
         setComments(prev => [...prev, ...(data.comments || [])]);
       }
       
-      setTotalComments(data.total || 0);
+      // ВИПРАВЛЕНО: Підрахунок всіх коментарів включаючи replies
+      const loadedComments = reset ? (data.comments || []) : [...comments, ...(data.comments || [])];
+      const totalDisplayedComments = countAllComments(loadedComments);
+      setTotalComments(totalDisplayedComments);
       
-      // ВИПРАВЛЕНО: Правильна логіка hasMore
-      const loadedCommentsCount = (data.comments || []).length;
-      setHasMore(loadedCommentsCount === commentsPerPage && (currentOffset + loadedCommentsCount) < (data.total || 0));
+      // ВИПРАВЛЕНО: hasMore логіка на основі top-level коментарів
+      const loadedTopLevelCount = (data.comments || []).length;
+      setHasMore(loadedTopLevelCount === commentsPerPage);
       
       if (!reset) {
         setOffset(prev => prev + commentsPerPage);
       }
 
-      // Завантажуємо pending коментарі з localStorage
       setPendingComments(getPendingComments(globalPageId));
 
     } catch (err) {
@@ -243,7 +256,7 @@ export function PandaTrackComments({
       setLoadingMore(false);
       loadingRef.current = false;
     }
-  }, [globalPageId, offset, lastKnownCommentTime]);
+  }, [globalPageId, offset, lastKnownCommentTime, comments]);
 
   // Load more коментарів
   const handleLoadMore = useCallback(() => {
@@ -256,12 +269,10 @@ export function PandaTrackComments({
   const handleNavigateToComment = (commentId: string) => {
     console.log('Navigating to comment:', commentId);
     
-    // Спочатку скролимо до блоку коментарів
     if (commentsRef.current) {
       commentsRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
     
-    // Потім шукаємо конкретний коментар
     setTimeout(() => {
       const commentElement = document.querySelector(`[data-comment-id="${commentId}"]`);
       if (commentElement) {
@@ -441,11 +452,10 @@ export function PandaTrackComments({
     }
   }, [pendingComments, globalPageId, loadComments]);
 
-  // Початкове завантаження + завантаження lastKnownCommentTime
+  // Початкове завантаження
   useEffect(() => {
     console.log('Initial load for pageId:', pageId, '→ globalPageId:', globalPageId);
     
-    // Завантажуємо збережений час останнього коментаря
     const savedTime = localStorage.getItem(LAST_COMMENT_TIME_KEY);
     if (savedTime) {
       setLastKnownCommentTime(savedTime);
@@ -454,22 +464,22 @@ export function PandaTrackComments({
     loadComments(true);
   }, [globalPageId, loadComments, pageId]);
 
-  // Auto-refresh тільки для перевірки нових коментарів
+  // Auto-refresh
   useEffect(() => {
     if (!autoRefresh) return;
 
     const interval = setInterval(() => {
       if (!loadingRef.current) {
         console.log('Auto-refresh: checking for new comments');
-        checkForNewComments(); // Тільки перевіряємо нові, не перезавантажуємо список
+        checkForNewComments();
         checkPendingCommentsStatus();
       }
-    }, 30000); // кожні 30 секунд
+    }, 30000);
 
     return () => clearInterval(interval);
   }, [autoRefresh, checkForNewComments, checkPendingCommentsStatus]);
 
-  // Cleanup pending коментарів які вже схвалені
+  // Cleanup pending коментарів
   useEffect(() => {
     const approvedIds = comments.map(c => c.id);
     const filteredPending = pendingComments.filter(pc => !approvedIds.includes(pc.id));
@@ -482,7 +492,7 @@ export function PandaTrackComments({
     }
   }, [comments, pendingComments, globalPageId]);
 
-  // Періодична перевірка pending коментарів (кожні 2 хвилини)
+  // Періодична перевірка pending коментарів
   useEffect(() => {
     const interval = setInterval(checkPendingCommentsStatus, 2 * 60 * 1000);
     return () => clearInterval(interval);
@@ -498,7 +508,7 @@ export function PandaTrackComments({
         onDismiss={() => setNewCommentNotification(null)}
       />
 
-      {/* Заголовок - показуємо тільки якщо title не порожній */}
+      {/* Заголовок */}
       {title && <h2 className="text-2xl font-bold mb-4">{title}</h2>}
 
       {/* Статистика */}
@@ -523,7 +533,7 @@ export function PandaTrackComments({
         className="mb-8"
       />
 
-      {/* Pending коментарі (тільки для автора) */}
+      {/* Pending коментарі */}
       {pendingComments.length > 0 && (
         <div className="mb-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
           <h3 className="text-lg font-medium text-yellow-800 mb-3">
@@ -585,8 +595,8 @@ export function PandaTrackComments({
             submittingReply={submitting}
           />
 
-          {/* ВИПРАВЛЕНО: Load More кнопка завжди показується якщо є більше коментарів */}
-          {hasMore && !loadingMore && comments.length > 0 && (
+          {/* ВИПРАВЛЕНО: Load More кнопка з'являється коли є 20+ коментарів */}
+          {hasMore && !loadingMore && totalComments >= 20 && (
             <div className="text-center mt-8">
               <button
                 onClick={handleLoadMore}
