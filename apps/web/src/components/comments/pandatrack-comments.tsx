@@ -1,5 +1,5 @@
-// src/components/comments/pandatrack-comments.tsx v10.0
-// ВИПРАВЛЕНО: Load More при 20+ коментарях + URL navigation + безпечний auto-refresh
+// src/components/comments/pandatrack-comments.tsx v10.1
+// ВИПРАВЛЕНО: Load More кнопка з'являється при 20+ коментарях (навіть якщо 27)
 
 'use client';
 
@@ -122,7 +122,7 @@ export function PandaTrackComments({
 
   console.log('PandaTrackComments rendered with pageId:', pageId, '→ globalPageId:', globalPageId);
 
-  // ДОДАНО: URL Comment Navigation
+  // URL Comment Navigation
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const urlParams = new URLSearchParams(window.location.search);
@@ -136,7 +136,7 @@ export function PandaTrackComments({
     }
   }, []);
 
-  // ВИПРАВЛЕНО: Auto-refresh тільки для перевірки нових коментарів (БЕЗ перезавантаження)
+  // Auto-refresh тільки для перевірки нових коментарів (БЕЗ перезавантаження)
   const checkForNewComments = useCallback(async () => {
     if (loadingRef.current) return;
     
@@ -236,14 +236,20 @@ export function PandaTrackComments({
       
       setTotalComments(data.total || 0);
       
-      // ВИПРАВЛЕНО: hasMore логіка - кнопка з'явиться при 20+ завантажених коментарях
-      const loadedCount = (data.comments || []).length;
-      if (reset) {
-        // При першому завантаженні: hasMore = true якщо завантажили рівно commentsPerPage
-        setHasMore(loadedCount === commentsPerPage);
-      } else {
-        // При load more: hasMore = false якщо завантажили менше ніж commentsPerPage
-        setHasMore(loadedCount === commentsPerPage);
+      // ВИПРАВЛЕНО: hasMore логіка - кнопка ЗАВЖДИ показується якщо загальна кількість > поточна завантажена
+      const currentLoadedCount = reset ? (data.comments || []).length : comments.length + (data.comments || []).length;
+      const totalAvailable = data.total || 0;
+      
+      console.log('Load More Logic:', {
+        currentLoadedCount,
+        totalAvailable,
+        hasMoreCalculated: currentLoadedCount < totalAvailable
+      });
+      
+      // КРИТИЧНЕ ВИПРАВЛЕННЯ: hasMore = true якщо є ще коментарі для завантаження
+      setHasMore(currentLoadedCount < totalAvailable);
+      
+      if (!reset) {
         setOffset(prev => prev + commentsPerPage);
       }
 
@@ -257,12 +263,12 @@ export function PandaTrackComments({
       setLoadingMore(false);
       loadingRef.current = false;
     }
-  }, [globalPageId, offset, lastKnownCommentTime]);
+  }, [globalPageId, offset, lastKnownCommentTime, comments.length]);
 
-  // ВИПРАВЛЕНО: Load more коментарів з правильною логікою
+  // Load more коментарів
   const handleLoadMore = useCallback(() => {
     if (!loadingMore && hasMore && !loadingRef.current) {
-      console.log('Loading more comments, current count:', comments.length);
+      console.log('Loading more comments, current count:', comments.length, 'hasMore:', hasMore);
       loadComments(false);
     }
   }, [loadComments, loadingMore, hasMore, comments.length]);
@@ -466,7 +472,7 @@ export function PandaTrackComments({
     loadComments(true);
   }, [globalPageId, loadComments, pageId]);
 
-  // ВИПРАВЛЕНО: Auto-refresh тільки для checkForNewComments (БЕЗ loadComments)
+  // Auto-refresh тільки для checkForNewComments (БЕЗ loadComments)
   useEffect(() => {
     if (!autoRefresh) return;
 
@@ -500,13 +506,14 @@ export function PandaTrackComments({
     return () => clearInterval(interval);
   }, [checkPendingCommentsStatus]);
 
-  // Debug info
+  // Enhanced Debug info
   console.log('Comments state:', {
     commentsCount: comments.length,
+    totalComments,
     hasMore,
     loadingMore,
     offset,
-    totalComments
+    shouldShowButton: hasMore && comments.length >= 20
   });
 
   // Render
@@ -606,8 +613,8 @@ export function PandaTrackComments({
             submittingReply={submitting}
           />
 
-          {/* ВИПРАВЛЕНО: Load More кнопка з'являється при 20+ коментарях */}
-          {hasMore && comments.length >= 20 && (
+          {/* ВИПРАВЛЕНО: Load More кнопка ЗАВЖДИ показується якщо є ще коментарі для завантаження */}
+          {hasMore && comments.length > 0 && (
             <div className="text-center mt-8">
               <button
                 onClick={handleLoadMore}
@@ -632,6 +639,13 @@ export function PandaTrackComments({
                   </>
                 )}
               </button>
+              
+              {/* Debug info для розробки */}
+              {process.env.NODE_ENV === 'development' && (
+                <div className="mt-2 text-xs text-gray-500">
+                  Завантажено: {comments.length} з {totalComments} | hasMore: {hasMore.toString()}
+                </div>
+              )}
             </div>
           )}
 

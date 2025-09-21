@@ -1,6 +1,4 @@
-// src/components/comments/comment-notification.tsx v4.0
-// ВИПРАВЛЕНО: Спрощений текст "Новий коментар" + backdrop + URL navigation
-
+// src/components/comments/comment-notification.tsx v4.1
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -64,7 +62,7 @@ export function CommentNotification({
 
   return (
     <>
-      {/* ДОДАНО: Backdrop overlay */}
+      {/* Backdrop overlay */}
       <div 
         className="fixed inset-0 bg-black/20 z-40 transition-opacity duration-300"
         onClick={handleDismiss}
@@ -72,9 +70,9 @@ export function CommentNotification({
 
       {/* Notification popup */}
       <div className="fixed bottom-6 left-6 z-50">
-        {/* ФІКСОВАНИЙ РОЗМІР: 166x61px */}
+        {/* ВИПРАВЛЕНО: 167px width замість 166px */}
         <div 
-          className="w-[166px] h-[61px] bg-gray-100 rounded-lg shadow-lg border border-gray-300 overflow-hidden cursor-pointer hover:shadow-xl transition-shadow flex"
+          className="w-[167px] h-[61px] bg-gray-100 rounded-lg shadow-lg border border-gray-300 overflow-hidden cursor-pointer hover:shadow-xl transition-shadow flex"
           onClick={handleClick}
         >
           {/* Ліва частина - іконка */}
@@ -84,16 +82,13 @@ export function CommentNotification({
             </svg>
           </div>
 
-          {/* Права частина - СПРОЩЕНИЙ контент БЕЗ тексту коментаря */}
+          {/* Права частина - СПРОЩЕНИЙ контент */}
           <div className="flex-1 p-2 flex flex-col justify-center">
             <div className="flex items-center justify-between">
               <div>
-                {/* ВИПРАВЛЕНО: Тільки "Новий коментар" без деталей */}
+                {/* ВИПРАВЛЕНО: Тільки заголовок, БЕЗ "Натисніть для перегляду" */}
                 <div className="text-xs font-medium text-gray-800 leading-tight">
                   {newCommentsCount === 1 ? 'Новий коментар' : 'Нові коментарі'}
-                </div>
-                <div className="text-xs text-gray-600 leading-tight">
-                  Натисніть для перегляду
                 </div>
               </div>
               

@@ -1,6 +1,4 @@
-// src/components/comments/comments-list.tsx v10.0
-// ВИПРАВЛЕНО: Лінії зліва біля аватарів + show more для replies + розширена логіка
-
+// src/components/comments/comments-list.tsx v11.0
 'use client';
 
 import { useState } from 'react';
@@ -97,7 +95,7 @@ export function CommentsList({
           onReply={onReply}
           maxRepliesDepth={maxRepliesDepth}
           submittingReply={submittingReply}
-          allComments={comments} // ВИПРАВЛЕНО: передаємо comments як allComments на верхньому рівні
+          allComments={comments} // передаємо comments як allComments на верхньому рівні
           isLastInLevel={index === comments.length - 1}
         />
       ))}
@@ -140,9 +138,19 @@ function CommentItem({
   // ВИПРАВЛЕНО: Show more для replies з правильною логікою
   const [showAllReplies, setShowAllReplies] = useState(false);
   const REPLIES_LIMIT = 2;
-  const hasMoreReplies = comment.replies.length > REPLIES_LIMIT;
+  
+  // КРИТИЧНЕ ВИПРАВЛЕННЯ: правильна умова для показу кнопки
+  const hasMoreReplies = comment.replies && comment.replies.length > REPLIES_LIMIT;
   const visibleReplies = showAllReplies ? comment.replies : comment.replies.slice(0, REPLIES_LIMIT);
-  const hiddenRepliesCount = Math.max(0, comment.replies.length - REPLIES_LIMIT);
+  const hiddenRepliesCount = hasMoreReplies ? comment.replies.length - REPLIES_LIMIT : 0;
+
+  console.log('CommentItem debug:', {
+    commentId: comment.id,
+    totalReplies: comment.replies?.length || 0,
+    hasMoreReplies,
+    showAllReplies,
+    hiddenRepliesCount
+  });
 
   const handleVote = async (voteType: number) => {
     const voteDirection = voteType === 1 ? 'up' : 'down';
@@ -214,7 +222,7 @@ function CommentItem({
         
         {/* Заголовок коментаря */}
         <div className="flex items-start space-x-3 mb-3">
-          {/* Сірий аватар для всіх */}
+          {/* Аватар */}
           <div className="w-10 h-10 bg-gray-400 rounded-full flex items-center justify-center flex-shrink-0">
             <span className="text-white font-medium text-sm">
               {comment.authorName.charAt(0).toUpperCase()}
@@ -228,7 +236,7 @@ function CommentItem({
                 {comment.authorName}
               </span>
               
-              {/* Reply addressee без синього кольору */}
+              {/* Reply addressee */}
               {comment.replyDepth > 0 && parentAuthorName && (
                 <span className="text-sm text-gray-600">
                   відповідь для <span className="font-medium text-gray-900">{parentAuthorName}</span>
@@ -241,7 +249,7 @@ function CommentItem({
                 </span>
               )}
 
-              {/* ДОДАНО: Development debug info */}
+              {/* Development debug info */}
               {process.env.NODE_ENV === 'development' && comment.commentType && (
                 <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">
                   {comment.commentType}
@@ -396,22 +404,20 @@ function CommentItem({
         )}
       </div>
 
-      {/* ВИПРАВЛЕНО: Replies з правильними лініями ЗЛІВА біля аватарів */}
+      {/* ВИПРАВЛЕНО: Replies з правильними connecting lines */}
       {comment.replies && comment.replies.length > 0 && (
-        <div className="mt-4">
-          {/* ВИПРАВЛЕНО: Лінія починається зліва (margin-left: 20px - половина аватара) */}
-          <div className="ml-5">
-            <div className="w-px h-4 bg-gray-300"></div>
-          </div>
+        <div className="relative mt-4">
+          {/* ВИПРАВЛЕНО: Лінія знизу батьківського коментаря (по центру аватара) */}
+          <div className="absolute top-0 left-5 w-px h-4 bg-gray-300"></div>
           
-          {/* Replies container з правильним відступом */}
-          <div className="ml-5 space-y-4 relative">
-            {/* Вертикальна лінія вздовж всіх replies */}
+          {/* Replies container */}
+          <div className="ml-5 pl-4 space-y-4 relative">
+            {/* Вертикальна лінія для всіх replies */}
             <div className="absolute left-0 top-0 bottom-0 w-px bg-gray-300"></div>
             
             {visibleReplies.map((reply, index) => (
               <div key={reply.id} className="relative">
-                {/* Горизонтальна лінія до кожного reply */}
+                {/* Горизонтальна лінія до кожного reply (по центру аватара) */}
                 <div className="absolute left-0 top-5 w-4 h-px bg-gray-300"></div>
                 
                 {/* Reply content з відступом */}
@@ -423,23 +429,27 @@ function CommentItem({
                     onReply={onReply}
                     maxRepliesDepth={maxRepliesDepth}
                     submittingReply={submittingReply}
-                    allComments={allComments} // ВИПРАВЛЕНО: передаємо allComments в рекурсії
-                    isLastInLevel={index === visibleReplies.length - 1}
+                    allComments={allComments} // передаємо allComments в рекурсії
+                    isLastInLevel={index === visibleReplies.length - 1 && !hasMoreReplies}
                   />
                 </div>
               </div>
             ))}
           </div>
 
-          {/* ВИПРАВЛЕНО: Show more кнопка для replies з правильною умовою */}
+          {/* ВИПРАВЛЕНО: Show more кнопка для replies */}
           {hasMoreReplies && !showAllReplies && (
-            <div className="mt-4 ml-5">
+            <div className="ml-5 mt-4 relative">
               {/* Лінія до кнопки */}
-              <div className="w-px h-4 bg-gray-300"></div>
+              <div className="absolute left-0 top-0 w-px h-4 bg-gray-300"></div>
+              <div className="absolute left-0 top-4 w-4 h-px bg-gray-300"></div>
               
-              <div className="ml-4">
+              <div className="ml-4 pt-4">
                 <button
-                  onClick={() => setShowAllReplies(true)}
+                  onClick={() => {
+                    console.log('Show more replies clicked for comment:', comment.id);
+                    setShowAllReplies(true);
+                  }}
                   className="flex items-center gap-2 px-3 py-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
