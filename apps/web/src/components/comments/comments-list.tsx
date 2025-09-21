@@ -1,5 +1,5 @@
-// src/components/comments/comments-list.tsx v9.0
-// ФІНАЛЬНА ВЕРСІЯ: вертикальні лінії зверху-вниз, show more для replies, ієрархічна структура
+// src/components/comments/comments-list.tsx v10.0
+// ВИПРАВЛЕНО: Лінії зліва біля аватарів + show more для replies + розширена логіка
 
 'use client';
 
@@ -97,7 +97,7 @@ export function CommentsList({
           onReply={onReply}
           maxRepliesDepth={maxRepliesDepth}
           submittingReply={submittingReply}
-          allComments={comments}
+          allComments={comments} // ВИПРАВЛЕНО: передаємо comments як allComments на верхньому рівні
           isLastInLevel={index === comments.length - 1}
         />
       ))}
@@ -137,11 +137,12 @@ function CommentItem({
   const [voting, setVoting] = useState<'up' | 'down' | null>(null);
   const [userVote, setUserVote] = useState<'up' | 'down' | null>(null);
   
-  // ВИПРАВЛЕНО: Show more для replies - ліміт 2
+  // ВИПРАВЛЕНО: Show more для replies з правильною логікою
   const [showAllReplies, setShowAllReplies] = useState(false);
   const REPLIES_LIMIT = 2;
   const hasMoreReplies = comment.replies.length > REPLIES_LIMIT;
   const visibleReplies = showAllReplies ? comment.replies : comment.replies.slice(0, REPLIES_LIMIT);
+  const hiddenRepliesCount = Math.max(0, comment.replies.length - REPLIES_LIMIT);
 
   const handleVote = async (voteType: number) => {
     const voteDirection = voteType === 1 ? 'up' : 'down';
@@ -208,7 +209,7 @@ function CommentItem({
   return (
     <div className="comment-item" data-comment-id={comment.id}>
       
-      {/* ГОЛОВНИЙ КОМЕНТАР - однаковий розмір для всіх */}
+      {/* ГОЛОВНИЙ КОМЕНТАР */}
       <div className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-sm transition-shadow">
         
         {/* Заголовок коментаря */}
@@ -239,6 +240,14 @@ function CommentItem({
                   анонім
                 </span>
               )}
+
+              {/* ДОДАНО: Development debug info */}
+              {process.env.NODE_ENV === 'development' && comment.commentType && (
+                <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">
+                  {comment.commentType}
+                </span>
+              )}
+
               <span className="text-sm text-gray-500">
                 {formatTimeAgo(comment.createdAt)}
               </span>
@@ -251,7 +260,7 @@ function CommentItem({
               </p>
             </div>
 
-            {/* ВИПРАВЛЕНО: Дії поряд, БЕЗ лічильника відповідей */}
+            {/* Дії поряд */}
             <div className="flex items-center gap-3 text-sm">
               
               {/* 1. Голосування з правильними іконками */}
@@ -387,56 +396,56 @@ function CommentItem({
         )}
       </div>
 
-      {/* ВИПРАВЛЕНО: Replies з ВЕРТИКАЛЬНИМИ лініями зверху-вниз */}
+      {/* ВИПРАВЛЕНО: Replies з правильними лініями ЗЛІВА біля аватарів */}
       {comment.replies && comment.replies.length > 0 && (
         <div className="mt-4">
-          {/* Вертикальна лінія зверху */}
-          <div className="w-full flex justify-center">
+          {/* ВИПРАВЛЕНО: Лінія починається зліва (margin-left: 20px - половина аватара) */}
+          <div className="ml-5">
             <div className="w-px h-4 bg-gray-300"></div>
           </div>
           
-          {/* Replies container */}
-          <div className="space-y-4">
+          {/* Replies container з правильним відступом */}
+          <div className="ml-5 space-y-4 relative">
+            {/* Вертикальна лінія вздовж всіх replies */}
+            <div className="absolute left-0 top-0 bottom-0 w-px bg-gray-300"></div>
+            
             {visibleReplies.map((reply, index) => (
-              <div key={reply.id}>
-                {/* Вертикальна лінія між replies */}
-                {index > 0 && (
-                  <div className="w-full flex justify-center">
-                    <div className="w-px h-4 bg-gray-300"></div>
-                  </div>
-                )}
+              <div key={reply.id} className="relative">
+                {/* Горизонтальна лінія до кожного reply */}
+                <div className="absolute left-0 top-5 w-4 h-px bg-gray-300"></div>
                 
-                <CommentItem
-                  comment={reply}
-                  onVote={onVote}
-                  onFlag={onFlag}
-                  onReply={onReply}
-                  maxRepliesDepth={maxRepliesDepth}
-                  submittingReply={submittingReply}
-                  allComments={allComments}
-                  isLastInLevel={index === visibleReplies.length - 1}
-                />
+                {/* Reply content з відступом */}
+                <div className="ml-4">
+                  <CommentItem
+                    comment={reply}
+                    onVote={onVote}
+                    onFlag={onFlag}
+                    onReply={onReply}
+                    maxRepliesDepth={maxRepliesDepth}
+                    submittingReply={submittingReply}
+                    allComments={allComments} // ВИПРАВЛЕНО: передаємо allComments в рекурсії
+                    isLastInLevel={index === visibleReplies.length - 1}
+                  />
+                </div>
               </div>
             ))}
           </div>
 
-          {/* ВИПРАВЛЕНО: Show more кнопка для replies */}
+          {/* ВИПРАВЛЕНО: Show more кнопка для replies з правильною умовою */}
           {hasMoreReplies && !showAllReplies && (
-            <div className="mt-4">
-              {/* Вертикальна лінія до кнопки */}
-              <div className="w-full flex justify-center">
-                <div className="w-px h-4 bg-gray-300"></div>
-              </div>
+            <div className="mt-4 ml-5">
+              {/* Лінія до кнопки */}
+              <div className="w-px h-4 bg-gray-300"></div>
               
-              <div className="text-center">
+              <div className="ml-4">
                 <button
                   onClick={() => setShowAllReplies(true)}
-                  className="flex items-center gap-2 mx-auto px-4 py-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
-                  <span>показати більше коментарів ({comment.replies.length - REPLIES_LIMIT})</span>
+                  <span>показати більше коментарів ({hiddenRepliesCount})</span>
                 </button>
               </div>
             </div>
