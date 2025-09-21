@@ -62,12 +62,6 @@ export function CommentNotification({
 
   return (
     <>
-      {/* Backdrop overlay */}
-      <div 
-        className="fixed inset-0 bg-black/20 z-40 transition-opacity duration-300"
-        onClick={handleDismiss}
-      />
-
       {/* Notification popup */}
       <div className="fixed bottom-6 left-6 z-50">
         {/* ВИПРАВЛЕНО: 167px width замість 166px */}
