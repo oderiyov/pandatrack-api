@@ -175,12 +175,12 @@ export function CommentForm({
 
     // Обов'язкове поле імені
     if (!authorName.trim()) {
-      alert('Будь ласка, введіть ваше ім\'я');
+      alert('Будь ласка, введіть ваше ім&apos;я');
       return;
     }
 
     if (authorName.trim().length < 2) {
-      alert('Ім\'я має містити принаймні 2 символи');
+      alert('Ім&apos;я має містити принаймні 2 символи');
       return;
     }
 
@@ -257,7 +257,7 @@ export function CommentForm({
             <div className="flex-1">
               <input
                 type="text"
-                placeholder="Ваше ім'я *"
+                placeholder="Ваше ім&apos;я *"
                 value={authorName}
                 onChange={handleAuthorNameChange}
                 className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
@@ -266,7 +266,7 @@ export function CommentForm({
                 required
               />
               {authorName.trim().length > 0 && authorName.trim().length < 2 && (
-                <p className="text-red-500 text-xs mt-1">Ім\'я має містити принаймні 2 символи</p>
+                <p className="text-red-500 text-xs mt-1">Ім&apos;я має містити принаймні 2 символи</p>
               )}
             </div>
             
