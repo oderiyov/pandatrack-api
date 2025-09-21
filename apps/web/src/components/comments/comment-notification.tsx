@@ -64,9 +64,9 @@ export function CommentNotification({
     <>
       {/* Notification popup */}
       <div className="fixed bottom-6 left-6 z-50">
-        {/* ВИПРАВЛЕНО: 167px width замість 166px */}
+        {/* ВИПРАВЛЕНО: 168px width замість 166px */}
         <div 
-          className="w-[167px] h-[61px] bg-gray-100 rounded-lg shadow-lg border border-gray-300 overflow-hidden cursor-pointer hover:shadow-xl transition-shadow flex"
+          className="w-[168px] h-[61px] bg-gray-100 rounded-lg shadow-lg border border-gray-300 overflow-hidden cursor-pointer hover:shadow-xl transition-shadow flex"
           onClick={handleClick}
         >
           {/* Ліва частина - іконка */}

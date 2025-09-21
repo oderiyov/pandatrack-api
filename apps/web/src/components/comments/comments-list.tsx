@@ -1,4 +1,6 @@
-// src/components/comments/comments-list.tsx v12.0
+// src/components/comments/comments-list.tsx v13.0
+// УЛЬТРА ВИПРАВЛЕНО: однакові розміри + правильні лінії + reply depth fix
+
 'use client';
 
 import { useState } from 'react';
@@ -77,7 +79,7 @@ export function CommentsList({
   onVote,
   onFlag,
   onReply,
-  maxRepliesDepth = 3,
+  maxRepliesDepth = 5, // ЗБІЛЬШЕНО з 3 до 5 рівнів
   submittingReply = false
 }: CommentsListProps) {
   if (comments.length === 0) {
@@ -97,6 +99,7 @@ export function CommentsList({
           submittingReply={submittingReply}
           allComments={comments}
           isLastInLevel={index === comments.length - 1}
+          depth={0} // ДОДАНО: відстеження глибини
         />
       ))}
     </div>
@@ -117,6 +120,7 @@ interface CommentItemProps {
   submittingReply: boolean;
   allComments: Comment[];
   isLastInLevel?: boolean;
+  depth: number; // ДОДАНО: поточна глибина
 }
 
 function CommentItem({
@@ -127,7 +131,8 @@ function CommentItem({
   maxRepliesDepth,
   submittingReply,
   allComments,
-  isLastInLevel = false // eslint-disable-line @typescript-eslint/no-unused-vars
+  isLastInLevel = false, // eslint-disable-line @typescript-eslint/no-unused-vars
+  depth
 }: CommentItemProps) {
   const [showReplyForm, setShowReplyForm] = useState(false);
   const [showFlagForm, setShowFlagForm] = useState(false);
@@ -135,22 +140,22 @@ function CommentItem({
   const [voting, setVoting] = useState<'up' | 'down' | null>(null);
   const [userVote, setUserVote] = useState<'up' | 'down' | null>(null);
   
-  // ВИПРАВЛЕНО: Show more для replies
+  // Show more для replies
   const [showAllReplies, setShowAllReplies] = useState(false);
   const REPLIES_LIMIT = 2;
   
-  // ВИПРАВЛЕНО: безпечна перевірка існування replies
   const hasMoreReplies = (comment.replies?.length || 0) > REPLIES_LIMIT;
   const visibleReplies = showAllReplies ? (comment.replies || []) : (comment.replies || []).slice(0, REPLIES_LIMIT);
   const hiddenRepliesCount = hasMoreReplies ? (comment.replies?.length || 0) - REPLIES_LIMIT : 0;
 
   console.log('CommentItem debug:', {
     commentId: comment.id,
+    depth,
     totalReplies: comment.replies?.length || 0,
     hasMoreReplies,
     showAllReplies,
     hiddenRepliesCount,
-    visibleRepliesCount: visibleReplies.length
+    canReply: depth < maxRepliesDepth
   });
 
   const handleVote = async (voteType: number) => {
@@ -218,8 +223,8 @@ function CommentItem({
   return (
     <div className="comment-item" data-comment-id={comment.id}>
       
-      {/* ГОЛОВНИЙ КОМЕНТАР */}
-      <div className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-sm transition-shadow">
+      {/* ГОЛОВНИЙ КОМЕНТАР - ЗАВЖДИ ОДНАКОВИЙ РОЗМІР */}
+      <div className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-sm transition-shadow w-full">
         
         {/* Заголовок коментаря */}
         <div className="flex items-start space-x-3 mb-3">
@@ -253,7 +258,7 @@ function CommentItem({
               {/* Development debug info */}
               {process.env.NODE_ENV === 'development' && comment.commentType && (
                 <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">
-                  {comment.commentType}
+                  {comment.commentType} | depth: {depth}
                 </span>
               )}
 
@@ -331,8 +336,8 @@ function CommentItem({
                 </svg>
               </button>
 
-              {/* 4. Reply */}
-              {comment.replyDepth < maxRepliesDepth && (
+              {/* 4. Reply - ВИПРАВЛЕНО: перевірка depth замість replyDepth */}
+              {depth < maxRepliesDepth && (
                 <button
                   onClick={() => setShowReplyForm(!showReplyForm)}
                   className="flex items-center gap-1 px-2 py-1 rounded-md hover:bg-blue-50 hover:text-blue-600 transition-colors text-gray-600 flex-shrink-0"
@@ -405,70 +410,53 @@ function CommentItem({
         )}
       </div>
 
-      {/* ВИПРАВЛЕНО: Connecting lines - тільки одна вертикальна лінія по центру аватарів */}
+      {/* ВИПРАВЛЕНО: Replies БЕЗ зменшення розміру + правильні лінії */}
       {comment.replies && comment.replies.length > 0 && (
-        <div className="relative mt-4">
-          {/* ВИПРАВЛЕНО: Вертикальна лінія від низу батьківського коментаря по центру аватара */}
-          <div 
-            className="absolute w-px bg-gray-300" 
-            style={{
-              left: '20px', // Центр аватара (40px / 2 = 20px)
-              top: '0px',   // Від верху контейнера replies
-              height: `${visibleReplies.length * 120 + (hasMoreReplies && !showAllReplies ? 60 : 0)}px` // Динамічна висота
-            }}
-          ></div>
+        <div className="mt-6">
+          {/* ПРОСТА ВЕРТИКАЛЬНА ЛІНІЯ по центру між коментарями */}
+          <div className="flex justify-center">
+            <div className="w-px h-6 bg-gray-300"></div>
+          </div>
           
-          {/* Replies container з правильним відступом */}
-          <div className="ml-8 space-y-4">
+          {/* REPLIES НА ТОМУ Ж РІВНІ */}
+          <div className="space-y-6">
             {visibleReplies.map((reply, index) => (
-              <div key={reply.id} className="relative">
-                {/* Горизонтальна лінія від вертикальної до центру аватара reply */}
-                <div 
-                  className="absolute w-4 h-px bg-gray-300"
-                  style={{
-                    left: '-12px', // Від вертикальної лінії
-                    top: '20px'    // Центр аватара reply (40px / 2 = 20px)
-                  }}
-                ></div>
-                
-                <CommentItem
-                  comment={reply}
-                  onVote={onVote}
-                  onFlag={onFlag}
-                  onReply={onReply}
-                  maxRepliesDepth={maxRepliesDepth}
-                  submittingReply={submittingReply}
-                  allComments={allComments}
-                  isLastInLevel={index === visibleReplies.length - 1 && !hasMoreReplies}
-                />
-              </div>
+              <CommentItem
+                key={reply.id}
+                comment={reply}
+                onVote={onVote}
+                onFlag={onFlag}
+                onReply={onReply}
+                maxRepliesDepth={maxRepliesDepth}
+                submittingReply={submittingReply}
+                allComments={allComments}
+                isLastInLevel={index === visibleReplies.length - 1 && !hasMoreReplies}
+                depth={depth + 1} // ЗБІЛЬШУЄМО ГЛИБИНУ
+              />
             ))}
           </div>
 
-          {/* ВИПРАВЛЕНО: Show more кнопка з правильним позиціюванням */}
+          {/* Show more кнопка */}
           {hasMoreReplies && !showAllReplies && (
-            <div className="ml-8 mt-4 relative">
-              {/* Горизонтальна лінія до кнопки */}
-              <div 
-                className="absolute w-4 h-px bg-gray-300"
-                style={{
-                  left: '-12px',
-                  top: '16px' // Центр кнопки
-                }}
-              ></div>
+            <div className="mt-6">
+              <div className="flex justify-center">
+                <div className="w-px h-6 bg-gray-300"></div>
+              </div>
               
-              <button
-                onClick={() => {
-                  console.log('Show more replies clicked for comment:', comment.id);
-                  setShowAllReplies(true);
-                }}
-                className="flex items-center gap-2 px-3 py-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-                <span>показати більше коментарів ({hiddenRepliesCount})</span>
-              </button>
+              <div className="text-center">
+                <button
+                  onClick={() => {
+                    console.log('Show more replies clicked for comment:', comment.id);
+                    setShowAllReplies(true);
+                  }}
+                  className="flex items-center gap-2 mx-auto px-4 py-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                  <span>показати більше коментарів ({hiddenRepliesCount})</span>
+                </button>
+              </div>
             </div>
           )}
         </div>
