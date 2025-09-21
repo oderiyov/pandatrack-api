@@ -1,5 +1,5 @@
-// src/components/comments/pandatrack-comments.tsx v9.0
-// ФІНАЛЬНА ВЕРСІЯ: правильна пагінація (load more після 20 top-level коментарів)
+// src/components/comments/pandatrack-comments.tsx v10.0
+// ВИПРАВЛЕНО: Load More при 20+ коментарях + URL navigation + безпечний auto-refresh
 
 'use client';
 
@@ -122,13 +122,28 @@ export function PandaTrackComments({
 
   console.log('PandaTrackComments rendered with pageId:', pageId, '→ globalPageId:', globalPageId);
 
-  // Auto-refresh для нових коментарів
+  // ДОДАНО: URL Comment Navigation
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const commentId = urlParams.get('comment');
+      if (commentId) {
+        // Затримка для завантаження коментарів
+        setTimeout(() => {
+          handleNavigateToComment(commentId);
+        }, 2000);
+      }
+    }
+  }, []);
+
+  // ВИПРАВЛЕНО: Auto-refresh тільки для перевірки нових коментарів (БЕЗ перезавантаження)
   const checkForNewComments = useCallback(async () => {
     if (loadingRef.current) return;
     
     try {
       console.log('Checking for new comments...');
       
+      // Завантажуємо ТІЛЬКИ перший коментар для перевірки
       const response = await fetch(
         `${API_BASE}/api/comments/${globalPageId}?limit=1&offset=0`, 
         {
@@ -144,9 +159,11 @@ export function PandaTrackComments({
           const newestComment = data.comments[0];
           const newestCommentTime = newestComment.createdAt;
           
+          // Перевіряємо чи є новий коментар
           if (lastKnownCommentTime && new Date(newestCommentTime) > new Date(lastKnownCommentTime)) {
             const currentUserName = localStorage.getItem('pandatrack_author_name');
             
+            // Показуємо notification тільки якщо це не наш коментар
             if (!currentUserName || currentUserName !== newestComment.authorName) {
               console.log('New comment detected for notification:', newestComment);
               setNewCommentNotification(newestComment);
@@ -202,6 +219,7 @@ export function PandaTrackComments({
 
       const data: CommentsData = await response.json();
       
+      // Встановлюємо lastKnownCommentTime при першому завантаженні
       if (reset && data.comments && data.comments.length > 0) {
         const newestTime = data.comments[0].createdAt;
         if (!lastKnownCommentTime) {
@@ -216,14 +234,16 @@ export function PandaTrackComments({
         setComments(prev => [...prev, ...(data.comments || [])]);
       }
       
-      // ВИПРАВЛЕНО: Використовуємо data.total з API (це буде total top-level коментарів)
       setTotalComments(data.total || 0);
       
-      // ВИПРАВЛЕНО: hasMore на основі завантажених top-level коментарів
-      const loadedTopLevelCount = (data.comments || []).length;
-      setHasMore(loadedTopLevelCount === commentsPerPage);
-      
-      if (!reset) {
+      // ВИПРАВЛЕНО: hasMore логіка - кнопка з'явиться при 20+ завантажених коментарях
+      const loadedCount = (data.comments || []).length;
+      if (reset) {
+        // При першому завантаженні: hasMore = true якщо завантажили рівно commentsPerPage
+        setHasMore(loadedCount === commentsPerPage);
+      } else {
+        // При load more: hasMore = false якщо завантажили менше ніж commentsPerPage
+        setHasMore(loadedCount === commentsPerPage);
         setOffset(prev => prev + commentsPerPage);
       }
 
@@ -239,12 +259,13 @@ export function PandaTrackComments({
     }
   }, [globalPageId, offset, lastKnownCommentTime]);
 
-  // Load more коментарів
+  // ВИПРАВЛЕНО: Load more коментарів з правильною логікою
   const handleLoadMore = useCallback(() => {
     if (!loadingMore && hasMore && !loadingRef.current) {
+      console.log('Loading more comments, current count:', comments.length);
       loadComments(false);
     }
-  }, [loadComments, loadingMore, hasMore]);
+  }, [loadComments, loadingMore, hasMore, comments.length]);
 
   // Navigation to specific comment
   const handleNavigateToComment = (commentId: string) => {
@@ -445,14 +466,14 @@ export function PandaTrackComments({
     loadComments(true);
   }, [globalPageId, loadComments, pageId]);
 
-  // Auto-refresh
+  // ВИПРАВЛЕНО: Auto-refresh тільки для checkForNewComments (БЕЗ loadComments)
   useEffect(() => {
     if (!autoRefresh) return;
 
     const interval = setInterval(() => {
       if (!loadingRef.current) {
         console.log('Auto-refresh: checking for new comments');
-        checkForNewComments();
+        checkForNewComments(); // ТІЛЬКИ перевірка, БЕЗ перезавантаження
         checkPendingCommentsStatus();
       }
     }, 30000);
@@ -478,6 +499,15 @@ export function PandaTrackComments({
     const interval = setInterval(checkPendingCommentsStatus, 2 * 60 * 1000);
     return () => clearInterval(interval);
   }, [checkPendingCommentsStatus]);
+
+  // Debug info
+  console.log('Comments state:', {
+    commentsCount: comments.length,
+    hasMore,
+    loadingMore,
+    offset,
+    totalComments
+  });
 
   // Render
   return (
@@ -576,28 +606,32 @@ export function PandaTrackComments({
             submittingReply={submitting}
           />
 
-          {/* ВИПРАВЛЕНО: Load More кнопка з'являється коли є 20+ TOP-LEVEL коментарів */}
-          {hasMore && !loadingMore && comments.length >= 20 && (
+          {/* ВИПРАВЛЕНО: Load More кнопка з'являється при 20+ коментарях */}
+          {hasMore && comments.length >= 20 && (
             <div className="text-center mt-8">
               <button
                 onClick={handleLoadMore}
-                className="bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm inline-flex items-center space-x-2"
+                disabled={loadingMore}
+                className={`px-8 py-3 rounded-lg font-medium text-sm inline-flex items-center space-x-2 transition-colors ${
+                  loadingMore 
+                    ? 'bg-gray-400 cursor-not-allowed text-white' 
+                    : 'bg-blue-600 hover:bg-blue-700 text-white'
+                }`}
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-                <span>Показати більше коментарів</span>
+                {loadingMore ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    <span>Завантаження...</span>
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                    <span>Показати більше коментарів</span>
+                  </>
+                )}
               </button>
-            </div>
-          )}
-
-          {/* Loading more indicator */}
-          {loadingMore && (
-            <div className="flex justify-center py-6">
-              <div className="flex items-center space-x-2">
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
-                <span className="text-sm text-gray-600">Завантаження...</span>
-              </div>
             </div>
           )}
 
