@@ -425,9 +425,9 @@ function CommentItem({
               className="absolute bg-gray-300 pointer-events-none" 
               style={{ 
                 left: '20px',
-                top: '0px', 
+                top: '-60px', 
                 width: '2px',
-                height: `${(visibleReplies.length * 120)}px`,
+                height: `${(visibleReplies.length * 120) + 60}px`,
                 zIndex: 1
               }}
             ></div>
