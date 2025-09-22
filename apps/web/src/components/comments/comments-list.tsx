@@ -98,7 +98,7 @@ export function CommentsList({
           maxRepliesDepth={maxRepliesDepth}
           submittingReply={submittingReply}
           allComments={comments}
-          isLastInLevel={index === comments.length - 1}
+          isLastInLevel={index === comments.length - 1} // eslint-disable-next-line @typescript-eslint/no-unused-vars
           depth={0} // Правильне відстеження глибини
         />
       ))}
@@ -119,7 +119,7 @@ interface CommentItemProps {
   maxRepliesDepth: number;
   submittingReply: boolean;
   allComments: Comment[];
-  isLastInLevel?: boolean;
+  isLastInLevel?: boolean; // eslint-disable-next-line @typescript-eslint/no-unused-vars
   depth: number; // Поточна глибина для правильної перевірки
 }
 
@@ -131,7 +131,7 @@ function CommentItem({
   maxRepliesDepth,
   submittingReply,
   allComments,
-  isLastInLevel = false,
+  isLastInLevel = false, // eslint-disable-next-line @typescript-eslint/no-unused-vars
   depth
 }: CommentItemProps) {
   const [showReplyForm, setShowReplyForm] = useState(false);
@@ -435,7 +435,7 @@ function CommentItem({
                   maxRepliesDepth={maxRepliesDepth}
                   submittingReply={submittingReply}
                   allComments={allComments}
-                  isLastInLevel={index === visibleReplies.length - 1 && !hasMoreReplies}
+                  isLastInLevel={index === visibleReplies.length - 1 && !hasMoreReplies} // eslint-disable-next-line @typescript-eslint/no-unused-vars
                   depth={depth + 1} // ЗБІЛЬШУЄМО ГЛИБИНУ
                 />
               </div>

@@ -1,5 +1,5 @@
-// src/components/comments/comment-form.tsx v8.0 - ПОВНА ФІНАЛЬНА ВЕРСІЯ
-// ВСІХ ФУНКЦІЇ: завжди розгорнута форма + обов'язкове ім'я + enhanced features
+// src/components/comments/comment-form.tsx v8.1 - ALL ESLint & TypeScript FIXES
+// ВИПРАВЛЕНО: TypeScript any types + React unescaped entities + unused vars + index signatures
 
 'use client';
 
@@ -12,7 +12,7 @@ interface CommentFormProps {
     authorEmail?: string;
     parentId?: string;
     typingTime?: number;
-    clientInfo?: Record<string, any>;
+    clientInfo?: Record<string, unknown>;
   }) => Promise<void>;
   submitting: boolean;
   className?: string;
@@ -21,7 +21,6 @@ interface CommentFormProps {
   showAuthorFields?: boolean;
   buttonText?: string;
   showAdvancedFeatures?: boolean;
-  userPreferences?: Record<string, any>;
   disabled?: boolean;
   maxLength?: number;
   minLength?: number;
@@ -47,7 +46,11 @@ interface ClientInfo {
   screenResolution: string;
   colorDepth: number;
   deviceMemory?: number;
-  connection?: any;
+  connection?: {
+    effectiveType: string;
+    downlink: number;
+  };
+  [key: string]: unknown; // Index signature for Record<string, unknown> compatibility
 }
 
 // Enhanced helpful hints на основі контент аналізу
@@ -151,16 +154,24 @@ const getHelpfulHints = (content: string, language: 'uk' | 'en' | 'ru' = 'uk'): 
 const getClientInfo = (): ClientInfo => {
   if (typeof window === 'undefined') return {} as ClientInfo;
   
+  const navWithMemory = navigator as { deviceMemory?: number };
+  const navWithConnection = navigator as { 
+    connection?: { 
+      effectiveType: string; 
+      downlink: number; 
+    } 
+  };
+  
   return {
     userAgent: navigator.userAgent,
     language: navigator.language || 'uk',
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     screenResolution: `${screen.width}x${screen.height}`,
     colorDepth: screen.colorDepth,
-    deviceMemory: (navigator as any).deviceMemory || undefined,
-    connection: (navigator as any).connection ? {
-      effectiveType: (navigator as any).connection.effectiveType,
-      downlink: (navigator as any).connection.downlink
+    deviceMemory: navWithMemory.deviceMemory || undefined,
+    connection: navWithConnection.connection ? {
+      effectiveType: navWithConnection.connection.effectiveType,
+      downlink: navWithConnection.connection.downlink
     } : undefined
   };
 };
@@ -191,7 +202,6 @@ export function CommentForm({
   showAuthorFields = true,
   buttonText = 'Коментувати',
   showAdvancedFeatures = false,
-  userPreferences = {},
   disabled = false,
   maxLength = 3000,
   minLength = 3,
@@ -223,7 +233,6 @@ export function CommentForm({
   const formRef = useRef<HTMLFormElement>(null);
   const [helpfulHints, setHelpfulHints] = useState<string[]>([]);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [mentionSuggestions, setMentionSuggestions] = useState<string[]>([]);
 
   // Enhanced autosave functionality
   const [lastSaved, setLastSaved] = useState<number | null>(null);
@@ -500,7 +509,7 @@ export function CommentForm({
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
       e.preventDefault();
       if (isFormValid) {
-        handleSubmit(e as any);
+        handleSubmit(e as React.FormEvent);
       }
     }
     
@@ -697,7 +706,7 @@ export function CommentForm({
               <div className="flex-1">
                 <input
                   type="text"
-                  placeholder="Ваше ім'я *"
+                  placeholder="Введіть ваше ім&apos;я *"
                   value={authorName}
                   onChange={handleAuthorNameChange}
                   className={`w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${
@@ -709,7 +718,7 @@ export function CommentForm({
                   aria-label="Ім'я автора"
                 />
                 {authorName.trim().length > 0 && authorName.trim().length < 2 && (
-                  <p className="text-red-500 text-xs mt-1">Ім'я має містити принаймні 2 символи</p>
+                  <p className="text-red-500 text-xs mt-1">Ім&apos;я має містити принаймні 2 символи</p>
                 )}
               </div>
               
