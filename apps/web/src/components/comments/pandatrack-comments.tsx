@@ -252,7 +252,7 @@ export function PandaTrackComments({
       
       setTotalComments(data.total || 0);
       
-      // ВИПРАВЛЕНО: простіша логіка hasMore
+      // ВИПРАВЛЕНО: правильний розрахунок currentTotal для reset=false
       const receivedComments = data.comments?.length || 0;
       const currentTotal = reset ? receivedComments : comments.length + receivedComments;
       const stillHasMore = currentTotal < (data.total || 0);
@@ -260,6 +260,7 @@ export function PandaTrackComments({
       console.log('Load More Logic FIXED:', {
         pageToLoad,
         receivedComments,
+        existingComments: reset ? 0 : comments.length,
         currentTotal,
         totalFromAPI: data.total,
         stillHasMore
@@ -478,7 +479,8 @@ export function PandaTrackComments({
     }
     
     loadComments(true);
-  }, [globalPageId, loadComments, pageId]);
+    // ВИПРАВЛЕНО: видалено loadComments з dependencies
+  }, [globalPageId, pageId]);
 
   // Auto-refresh
   useEffect(() => {
