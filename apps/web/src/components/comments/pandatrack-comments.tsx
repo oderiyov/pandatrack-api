@@ -245,8 +245,16 @@ export function PandaTrackComments({
       setTotalComments(data.total || 0);
       
       // ВИПРАВЛЕНО: hasMore логіка базується на правильному total
-      const currentLoadedCount = reset ? (data.comments || []).length : comments.length + (data.comments || []).length;
+      const countAllComments = (commentsList: Comment[]): number => {
+        return commentsList.reduce((total, comment) => {
+          return total + 1 + countAllComments(comment.replies || []);
+        }, 0);
+      };
+
+      const currentCommentsList = reset ? (data.comments || []) : [...comments, ...(data.comments || [])];
+      const currentLoadedCount = countAllComments(currentCommentsList);
       const totalAvailable = data.total || 0;
+      
       
       console.log('Load More Logic:', {
         currentLoadedCount,

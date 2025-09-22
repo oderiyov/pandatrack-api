@@ -149,7 +149,7 @@ function CommentItem({
   const hiddenRepliesCount = hasMoreReplies ? (comment.replies?.length || 0) - REPLIES_LIMIT : 0;
 
   // ВИПРАВЛЕНО: перевіряємо depth замість comment.replyDepth
-  const canReply = depth < maxRepliesDepth;
+  const canReply = (depth + 1) < maxRepliesDepth;
 
   console.log('CommentItem debug:', {
     commentId: comment.id,
@@ -418,14 +418,14 @@ function CommentItem({
       {comment.replies && comment.replies.length > 0 && (
         <div className="mt-4 relative">
           {/* ПРАВИЛЬНА CONNECTING LINE: від центру аватара батьківського до дочірнього */}
-          <div className="absolute left-5 top-0 w-0.5 bg-gray-300" style={{ height: '20px' }}></div>
+          <div className="absolute left-5 top-5 w-0.5 bg-gray-300" style={{ height: 'calc(100% - 40px)' }}></div>
           
           {/* ВИПРАВЛЕНО: REPLIES БЕЗ MARGIN-LEFT - ЗБЕРІГАЮТЬ ПОВНУ ШИРИНУ */}
-          <div className="ml-8 space-y-6">
+          <div className="space-y-6" style={{ marginLeft: '2rem', paddingLeft: '1rem', borderLeft: '2px solid #e5e7eb' }}>
             {visibleReplies.map((reply, index) => (
               <div key={reply.id} className="relative">
                 {/* Горизонтальна лінія до кожного reply */}
-                <div className="absolute -left-6 top-5 w-6 h-0.5 bg-gray-300"></div>
+                <div className="absolute -left-6 top-5 w-3 h-0.5 bg-gray-300"></div>
                 
                 <CommentItem
                   comment={reply}
