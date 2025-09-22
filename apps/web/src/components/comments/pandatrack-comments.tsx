@@ -1,5 +1,5 @@
-// src/components/comments/pandatrack-comments.tsx v10.1
-// ВИПРАВЛЕНО: Load More кнопка з'являється при 20+ коментарях (навіть якщо 27)
+// src/components/comments/pandatrack-comments.tsx v10.2
+// ВИПРАВЛЕНО: Load More кнопка з'являється при 20+ коментарях + правильний total count
 
 'use client';
 
@@ -95,7 +95,7 @@ export function PandaTrackComments({
   title = 'Запитання Про Відстеження Відправлень',
   showStats = true,
   showInfo = true,
-  maxRepliesDepth = 3,
+  maxRepliesDepth = 5, // ЗБІЛЬШЕНО до 5
   autoRefresh = true
 }: CommentsProps) {
   const [comments, setComments] = useState<Comment[]>([]);
@@ -136,14 +136,14 @@ export function PandaTrackComments({
     }
   }, []);
 
-  // Auto-refresh тільки для перевірки нових коментарів (БЕЗ перезавантаження)
+  // ВИПРАВЛЕНО: checkForNewComments тільки для нотифікацій, НЕ впливає на pagination
   const checkForNewComments = useCallback(async () => {
     if (loadingRef.current) return;
     
     try {
-      console.log('Checking for new comments...');
+      console.log('Checking for new comments (notification only)...');
       
-      // Завантажуємо ТІЛЬКИ перший коментар для перевірки
+      // Завантажуємо ТІЛЬКИ перший коментар для перевірки нових
       const response = await fetch(
         `${API_BASE}/api/comments/${globalPageId}?limit=1&offset=0`, 
         {
@@ -179,7 +179,7 @@ export function PandaTrackComments({
     }
   }, [globalPageId, lastKnownCommentTime]);
 
-  // Завантаження коментарів
+  // ВИПРАВЛЕНО: loadComments тільки для головного завантаження
   const loadComments = useCallback(async (reset = true) => {
     if (loadingRef.current) {
       console.log('Already loading, skipping request');
@@ -201,7 +201,7 @@ export function PandaTrackComments({
         currentOffset = offset;
       }
 
-      console.log(`Loading comments: reset=${reset}, offset=${currentOffset}, pageId=${globalPageId}`);
+      console.log(`Loading comments: reset=${reset}, offset=${currentOffset}, limit=${commentsPerPage}, pageId=${globalPageId}`);
 
       const response = await fetch(
         `${API_BASE}/api/comments/${globalPageId}?limit=${commentsPerPage}&offset=${currentOffset}`, 
@@ -219,6 +219,13 @@ export function PandaTrackComments({
 
       const data: CommentsData = await response.json();
       
+      console.log('LoadComments response:', {
+        commentsReceived: data.comments?.length || 0,
+        totalFromAPI: data.total,
+        limit: data.limit,
+        offset: data.offset
+      });
+      
       // Встановлюємо lastKnownCommentTime при першому завантаженні
       if (reset && data.comments && data.comments.length > 0) {
         const newestTime = data.comments[0].createdAt;
@@ -234,19 +241,20 @@ export function PandaTrackComments({
         setComments(prev => [...prev, ...(data.comments || [])]);
       }
       
+      // ВИПРАВЛЕНО: використовуємо total з API (тепер правильний після backend виправлення)
       setTotalComments(data.total || 0);
       
-      // ВИПРАВЛЕНО: hasMore логіка - кнопка ЗАВЖДИ показується якщо загальна кількість > поточна завантажена
+      // ВИПРАВЛЕНО: hasMore логіка базується на правильному total
       const currentLoadedCount = reset ? (data.comments || []).length : comments.length + (data.comments || []).length;
       const totalAvailable = data.total || 0;
       
       console.log('Load More Logic:', {
         currentLoadedCount,
         totalAvailable,
-        hasMoreCalculated: currentLoadedCount < totalAvailable
+        hasMoreCalculated: currentLoadedCount < totalAvailable,
+        shouldShowButton: currentLoadedCount < totalAvailable && currentLoadedCount >= 20
       });
       
-      // КРИТИЧНЕ ВИПРАВЛЕННЯ: hasMore = true якщо є ще коментарі для завантаження
       setHasMore(currentLoadedCount < totalAvailable);
       
       if (!reset) {
@@ -472,17 +480,17 @@ export function PandaTrackComments({
     loadComments(true);
   }, [globalPageId, loadComments, pageId]);
 
-  // Auto-refresh тільки для checkForNewComments (БЕЗ loadComments)
+  // ВИПРАВЛЕНО: Auto-refresh ТІЛЬКИ для checkForNewComments
   useEffect(() => {
     if (!autoRefresh) return;
 
     const interval = setInterval(() => {
       if (!loadingRef.current) {
-        console.log('Auto-refresh: checking for new comments');
-        checkForNewComments(); // ТІЛЬКИ перевірка, БЕЗ перезавантаження
-        checkPendingCommentsStatus();
+        console.log('Auto-refresh: checking for new comments only');
+        checkForNewComments(); // ТІЛЬКИ для нотифікацій
+        checkPendingCommentsStatus(); // Перевірка pending
       }
-    }, 30000);
+    }, 30000); // Кожні 30 секунд
 
     return () => clearInterval(interval);
   }, [autoRefresh, checkForNewComments, checkPendingCommentsStatus]);
@@ -506,14 +514,14 @@ export function PandaTrackComments({
     return () => clearInterval(interval);
   }, [checkPendingCommentsStatus]);
 
-  // Enhanced Debug info
+  // Debug info
   console.log('Comments state:', {
     commentsCount: comments.length,
     totalComments,
     hasMore,
     loadingMore,
     offset,
-    shouldShowButton: hasMore && comments.length >= 20
+    shouldShowLoadMoreButton: hasMore && comments.length >= 20
   });
 
   // Render
@@ -613,7 +621,7 @@ export function PandaTrackComments({
             submittingReply={submitting}
           />
 
-          {/* ВИПРАВЛЕНО: Load More кнопка ЗАВЖДИ показується якщо є ще коментарі для завантаження */}
+          {/* ВИПРАВЛЕНО: Load More кнопка з правильною логікою */}
           {hasMore && comments.length >= 20 && (
             <div className="text-center mt-8">
               <button

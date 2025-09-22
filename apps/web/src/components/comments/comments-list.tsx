@@ -1,5 +1,5 @@
-// src/components/comments/comments-list.tsx v13.0
-// УЛЬТРА ВИПРАВЛЕНО: однакові розміри + правильні лінії + reply depth fix
+// src/components/comments/comments-list.tsx v12.1 - МІНІМАЛЬНІ ВИПРАВЛЕННЯ
+// ВИПРАВЛЕНО: однакові розміри replies + правильні connecting lines + reply depth до 5
 
 'use client';
 
@@ -99,7 +99,7 @@ export function CommentsList({
           submittingReply={submittingReply}
           allComments={comments}
           isLastInLevel={index === comments.length - 1}
-          depth={0} // ДОДАНО: відстеження глибини
+          depth={0} // Правильне відстеження глибини
         />
       ))}
     </div>
@@ -120,7 +120,7 @@ interface CommentItemProps {
   submittingReply: boolean;
   allComments: Comment[];
   isLastInLevel?: boolean;
-  depth: number; // ДОДАНО: поточна глибина
+  depth: number; // Поточна глибина для правильної перевірки
 }
 
 function CommentItem({
@@ -131,7 +131,7 @@ function CommentItem({
   maxRepliesDepth,
   submittingReply,
   allComments,
-  isLastInLevel = false, // eslint-disable-line @typescript-eslint/no-unused-vars
+  isLastInLevel = false,
   depth
 }: CommentItemProps) {
   const [showReplyForm, setShowReplyForm] = useState(false);
@@ -148,14 +148,18 @@ function CommentItem({
   const visibleReplies = showAllReplies ? (comment.replies || []) : (comment.replies || []).slice(0, REPLIES_LIMIT);
   const hiddenRepliesCount = hasMoreReplies ? (comment.replies?.length || 0) - REPLIES_LIMIT : 0;
 
+  // ВИПРАВЛЕНО: перевіряємо depth замість comment.replyDepth
+  const canReply = depth < maxRepliesDepth;
+
   console.log('CommentItem debug:', {
     commentId: comment.id,
     depth,
+    maxRepliesDepth,
+    canReply,
     totalReplies: comment.replies?.length || 0,
     hasMoreReplies,
     showAllReplies,
-    hiddenRepliesCount,
-    canReply: depth < maxRepliesDepth
+    hiddenRepliesCount
   });
 
   const handleVote = async (voteType: number) => {
@@ -223,7 +227,7 @@ function CommentItem({
   return (
     <div className="comment-item" data-comment-id={comment.id}>
       
-      {/* ГОЛОВНИЙ КОМЕНТАР - ЗАВЖДИ ОДНАКОВИЙ РОЗМІР */}
+      {/* ВИПРАВЛЕНО: КОМЕНТАР ЗАВЖДИ ПОВНА ШИРИНА БЕЗ margin-left */}
       <div className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-sm transition-shadow w-full">
         
         {/* Заголовок коментаря */}
@@ -243,7 +247,7 @@ function CommentItem({
               </span>
               
               {/* Reply addressee */}
-              {comment.replyDepth > 0 && parentAuthorName && (
+              {depth > 0 && parentAuthorName && (
                 <span className="text-sm text-gray-600">
                   відповідь для <span className="font-medium text-gray-900">{parentAuthorName}</span>
                 </span>
@@ -258,7 +262,7 @@ function CommentItem({
               {/* Development debug info */}
               {process.env.NODE_ENV === 'development' && comment.commentType && (
                 <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">
-                  {comment.commentType} | depth: {depth}
+                  {comment.commentType} | depth: {depth} | canReply: {canReply.toString()}
                 </span>
               )}
 
@@ -336,8 +340,8 @@ function CommentItem({
                 </svg>
               </button>
 
-              {/* 4. Reply - ВИПРАВЛЕНО: перевірка depth замість replyDepth */}
-              {depth < maxRepliesDepth && (
+              {/* 4. Reply - ВИПРАВЛЕНО: використовуємо canReply */}
+              {canReply && (
                 <button
                   onClick={() => setShowReplyForm(!showReplyForm)}
                   className="flex items-center gap-1 px-2 py-1 rounded-md hover:bg-blue-50 hover:text-blue-600 transition-colors text-gray-600 flex-shrink-0"
@@ -352,7 +356,7 @@ function CommentItem({
           </div>
         </div>
 
-        {/* ВИПРАВЛЕНО: Форма відповіді з повною шириною */}
+        {/* Форма відповіді з повною шириною */}
         {showReplyForm && (
           <div className="mt-4 pt-4 border-t border-gray-200 w-full">
             <CommentForm
@@ -410,46 +414,45 @@ function CommentItem({
         )}
       </div>
 
-      {/* ВИПРАВЛЕНО: Replies БЕЗ зменшення розміру + правильні лінії */}
+      {/* ВИПРАВЛЕНО: Replies з правильними connecting lines + БЕЗ зменшення ширини */}
       {comment.replies && comment.replies.length > 0 && (
-        <div className="mt-6">
-          {/* ПРОСТА ВЕРТИКАЛЬНА ЛІНІЯ по центру між коментарями */}
-          <div className="flex justify-center">
-            <div className="w-px h-6 bg-gray-300"></div>
-          </div>
+        <div className="mt-4 relative">
+          {/* ПРАВИЛЬНА CONNECTING LINE: від центру аватара батьківського до дочірнього */}
+          <div className="absolute left-5 top-0 w-0.5 bg-gray-300" style={{ height: '20px' }}></div>
           
-          {/* REPLIES НА ТОМУ Ж РІВНІ */}
-          <div className="space-y-6">
+          {/* ВИПРАВЛЕНО: REPLIES БЕЗ MARGIN-LEFT - ЗБЕРІГАЮТЬ ПОВНУ ШИРИНУ */}
+          <div className="ml-8 space-y-6">
             {visibleReplies.map((reply, index) => (
-              <CommentItem
-                key={reply.id}
-                comment={reply}
-                onVote={onVote}
-                onFlag={onFlag}
-                onReply={onReply}
-                maxRepliesDepth={maxRepliesDepth}
-                submittingReply={submittingReply}
-                allComments={allComments}
-                isLastInLevel={index === visibleReplies.length - 1 && !hasMoreReplies}
-                depth={depth + 1} // ЗБІЛЬШУЄМО ГЛИБИНУ
-              />
+              <div key={reply.id} className="relative">
+                {/* Горизонтальна лінія до кожного reply */}
+                <div className="absolute -left-6 top-5 w-6 h-0.5 bg-gray-300"></div>
+                
+                <CommentItem
+                  comment={reply}
+                  onVote={onVote}
+                  onFlag={onFlag}
+                  onReply={onReply}
+                  maxRepliesDepth={maxRepliesDepth}
+                  submittingReply={submittingReply}
+                  allComments={allComments}
+                  isLastInLevel={index === visibleReplies.length - 1 && !hasMoreReplies}
+                  depth={depth + 1} // ЗБІЛЬШУЄМО ГЛИБИНУ
+                />
+              </div>
             ))}
           </div>
 
           {/* Show more кнопка */}
           {hasMoreReplies && !showAllReplies && (
-            <div className="mt-6">
-              <div className="flex justify-center">
-                <div className="w-px h-6 bg-gray-300"></div>
-              </div>
-              
-              <div className="text-center">
+            <div className="ml-8 mt-4">
+              <div className="relative">
+                <div className="absolute -left-6 top-3 w-6 h-0.5 bg-gray-300"></div>
                 <button
                   onClick={() => {
                     console.log('Show more replies clicked for comment:', comment.id);
                     setShowAllReplies(true);
                   }}
-                  className="flex items-center gap-2 mx-auto px-4 py-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
+                  className="flex items-center gap-2 px-4 py-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
