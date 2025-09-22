@@ -414,22 +414,25 @@ function CommentItem({
         )}
       </div>
 
-      {/* ВИПРАВЛЕНО: REPLIES з одною вертикальною лінією + однакова ширина */}
+      {/* ВИПРАВЛЕНО: REPLIES з повною шириною + лінія як overlay */}
       {comment.replies && comment.replies.length > 0 && (
         <div className="mt-4 relative">
-          {/* ОДНА ВЕРТИКАЛЬНА ЛІНІЯ від центру аватара */}
-          <div 
-            className="absolute bg-gray-300" 
-            style={{ 
-              left: '20px', // центр аватара (40px ширина / 2)
-              top: '0px',
-              width: '2px',
-              height: `${(visibleReplies.length * 120)}px` // динамічна висота
-            }}
-          ></div>
           
-          {/* REPLIES з фіксованим відступом БЕЗ зменшення ширини */}
-          <div className="space-y-6" style={{ paddingLeft: '32px' }}>
+          {/* REPLIES контейнер БЕЗ відступів */}
+          <div className="space-y-6">
+            {/* ЛІНІЯ як декоративний overlay - НЕ впливає на layout */}
+            <div 
+              className="absolute bg-gray-300 pointer-events-none" 
+              style={{ 
+                left: '20px',
+                top: '0px', 
+                width: '2px',
+                height: `${(visibleReplies.length * 120)}px`,
+                zIndex: 1
+              }}
+            ></div>
+            
+            {/* REPLIES з повною шириною */}
             {visibleReplies.map((reply, index) => (
               <CommentItem
                 key={reply.id}
@@ -441,24 +444,18 @@ function CommentItem({
                 submittingReply={submittingReply}
                 allComments={allComments}
                 isLastInLevel={index === visibleReplies.length - 1 && !hasMoreReplies}
-                depth={depth + 1} // ЗБІЛЬШУЄМО ГЛИБИНУ
+                depth={depth + 1}
               />
             ))}
           </div>
 
           {/* Show more кнопка */}
           {hasMoreReplies && !showAllReplies && (
-            <div style={{ paddingLeft: '32px' }} className="mt-4">
+            <div className="mt-4">
               <button
-                onClick={() => {
-                  console.log('Show more replies clicked for comment:', comment.id);
-                  setShowAllReplies(true);
-                }}
+                onClick={() => setShowAllReplies(true)}
                 className="flex items-center gap-2 px-4 py-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
                 <span>показати більше коментарів ({hiddenRepliesCount})</span>
               </button>
             </div>
