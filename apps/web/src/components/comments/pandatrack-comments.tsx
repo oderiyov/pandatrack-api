@@ -252,20 +252,20 @@ export function PandaTrackComments({
       
       setTotalComments(data.total || 0);
       
-      // ВИПРАВЛЕНО: перевіряємо чи є ще top-level коментарі для завантаження
-      const totalTopLevelLoaded = (pageToLoad + 1) * commentsPerPage;
-      const hasMoreTopLevel = totalTopLevelLoaded < (data.total || 0);
+      // ВИПРАВЛЕНО: простіша логіка hasMore
+      const receivedComments = data.comments?.length || 0;
+      const currentTotal = reset ? receivedComments : comments.length + receivedComments;
+      const stillHasMore = currentTotal < (data.total || 0);
       
-      console.log('Load More Logic:', {
+      console.log('Load More Logic FIXED:', {
         pageToLoad,
-        totalTopLevelLoaded,
+        receivedComments,
+        currentTotal,
         totalFromAPI: data.total,
-        hasMoreTopLevel,
-        newCommentsReceived: data.comments?.length || 0
+        stillHasMore
       });
       
-      // Якщо отримали менше коментарів ніж запитували, то більше немає
-      setHasMore(hasMoreTopLevel && (data.comments?.length || 0) === commentsPerPage);
+      setHasMore(stillHasMore);
 
       setPendingComments(getPendingComments(globalPageId));
 
@@ -513,9 +513,9 @@ export function PandaTrackComments({
     return () => clearInterval(interval);
   }, [checkPendingCommentsStatus]);
 
-  // ВИПРАВЛЕНО: спрощений розрахунок для Load More
+  // ВИПРАВЛЕНО: правильний розрахунок для Load More
   const currentLoadedCount = countAllComments(comments);
-  const shouldShowLoadMore = hasMore && comments.length >= commentsPerPage;
+  const shouldShowLoadMore = hasMore && currentLoadedCount < totalComments;
 
   // Debug info
   console.log('Comments state:', {
