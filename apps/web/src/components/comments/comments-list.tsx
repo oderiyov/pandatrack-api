@@ -1,5 +1,5 @@
-// src/components/comments/comments-list.tsx v13.0 - ПОВНІСТЮ ВИПРАВЛЕНО
-// ВИПРАВЛЕНО: Load More підрахунок + одна вертикальна лінія + однакові розміри replies
+// src/components/comments/comments-list.tsx v14.0 - ВИПРАВЛЕНО
+// ВИПРАВЛЕНО: Connecting lines від центру аватара + однакові розміри replies
 
 'use client';
 
@@ -79,7 +79,7 @@ export function CommentsList({
   onVote,
   onFlag,
   onReply,
-  maxRepliesDepth = 5, // 5 рівнів глибини (0-4)
+  maxRepliesDepth = 5,
   submittingReply = false
 }: CommentsListProps) {
   if (comments.length === 0) {
@@ -99,7 +99,7 @@ export function CommentsList({
           submittingReply={submittingReply}
           allComments={comments}
           isLastInLevel={index === comments.length - 1}
-          depth={0} // Стартова глибина
+          depth={0}
         />
       ))}
     </div>
@@ -120,7 +120,7 @@ interface CommentItemProps {
   submittingReply: boolean;
   allComments: Comment[];
   isLastInLevel?: boolean;
-  depth: number; // Поточна глибина для правильної перевірки
+  depth: number;
 }
 
 function CommentItem({
@@ -149,7 +149,7 @@ function CommentItem({
   const hiddenRepliesCount = hasMoreReplies ? (comment.replies?.length || 0) - REPLIES_LIMIT : 0;
 
   // ВИПРАВЛЕНО: правильна логіка для reply кнопки
-  const canReply = (depth + 1) < maxRepliesDepth;
+  const canReply = depth < maxRepliesDepth;
 
   console.log('CommentItem debug:', {
     commentId: comment.id,
@@ -227,7 +227,7 @@ function CommentItem({
   return (
     <div className="comment-item" data-comment-id={comment.id}>
       
-      {/* ОСНОВНИЙ КОМЕНТАР - завжди повна ширина */}
+      {/* ОСНОВНИЙ КОМЕНТАР - завжди ПОВНА ширина без відступів */}
       <div className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-sm transition-shadow w-full">
         
         {/* Заголовок коментаря */}
@@ -414,38 +414,54 @@ function CommentItem({
         )}
       </div>
 
-      {/* ВИПРАВЛЕНО: REPLIES з повною шириною + лінія як overlay */}
+      {/* ВИПРАВЛЕНІ REPLIES з правильними connecting lines */}
       {comment.replies && comment.replies.length > 0 && (
         <div className="mt-4 relative">
           
-          {/* REPLIES контейнер БЕЗ відступів */}
-          <div className="space-y-6">
-            {/* ЛІНІЯ як декоративний overlay - НЕ впливає на layout */}
-            <div 
-              className="absolute bg-gray-300 pointer-events-none" 
-              style={{ 
-                left: '20px',
-                top: '-60px', 
-                width: '2px',
-                height: `${(visibleReplies.length * 120) + 60}px`,
-                zIndex: 1
-              }}
-            ></div>
-            
-            {/* REPLIES з повною шириною */}
+          {/* REPLIES - ПОВНА ширина, БЕЗ margins */}
+          <div className="space-y-6 w-full">
             {visibleReplies.map((reply, index) => (
-              <CommentItem
-                key={reply.id}
-                comment={reply}
-                onVote={onVote}
-                onFlag={onFlag}
-                onReply={onReply}
-                maxRepliesDepth={maxRepliesDepth}
-                submittingReply={submittingReply}
-                allComments={allComments}
-                isLastInLevel={index === visibleReplies.length - 1 && !hasMoreReplies}
-                depth={depth + 1}
-              />
+              <div key={reply.id} className="relative w-full">
+                
+                {/* ПРАВИЛЬНА CONNECTING LINE від центру аватара батьківського до центру аватара дочірнього */}
+                <div 
+                  className="absolute bg-gray-300" 
+                  style={{ 
+                    left: '20px', // центр аватара (40px / 2 = 20px)
+                    top: '-30px', // підняти лінію до батьківського
+                    width: '2px',
+                    height: '70px', // достатньо довга щоб дійти до аватара дочірнього
+                    zIndex: 1
+                  }}
+                ></div>
+                
+                {/* ГОРИЗОНТАЛЬНА лінія до дочірнього аватара */}
+                <div 
+                  className="absolute bg-gray-300" 
+                  style={{ 
+                    left: '20px', // від вертикальної лінії
+                    top: '20px', // рівень аватара дочірнього (40px / 2)
+                    width: '30px', // до аватара дочірнього
+                    height: '2px',
+                    zIndex: 1
+                  }}
+                ></div>
+                
+                {/* Reply коментар ПОВНОЇ ширини БЕЗ margin-left */}
+                <div className="w-full">
+                  <CommentItem
+                    comment={reply}
+                    onVote={onVote}
+                    onFlag={onFlag}
+                    onReply={onReply}
+                    maxRepliesDepth={maxRepliesDepth}
+                    submittingReply={submittingReply}
+                    allComments={allComments}
+                    isLastInLevel={index === visibleReplies.length - 1 && !hasMoreReplies}
+                    depth={depth + 1}
+                  />
+                </div>
+              </div>
             ))}
           </div>
 
