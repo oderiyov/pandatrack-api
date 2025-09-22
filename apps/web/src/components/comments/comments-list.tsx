@@ -140,9 +140,9 @@ function CommentItem({
   const [voting, setVoting] = useState<'up' | 'down' | null>(null);
   const [userVote, setUserVote] = useState<'up' | 'down' | null>(null);
   
-  // ВИПРАВЛЕНО: Show more для replies - зменшений ліміт для тестування
+  // ВИПРАВЛЕНО: Show more для replies - збільшений ліміт
   const [showAllReplies, setShowAllReplies] = useState(false);
-  const REPLIES_LIMIT = 1; // ЗМЕНШЕНО з 2 до 1 для легшого тестування
+  const REPLIES_LIMIT = 2; // ПОВЕРНЕНО до 2 для правильної роботи
   
   const hasMoreReplies = (comment.replies?.length || 0) > REPLIES_LIMIT;
   const visibleReplies = showAllReplies ? (comment.replies || []) : (comment.replies || []).slice(0, REPLIES_LIMIT);
@@ -423,29 +423,17 @@ function CommentItem({
             {visibleReplies.map((reply, index) => (
               <div key={reply.id} className="relative w-full">
                 
-                {/* ВИПРАВЛЕНІ CONNECTING LINES */}
-                <div className="absolute" style={{ left: '20px', top: '-36px', zIndex: 1 }}>
-                  {/* Вертикальна лінія від батьківського аватара */}
-                  <div 
-                    className="bg-gray-300" 
-                    style={{ 
-                      width: '2px',
-                      height: '56px', // до рівня аватара дочірнього
-                    }}
-                  ></div>
-                  
-                  {/* Горизонтальна лінія до дочірнього аватара */}
-                  <div 
-                    className="bg-gray-300" 
-                    style={{ 
-                      position: 'absolute',
-                      top: '54px', // рівень аватара дочірнього
-                      left: '0px',
-                      width: '30px', // до аватара дочірнього
-                      height: '2px'
-                    }}
-                  ></div>
-                </div>
+                {/* ВИПРАВЛЕНА ОДНА ВЕРТИКАЛЬНА ЛІНІЯ від аватара до аватара */}
+                <div 
+                  className="absolute bg-gray-300" 
+                  style={{ 
+                    left: '20px', // центр аватара батьківського (40px / 2)
+                    top: '-36px', // підняти до батьківського аватара
+                    width: '2px',
+                    height: '76px', // довжина до дочірнього аватара (36 + 40)
+                    zIndex: 1
+                  }}
+                ></div>
                 
                 {/* Reply коментар ПОВНОЇ ширини БЕЗ margin-left */}
                 <div className="w-full">
