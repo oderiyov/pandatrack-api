@@ -1,5 +1,5 @@
-// src/components/comments/comments-list.tsx v14.0 - ВИПРАВЛЕНО
-// ВИПРАВЛЕНО: Connecting lines від центру аватара + однакові розміри replies
+// src/components/comments/comments-list.tsx v15.0 - ВИПРАВЛЕНО
+// ВИПРАВЛЕНО: Connecting lines від аватара до аватара + Show More Replies
 
 'use client';
 
@@ -140,15 +140,14 @@ function CommentItem({
   const [voting, setVoting] = useState<'up' | 'down' | null>(null);
   const [userVote, setUserVote] = useState<'up' | 'down' | null>(null);
   
-  // Show more для replies
+  // ВИПРАВЛЕНО: Show more для replies - зменшений ліміт для тестування
   const [showAllReplies, setShowAllReplies] = useState(false);
-  const REPLIES_LIMIT = 2;
+  const REPLIES_LIMIT = 1; // ЗМЕНШЕНО з 2 до 1 для легшого тестування
   
   const hasMoreReplies = (comment.replies?.length || 0) > REPLIES_LIMIT;
   const visibleReplies = showAllReplies ? (comment.replies || []) : (comment.replies || []).slice(0, REPLIES_LIMIT);
   const hiddenRepliesCount = hasMoreReplies ? (comment.replies?.length || 0) - REPLIES_LIMIT : 0;
 
-  // ВИПРАВЛЕНО: правильна логіка для reply кнопки
   const canReply = depth < maxRepliesDepth;
 
   console.log('CommentItem debug:', {
@@ -159,7 +158,8 @@ function CommentItem({
     totalReplies: comment.replies?.length || 0,
     hasMoreReplies,
     showAllReplies,
-    hiddenRepliesCount
+    hiddenRepliesCount,
+    REPLIES_LIMIT
   });
 
   const handleVote = async (voteType: number) => {
@@ -416,36 +416,36 @@ function CommentItem({
 
       {/* ВИПРАВЛЕНІ REPLIES з правильними connecting lines */}
       {comment.replies && comment.replies.length > 0 && (
-        <div className="mt-4 relative">
+        <div className="mt-6 relative w-full">
           
-          {/* REPLIES - ПОВНА ширина, БЕЗ margins */}
+          {/* REPLIES - ПОВНА ширина БЕЗ відступів */}
           <div className="space-y-6 w-full">
             {visibleReplies.map((reply, index) => (
               <div key={reply.id} className="relative w-full">
                 
-                {/* ПРАВИЛЬНА CONNECTING LINE від центру аватара батьківського до центру аватара дочірнього */}
-                <div 
-                  className="absolute bg-gray-300" 
-                  style={{ 
-                    left: '20px', // центр аватара (40px / 2 = 20px)
-                    top: '-30px', // підняти лінію до батьківського
-                    width: '2px',
-                    height: '70px', // достатньо довга щоб дійти до аватара дочірнього
-                    zIndex: 1
-                  }}
-                ></div>
-                
-                {/* ГОРИЗОНТАЛЬНА лінія до дочірнього аватара */}
-                <div 
-                  className="absolute bg-gray-300" 
-                  style={{ 
-                    left: '20px', // від вертикальної лінії
-                    top: '20px', // рівень аватара дочірнього (40px / 2)
-                    width: '30px', // до аватара дочірнього
-                    height: '2px',
-                    zIndex: 1
-                  }}
-                ></div>
+                {/* ВИПРАВЛЕНІ CONNECTING LINES */}
+                <div className="absolute" style={{ left: '20px', top: '-36px', zIndex: 1 }}>
+                  {/* Вертикальна лінія від батьківського аватара */}
+                  <div 
+                    className="bg-gray-300" 
+                    style={{ 
+                      width: '2px',
+                      height: '56px', // до рівня аватара дочірнього
+                    }}
+                  ></div>
+                  
+                  {/* Горизонтальна лінія до дочірнього аватара */}
+                  <div 
+                    className="bg-gray-300" 
+                    style={{ 
+                      position: 'absolute',
+                      top: '54px', // рівень аватара дочірнього
+                      left: '0px',
+                      width: '30px', // до аватара дочірнього
+                      height: '2px'
+                    }}
+                  ></div>
+                </div>
                 
                 {/* Reply коментар ПОВНОЇ ширини БЕЗ margin-left */}
                 <div className="w-full">
@@ -465,14 +465,17 @@ function CommentItem({
             ))}
           </div>
 
-          {/* Show more кнопка */}
+          {/* ВИПРАВЛЕНО: Show more кнопка для replies */}
           {hasMoreReplies && !showAllReplies && (
-            <div className="mt-4">
+            <div className="mt-4 pl-12">
               <button
                 onClick={() => setShowAllReplies(true)}
-                className="flex items-center gap-2 px-4 py-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
+                className="flex items-center gap-2 px-3 py-1.5 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
               >
-                <span>показати більше коментарів ({hiddenRepliesCount})</span>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+                <span>показати ще {hiddenRepliesCount} відпов{hiddenRepliesCount === 1 ? 'ідь' : hiddenRepliesCount < 5 ? 'іді' : 'ідей'}</span>
               </button>
             </div>
           )}

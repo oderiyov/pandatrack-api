@@ -1,5 +1,5 @@
-// src/components/comments/pandatrack-comments.tsx v10.3
-// ВИПРАВЛЕНО: Load More кнопка з'являється при hasMore=true
+// src/components/comments/pandatrack-comments.tsx v10.4
+// ВИПРАВЛЕНО: Load More offset проблема + спрощена логіка
 
 'use client';
 
@@ -112,7 +112,9 @@ export function PandaTrackComments({
   const [error, setError] = useState<string | null>(null);
   const [totalComments, setTotalComments] = useState(0);
   const [submitting, setSubmitting] = useState(false);
-  const [offset, setOffset] = useState(0);
+  
+  // ВИПРАВЛЕНО: currentPage замість offset для ясності
+  const [currentPage, setCurrentPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   
   // Ref для запобігання повторним запитам
@@ -181,6 +183,7 @@ export function PandaTrackComments({
     }
   }, [globalPageId, lastKnownCommentTime]);
 
+  // ВИПРАВЛЕНО: спрощена логіка завантаження з правильним offset
   const loadComments = useCallback(async (reset = true) => {
     if (loadingRef.current) {
       console.log('Already loading, skipping request');
@@ -192,20 +195,22 @@ export function PandaTrackComments({
     try {
       setError(null);
       
-      let currentOffset = 0;
+      let pageToLoad = 0;
       if (reset) {
         setLoading(true);
-        setOffset(0);
-        currentOffset = 0;
+        setCurrentPage(0);
+        pageToLoad = 0;
       } else {
         setLoadingMore(true);
-        currentOffset = offset;
+        pageToLoad = currentPage + 1; // ЗБІЛЬШУЄМО сторінку
       }
 
-      console.log(`Loading comments: reset=${reset}, offset=${currentOffset}, limit=${commentsPerPage}, pageId=${globalPageId}`);
+      const offsetToUse = pageToLoad * commentsPerPage;
+
+      console.log(`Loading comments: reset=${reset}, page=${pageToLoad}, offset=${offsetToUse}, limit=${commentsPerPage}, pageId=${globalPageId}`);
 
       const response = await fetch(
-        `${API_BASE}/api/comments/${globalPageId}?limit=${commentsPerPage}&offset=${currentOffset}`, 
+        `${API_BASE}/api/comments/${globalPageId}?limit=${commentsPerPage}&offset=${offsetToUse}`, 
         {
           method: 'GET',
           headers: {
@@ -224,7 +229,9 @@ export function PandaTrackComments({
         commentsReceived: data.comments?.length || 0,
         totalFromAPI: data.total,
         limit: data.limit,
-        offset: data.offset
+        offset: data.offset,
+        pageToLoad,
+        offsetToUse
       });
       
       if (reset && data.comments && data.comments.length > 0) {
@@ -237,29 +244,28 @@ export function PandaTrackComments({
       
       if (reset) {
         setComments(data.comments || []);
+        setCurrentPage(0);
       } else {
         setComments(prev => [...prev, ...(data.comments || [])]);
+        setCurrentPage(pageToLoad); // ОНОВЛЮЄМО поточну сторінку
       }
       
       setTotalComments(data.total || 0);
       
-      // ВИПРАВЛЕНО: hasMore логіка з правильним підрахунком
-      const currentCommentsList = reset ? (data.comments || []) : [...comments, ...(data.comments || [])];
-      const currentLoadedCount = countAllComments(currentCommentsList);
-      const totalAvailable = data.total || 0;
+      // ВИПРАВЛЕНО: перевіряємо чи є ще top-level коментарі для завантаження
+      const totalTopLevelLoaded = (pageToLoad + 1) * commentsPerPage;
+      const hasMoreTopLevel = totalTopLevelLoaded < (data.total || 0);
       
       console.log('Load More Logic:', {
-        currentLoadedCount,
-        totalAvailable,
-        hasMoreCalculated: currentLoadedCount < totalAvailable,
-        shouldShowButton: currentLoadedCount < totalAvailable && currentLoadedCount >= 20
+        pageToLoad,
+        totalTopLevelLoaded,
+        totalFromAPI: data.total,
+        hasMoreTopLevel,
+        newCommentsReceived: data.comments?.length || 0
       });
       
-      setHasMore(currentLoadedCount < totalAvailable);
-      
-      if (!reset) {
-        setOffset(prev => prev + commentsPerPage);
-      }
+      // Якщо отримали менше коментарів ніж запитували, то більше немає
+      setHasMore(hasMoreTopLevel && (data.comments?.length || 0) === commentsPerPage);
 
       setPendingComments(getPendingComments(globalPageId));
 
@@ -271,14 +277,15 @@ export function PandaTrackComments({
       setLoadingMore(false);
       loadingRef.current = false;
     }
-  }, [globalPageId, offset, lastKnownCommentTime, comments.length]);
+  }, [globalPageId, currentPage, lastKnownCommentTime, commentsPerPage]);
 
+  // ВИПРАВЛЕНО: handleLoadMore тепер просто викликає loadComments(false)
   const handleLoadMore = useCallback(() => {
     if (!loadingMore && hasMore && !loadingRef.current) {
-      console.log('Loading more comments, current count:', comments.length, 'hasMore:', hasMore);
+      console.log('Loading more comments, current page:', currentPage, 'hasMore:', hasMore);
       loadComments(false);
     }
-  }, [loadComments, loadingMore, hasMore, comments.length]);
+  }, [loadComments, loadingMore, hasMore, currentPage]);
 
   const handleNavigateToComment = (commentId: string) => {
     console.log('Navigating to comment:', commentId);
@@ -506,18 +513,18 @@ export function PandaTrackComments({
     return () => clearInterval(interval);
   }, [checkPendingCommentsStatus]);
 
-  // ВИПРАВЛЕНО: розрахунок для Load More
+  // ВИПРАВЛЕНО: спрощений розрахунок для Load More
   const currentLoadedCount = countAllComments(comments);
-  const shouldShowLoadMore = hasMore && currentLoadedCount < totalComments;
+  const shouldShowLoadMore = hasMore && comments.length >= commentsPerPage;
 
   // Debug info
   console.log('Comments state:', {
-    commentsCount: comments.length,
+    topLevelCommentsCount: comments.length,
     currentLoadedCount,
     totalComments,
     hasMore,
     loadingMore,
-    offset,
+    currentPage,
     shouldShowLoadMore
   });
 
@@ -617,7 +624,7 @@ export function PandaTrackComments({
             submittingReply={submitting}
           />
 
-          {/* ВИПРАВЛЕНИЙ Load More блок - ЗАВЖДИ перевіряє shouldShowLoadMore */}
+          {/* ВИПРАВЛЕНИЙ Load More блок */}
           {shouldShowLoadMore && (
             <div className="text-center mt-8">
               <button
@@ -647,7 +654,7 @@ export function PandaTrackComments({
               {/* Debug info для розробки */}
               {process.env.NODE_ENV === 'development' && (
                 <div className="mt-2 text-xs text-gray-500">
-                  Завантажено: {currentLoadedCount} з {totalComments} | hasMore: {hasMore.toString()} | shouldShow: {shouldShowLoadMore.toString()}
+                  Page: {currentPage} | Top-level: {comments.length} | Total: {currentLoadedCount} з {totalComments} | hasMore: {hasMore.toString()}
                 </div>
               )}
             </div>
