@@ -1,4 +1,5 @@
 const BaseProvider = require('./BaseProvider');
+const { translateStatus, translateLocation } = require('../utils/ukrposhtaTranslations');
 
 class UkrposhtaProvider extends BaseProvider {
     constructor(config) {
@@ -24,12 +25,13 @@ class UkrposhtaProvider extends BaseProvider {
             throw new Error('Ukrposhta Bearer token not configured');
         }
 
-        // Спробуємо кілька стратегій
+        // ВИПРАВЛЕНО: Правильний порядок стратегій - повна історія спочатку
         const strategies = [
-            () => this.tryLastEndpoint(trackingNumber),
-            () => this.tryFullEndpoint(trackingNumber),
-            () => this.tryWithoutLang(trackingNumber),
-            () => this.tryBulkEndpoint([trackingNumber])
+            () => this.tryFullEndpoint(trackingNumber),      // 1. /statuses - ПОВНА ІСТОРІЯ
+            () => this.tryFullEndpointUA(trackingNumber),    // 2. /statuses українською 
+            () => this.tryLastEndpoint(trackingNumber),      // 3. /statuses/last - fallback
+            () => this.tryWithoutLang(trackingNumber),       // 4. без lang параметра
+            () => this.tryBulkEndpoint([trackingNumber])     // 5. POST запит
         ];
 
         let lastError = null;
@@ -37,8 +39,8 @@ class UkrposhtaProvider extends BaseProvider {
         for (const strategy of strategies) {
             try {
                 const result = await strategy();
-                if (result.success) {
-                    console.log(`Ukrposhta: успішний запит стратегією ${strategy.name}`);
+                if (result.success && result.data.events && result.data.events.length > 0) {
+                    console.log(`Ukrposhta: успішний запит стратегією ${strategy.name}, подій: ${result.data.events.length}`);
                     return result;
                 }
             } catch (error) {
@@ -64,25 +66,8 @@ class UkrposhtaProvider extends BaseProvider {
         };
     }
 
-    async tryLastEndpoint(trackingNumber) {
-        // Використовуємо makeSimpleRequest для простих GET запитів
-        const url = `${this.baseUrl}/statuses/last?barcode=${trackingNumber}&lang=en`;
-        
-        const response = await this.makeSimpleRequest(url, {
-            'Authorization': `Bearer ${this.bearer}`,
-            'Cache-Control': 'no-cache'
-        });
-
-        if (response.data && response.data.barcode) {
-            const dataArray = Array.isArray(response.data) ? response.data : [response.data];
-            return this.normalizeUkrposhtaResponse(dataArray, trackingNumber);
-        }
-
-        return { success: false };
-    }
-
     async tryFullEndpoint(trackingNumber) {
-        // Використовуємо makeSimpleRequest для отримання повної історії
+        // ПРІОРИТЕТ: Повна історія англійською
         const url = `${this.baseUrl}/statuses?barcode=${trackingNumber}&lang=en`;
         
         const response = await this.makeSimpleRequest(url, {
@@ -91,7 +76,43 @@ class UkrposhtaProvider extends BaseProvider {
         });
 
         if (response.data && Array.isArray(response.data) && response.data.length > 0) {
+            console.log(`Ukrposhta: Отримано ${response.data.length} статусів з /statuses англійською`);
             return this.normalizeUkrposhtaResponse(response.data, trackingNumber);
+        }
+
+        return { success: false };
+    }
+
+    async tryFullEndpointUA(trackingNumber) {
+        // Повна історія українською (без lang=en)
+        const url = `${this.baseUrl}/statuses?barcode=${trackingNumber}`;
+        
+        const response = await this.makeSimpleRequest(url, {
+            'Authorization': `Bearer ${this.bearer}`,
+            'Cache-Control': 'no-cache'
+        });
+
+        if (response.data && Array.isArray(response.data) && response.data.length > 0) {
+            console.log(`Ukrposhta: Отримано ${response.data.length} статусів з /statuses українською`);
+            return this.normalizeUkrposhtaResponse(response.data, trackingNumber, true);
+        }
+
+        return { success: false };
+    }
+
+    async tryLastEndpoint(trackingNumber) {
+        // Fallback: тільки останній статус
+        const url = `${this.baseUrl}/statuses/last?barcode=${trackingNumber}&lang=en`;
+        
+        const response = await this.makeSimpleRequest(url, {
+            'Authorization': `Bearer ${this.bearer}`,
+            'Cache-Control': 'no-cache'
+        });
+
+        if (response.data && response.data.barcode) {
+            console.log('Ukrposhta: Fallback /statuses/last успішний (тільки останній статус)');
+            const dataArray = Array.isArray(response.data) ? response.data : [response.data];
+            return this.normalizeUkrposhtaResponse(dataArray, trackingNumber);
         }
 
         return { success: false };
@@ -108,7 +129,7 @@ class UkrposhtaProvider extends BaseProvider {
 
         if (response.data && response.data.barcode) {
             const dataArray = Array.isArray(response.data) ? response.data : [response.data];
-            return this.normalizeUkrposhtaResponse(dataArray, trackingNumber);
+            return this.normalizeUkrposhtaResponse(dataArray, trackingNumber, true);
         }
 
         return { success: false };
@@ -116,8 +137,8 @@ class UkrposhtaProvider extends BaseProvider {
 
     async tryBulkEndpoint(trackingNumbers) {
         try {
-            // Використовуємо старий makeRequest для POST з правильним форматом
-            const response = await this.makeRequest(`${this.baseUrl}/statuses/last`, {
+            // POST запит для bulk
+            const response = await this.makeRequest(`${this.baseUrl}/statuses`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${this.bearer}`,
@@ -125,11 +146,12 @@ class UkrposhtaProvider extends BaseProvider {
                     'Accept': 'application/json',
                     'User-Agent': 'PandaTrack/2.0'
                 },
-                data: trackingNumbers.map(num => ({ barcode: num })),
+                data: trackingNumbers,  // Просто масив рядків згідно з документацією
                 timeout: 30000
             });
 
             if (response.data && Array.isArray(response.data) && response.data.length > 0) {
+                console.log(`Ukrposhta: Bulk POST отримав ${response.data.length} статусів`);
                 return this.normalizeUkrposhtaResponse(response.data, trackingNumbers[0]);
             }
 
@@ -151,8 +173,8 @@ class UkrposhtaProvider extends BaseProvider {
         }
 
         try {
-            // Швидкий health check з makeSimpleRequest
-            const url = `${this.baseUrl}/statuses/last?barcode=0500100031143&lang=en`;
+            // Health check тестуємо повний endpoint
+            const url = `${this.baseUrl}/statuses?barcode=0500100031143&lang=en`;
             
             const response = await this.makeSimpleRequest(url, {
                 'Authorization': `Bearer ${this.bearer}`
@@ -164,7 +186,7 @@ class UkrposhtaProvider extends BaseProvider {
                 bearerValid: true,
                 responseCode: response.status,
                 responseTime: response.responseTime,
-                endpoint: '/statuses/last',
+                endpoint: '/statuses (full history)',
                 timestamp: new Date().toISOString()
             };
             
@@ -189,55 +211,78 @@ class UkrposhtaProvider extends BaseProvider {
         }
     }
 
-    normalizeUkrposhtaResponse(data, trackingNumber) {
-        const events = data.map(status => ({
-            date: status.date,
-            status: status.eventName,
-            location: status.name || '',
-            description: status.eventName || '',
-            statusCode: status.event,
-            country: status.country,
-            reason: status.eventReason,
-            step: status.step
-        }));
-
-        events.sort((a, b) => b.step - a.step);
+    normalizeUkrposhtaResponse(data, trackingNumber, isUkrainian = false) {
+        // Сортуємо за step (номер кроку) - від найранішого до найпізнішого
+        const sortedData = data.sort((a, b) => a.step - b.step);
         
-        const latestStatus = data.find(s => s.step === Math.max(...data.map(s => s.step)));
+        const events = sortedData.map(status => {
+            const originalStatus = status.eventName || 'Unknown Event';
+            const originalLocation = status.name || status.index || '';
+            
+            // Якщо дані українською - перекладаємо на українську
+            const translatedStatus = isUkrainian ? originalStatus : translateStatus(originalStatus);
+            const translatedLocation = isUkrainian ? originalLocation : translateLocation(originalLocation);
+            
+            return {
+                date: this.parseISODate(status.date),
+                status: translatedStatus,
+                location: translatedLocation,
+                description: translatedStatus,
+                statusCode: status.event?.toString(),
+                country: status.country === 'Україна' ? 'UKRAINE' : (status.country || 'UKRAINE'),
+                reason: status.eventReason,
+                step: status.step,
+                mailType: status.mailType,
+                indexOrder: status.indexOrder
+            };
+        });
+
+        // Останній статус (найбільший step)
+        const latestStatus = sortedData[sortedData.length - 1];
         
         const statusMapping = {
             41000: 'delivered',
-            48000: 'delivered',
+            48000: 'delivered', 
             41010: 'returned',
             31200: 'returning',
             31300: 'forwarding',
             31400: 'exception',
-            21700: 'in_transit',
-            21500: 'in_transit',
-            20700: 'in_transit',
-            20800: 'in_transit',
-            10100: 'accepted',
+            21700: 'at_pickup',    // В відділенні для отримання
+            21500: 'out_for_delivery', // Відправлено до відділення
+            20700: 'in_transit',   // Надходження до центру
+            20800: 'in_transit',   // Відправлення з центру
+            20900: 'in_transit',   // Відправлення до ВПЗ
+            10100: 'accepted',     // Прийнято
             10600: 'cancelled',
             10602: 'cancelled',
-            21400: 'storage'
+            10603: 'cancelled',
+            21400: 'storage'       // На зберіганні
         };
 
         const statusCode = latestStatus?.event;
         const normalizedStatus = statusMapping[statusCode] || 'in_transit';
         
+        // Перекладений статус для відображення
+        const displayStatus = isUkrainian ? 
+            latestStatus?.eventName : 
+            translateStatus(latestStatus?.eventName || 'Unknown Status');
+        
         return {
             success: true,
             data: {
                 trackingNumber: trackingNumber,
-                carrier: 'ukrposhta',
-                status: latestStatus?.eventName || 'Unknown',
-                statusCode: statusCode,
+                carrier: 'Укрпошта',  // Українська назва
+                status: displayStatus,
+                statusCode: statusCode?.toString(),
                 normalizedStatus: normalizedStatus,
                 lastUpdate: latestStatus?.date || new Date().toISOString(),
                 events: events,
                 estimatedDelivery: null,
                 mailType: latestStatus?.mailType,
-                country: latestStatus?.country,
+                country: latestStatus?.country === 'Україна' ? 'UKRAINE' : (latestStatus?.country || 'UKRAINE'),
+                destinationCountry: 'UKRAINE',
+                daysInTransit: this.calculateDaysInTransit(sortedData),
+                totalEvents: events.length,
                 raw: data
             },
             provider: this.name,
@@ -247,12 +292,41 @@ class UkrposhtaProvider extends BaseProvider {
         };
     }
 
+    parseISODate(dateString) {
+        if (!dateString) return new Date().toISOString();
+        
+        try {
+            // Укрпошта повертає дати в форматі "2017-07-27T16:33:00"
+            const date = new Date(dateString);
+            return isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
+        } catch {
+            return new Date().toISOString();
+        }
+    }
+
+    calculateDaysInTransit(statusArray) {
+        if (!statusArray || statusArray.length === 0) return 0;
+
+        const firstStatus = statusArray[0];
+        const lastStatus = statusArray[statusArray.length - 1];
+        
+        if (!firstStatus?.date) return 0;
+        
+        const startDate = new Date(firstStatus.date);
+        const endDate = lastStatus?.date ? new Date(lastStatus.date) : new Date();
+        
+        if (isNaN(startDate.getTime())) return 0;
+        
+        const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
+        return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    }
+
     canHandle(trackingNumber, carrierCode = null) {
         const number = trackingNumber.trim().toUpperCase();
         
         // Розширені формати згідно з документацією Укрпошти + фільтри
         const patterns = [
-            /^[0-9]{13}$/,                    // 13 цифр (bulk endpoint помилка)
+            /^[0-9]{13}$/,                    // 13 цифр 
             /^[0-9]{14}$/,                    // Внутрішні українські (14 цифр)
             /^[A-Z]{2}\d{9}UA$/,             // Українські міжнародні
             /^[A-Z]{2}\d{9}[A-Z]{2}$/,       // Загальні міжнародні UPU
