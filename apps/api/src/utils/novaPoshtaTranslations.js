@@ -1,4 +1,4 @@
-// apps/api/src/utils/novaPoshtaTranslations.js
+// apps/api/src/utils/novaPoshtaTranslations.js - ВИПРАВЛЕНА ВЕРСІЯ
 
 // Точні переклади найпоширеніших статусів
 const EXACT_TRANSLATIONS = {
@@ -13,45 +13,62 @@ const EXACT_TRANSLATIONS = {
     'Left branch': 'Вийшло з відділення',
     'Left the branch': 'Вийшло з відділення',
     
-    // Доставка - БЕЗ дублювання description
+    // Доставка
     'Delivered at parcel locker': 'Доставлено до поштомату',
     'Delivered at address': 'Доставлено за адресою',
     'Delivered': 'Доставлено',
     
-    // Прибуття - коротші варіанти
+    // Прибуття
     'Arrived at parcel locker': 'Прибуло до поштомату', 
     'Arrived at the address depot': 'Прибуло до адресного депо',
     'Arrived at the depot': 'Прибуло до депо',
     'Arrived at the KIT': 'Прибуло до КІТ',
-    'Arrived at terminal': 'Прибуло до терміналу',
+    'Arrived at terminal': 'Прибуло до terминалу',
     
-    // Відправка - коротші варіанти  
+    // Відправка
     'Left the address depot': 'Вийшло з адресного депо',
     'Left the KIT': 'Вийшло з КІТ',
-    'Left the terminal': 'Вийшло з терміналу'
+    'Left the terminal': 'Вийшло з терміналу',
+    
+    // ✅ НОВІ: Майбутні події
+    'Will arrive at': 'Прибуде до',
+    'Will leave from': 'Виїде з',
+    'Will depart from': 'Відправиться з',
+    'Leaving the': 'Виїде з',
+    
+    // ✅ СПЕЦІАЛЬНІ
+    'Return': 'Повернення',
+    'Returned': 'Повернено'
 };
 
 // Словник локацій та термінів
 const LOCATION_TERMS = {
     'parcel locker': 'поштомат',
-    'depot': 'депо',
+    'depot': 'депо', 
     'terminal': 'термінал',
-    'branch': 'відділення', 
+    'branch': 'відділення',
     'pickup point': 'пункт прийому',
     'address depot': 'адресне депо',
     'KIT': 'КІТ',
     'warehouse': 'склад',
     
+    // ✅ НОВІ: Терміни з API
+    'термінал': 'термінал',  // вже українською, залишаємо
+    'відділення': 'відділення', // вже українською
+    'депо': 'депо', // вже українською
+    
     // Міста
     'Kyiv': 'Київ',
-    'Kiev': 'Київ',
+    'Kiev': 'Київ', 
     'Lutsk': 'Луцьк',
     'Chernihiv': 'Чернігів',
     'Lviv': 'Львів',
     'Dnipro': 'Дніпро',
     'Kharkiv': 'Харків',
     'Odesa': 'Одеса',
-    'Velykyi Omelianyk': 'Великий Омеляник'
+    'Sumy': 'Суми', // ✅ ДОДАНО
+    'Velykyi Omelianyk': 'Великий Омеляник',
+    'urban villagе Sad': 'смт Сад' // ✅ ВИПРАВЛЕНО
 };
 
 /**
@@ -69,11 +86,18 @@ function translateStatus(englishStatus) {
         return EXACT_TRANSLATIONS[englishStatus];
     }
 
-    // Застосовуємо pattern-based переклади
+    // ✅ ВИПРАВЛЕНО: Розширені pattern-based переклади
     let translated = englishStatus;
 
-    // Основні patterns для статусів
+    // ✅ МАЙБУТНІ ПОДІЇ - найвищий пріоритет
     translated = translated
+        // Will arrive patterns
+        .replace(/^Will arrive at (.+)$/g, 'Прибуде до $1')
+        .replace(/^Will leave from (.+)$/g, 'Виїде з $1')
+        .replace(/^Will depart from (.+)$/g, 'Відправиться з $1')
+        .replace(/^Leaving the (.+)$/g, 'Виїде з $1')
+        
+        // ✅ ПОТОЧНІ ТА МИНУЛІ ПОДІЇ  
         // Delivered patterns - з номерами
         .replace(/^Delivered at parcel locker (\d+)$/g, 'Отримано в поштоматі $1')
         .replace(/^Delivered at branch (\d+)$/g, 'Отримано у відділенні $1') 
@@ -93,13 +117,16 @@ function translateStatus(englishStatus) {
         // Accepted patterns  
         .replace(/^Accepted at branch (\d+)$/g, 'Прийнято у відділенні $1')
         .replace(/^Accepted at pickup point (\d+)$/g, 'Прийнято у пункті прийому $1')
-        .replace(/^Accepted at (.+)$/g, 'Прийнято у $1');
+        .replace(/^Accepted at (.+)$/g, 'Прийнято у $1')
+        
+        // ✅ СПЕЦІАЛЬНІ СТАТУСИ
+        .replace(/^Return$/g, 'Повернення')
+        .replace(/^Returned$/g, 'Повернено');
 
-    // Замінюємо терміни та локації
+    // ✅ ВИПРАВЛЕНО: Замінюємо терміни та локації
     Object.entries(LOCATION_TERMS).forEach(([english, ukrainian]) => {
-        // Використовуємо word boundaries для точніших замін
-        const regex = new RegExp(`\\b${english}\\b`, 'gi');
-        translated = translated.replace(regex, ukrainian);
+        // Використовуємо точні заміни без word boundaries для кращої роботи з різними мовами
+        translated = translated.replace(new RegExp(english, 'g'), ukrainian);
     });
 
     return translated;
@@ -119,11 +146,37 @@ function translateLocation(englishLocation) {
 
     // Замінюємо терміни та назви міст
     Object.entries(LOCATION_TERMS).forEach(([english, ukrainian]) => {
-        const regex = new RegExp(`\\b${english}\\b`, 'gi');
-        translated = translated.replace(regex, ukrainian);
+        translated = translated.replace(new RegExp(english, 'g'), ukrainian);
     });
 
     return translated;
+}
+
+/**
+ * ✅ НОВА ФУНКЦІЯ: Визначає тип події на основі eventStatus
+ * @param {string} eventStatus - Статус події з API (future|now|passed)
+ * @param {string} status - Текст статусу
+ * @returns {string} Тип для UI (future|current|past)
+ */
+function getEventType(eventStatus, status) {
+    if (eventStatus === 'future') return 'future';
+    if (eventStatus === 'now') return 'current';
+    if (eventStatus === 'passed') return 'past';
+    
+    // Fallback логіка по ключовим словам
+    const futureKeywords = ['will', 'прибуде', 'виїде', 'leaving the'];
+    const currentKeywords = ['в дорозі', 'обробляється', 'готується'];
+    
+    const statusLower = status.toLowerCase();
+    
+    if (futureKeywords.some(keyword => statusLower.includes(keyword.toLowerCase()))) {
+        return 'future';
+    }
+    if (currentKeywords.some(keyword => statusLower.includes(keyword))) {
+        return 'current';
+    }
+    
+    return 'past'; // За замовчуванням
 }
 
 /**
@@ -138,6 +191,7 @@ function addTranslation(english, ukrainian) {
 module.exports = {
     translateStatus,
     translateLocation,
+    getEventType, // ✅ НОВА ФУНКЦІЯ
     addTranslation,
     EXACT_TRANSLATIONS,
     LOCATION_TERMS

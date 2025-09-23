@@ -230,10 +230,10 @@ class NovaPoshtaProvider extends BaseProvider {
             });
         }
 
-        console.log(`Nova Poshta: Built ${events.length} events from tracking data`);
+        console.log(`Nova Poshta: Built ${events.length} events with eventStatus from tracking data`);
         
-        // Сортуємо події по даті (найновіші спочатку для UI)
-        return events.sort((a, b) => new Date(b.date) - new Date(a.date));
+        // НЕ сортуємо події по даті - залишаемо в порядку API для правильного timeline
+        return events;
     }
 
     getCurrentStatus(data) {
