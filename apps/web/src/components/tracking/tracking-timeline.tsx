@@ -31,12 +31,12 @@ export default function TrackingTimeline({ events, isDelivered, carrier }: Track
     )
   }
 
-  //  СТРАТЕГSЯ КОНКУРЕНТSВ: Фильтруем future події
+  // ✅ СТРАТЕГИЯ КОНКУРЕНТОВ: Фильтруем future события
   const realEvents = events.filter(event => {
-    // Прибираем події с eventStatus = 'future'
+    // Убираем события с eventStatus = 'future'
     if (event.eventStatus === 'future') return false
     
-    // Прибираем події які починаються з "Will" або "Прибуде"
+    // Убираем события которые начинаются с "Will" или "Прибуде"
     if (event.status.toLowerCase().includes('will ')) return false
     if (event.status.toLowerCase().includes('прибуде')) return false
     if (event.status.toLowerCase().includes('виїде з') && 
@@ -52,10 +52,10 @@ export default function TrackingTimeline({ events, isDelivered, carrier }: Track
     return dateB - dateA // Newest first
   })
 
-  // Fix: Визначаемо ТІЛЬКИ ОДИН текущій статус
+  // ✅ ИСПРАВЛЕНО: Определяем ТОЛЬКО ОДИН текущий статус
   const getCurrentEventIndex = () => {
     if (isDelivered) {
-      // Якщо доставлено - знайти доставленну подію
+      // Если доставлено - найти доставленное событие
       return sortedEvents.findIndex(event => {
         const status = event.status.toLowerCase()
         return status.includes('доставлено') || 
@@ -65,7 +65,7 @@ export default function TrackingTimeline({ events, isDelivered, carrier }: Track
       })
     }
     
-    // Якщо в дорозі - перша подія (саме нове по даті)
+    // Если в пути - первое событие (самое новое по дате)
     return 0
   }
 
@@ -234,7 +234,7 @@ export default function TrackingTimeline({ events, isDelivered, carrier }: Track
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <h4 className="font-semibold text-blue-900 mb-2">Допомога з відстеженням</h4>
           <p className="text-blue-800 text-sm">
-            🚛 <strong>"Зараз тут"</strong> показує поточне місцезнаходження посилки. 
+            🚛 <strong>&ldquo;Зараз тут&rdquo;</strong> показує поточне місцезнаходження посилки. 
             Якщо статус не оновлювався більше тижня, рекомендуємо звернутися до служби 
             підтримки перевізника.
           </p>
