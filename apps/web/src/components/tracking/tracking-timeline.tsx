@@ -1,4 +1,4 @@
-// components/tracking/tracking-timeline.tsx - v 3.0
+// components/tracking/tracking-timeline.tsx - З CarrierBadge + фільтрація + "Зараз тут"
 'use client'
 
 import { CarrierBadge } from '@/components/ui/carrier-badge'
@@ -11,7 +11,7 @@ interface TrackingEvent {
   location?: string
   statusCode?: string
   displayDate?: string
-  eventStatus?: 'future' | 'now' | 'passed'
+  eventStatus?: 'future' | 'now' | 'passed' // Додано для фільтрації
   eventType?: string
 }
 
@@ -31,7 +31,7 @@ export default function TrackingTimeline({ events, isDelivered, carrier }: Track
     )
   }
 
-  // ✅ СТРАТЕГИЯ КОНКУРЕНТОВ: Фильтруем future события
+  // ✅ ДОДАНО: Фільтрація future подій як у конкурентів
   const realEvents = events.filter(event => {
     // Убираем события с eventStatus = 'future'
     if (event.eventStatus === 'future') return false
@@ -39,8 +39,6 @@ export default function TrackingTimeline({ events, isDelivered, carrier }: Track
     // Убираем события которые начинаются с "Will" или "Прибуде"
     if (event.status.toLowerCase().includes('will ')) return false
     if (event.status.toLowerCase().includes('прибуде')) return false
-    if (event.status.toLowerCase().includes('виїде з') && 
-        event.status.toLowerCase().includes('прибуде')) return false
     
     return true
   })
@@ -52,7 +50,7 @@ export default function TrackingTimeline({ events, isDelivered, carrier }: Track
     return dateB - dateA // Newest first
   })
 
-  // ✅ ИСПРАВЛЕНО: Определяем ТОЛЬКО ОДИН текущий статус
+  // ✅ ДОДАНО: Визначення поточного статусу для "Зараз тут"
   const getCurrentEventIndex = () => {
     if (isDelivered) {
       // Если доставлено - найти доставленное событие
@@ -119,48 +117,45 @@ export default function TrackingTimeline({ events, isDelivered, carrier }: Track
       <div className="relative">
         {sortedEvents.map((event, index) => {
           const isLastEvent = index === sortedEvents.length - 1
-          const isCurrent = index === currentEventIndex
+          const isCurrent = index === currentEventIndex // ✅ ДОДАНО: поточна подія
           const { mainText, subText } = cleanStatusText(event.status, event.description, event.location)
 
-          // ✅ ИСПРАВЛЕНО: Простая логика цветов
+          // ✅ ЗМІНЕНО: Поліпшена логіка кольорів - тільки один синій
           const getStatusColor = () => {
-            // Проверяем является ли это доставленным событием
-            const isDeliveredEvent = ['доставлено', 'отримано', 'вручено', 'delivered'].some(keyword => 
-              mainText.toLowerCase().includes(keyword)
-            )
+            // Перевірка чи це доставлений статус
+            const deliveredKeywords = ['доставлено', 'отримано', 'вручено', 'delivered', 'received'];
+            const isDeliveredStatus = deliveredKeywords.some(keyword => 
+              mainText.toLowerCase().includes(keyword) || 
+              (subText && subText.toLowerCase().includes(keyword))
+            );
             
-            if (isDeliveredEvent) {
+            // Зелений для доставлених
+            if (isDeliveredStatus) {
               return {
                 dot: 'bg-green-500 border-green-500',
-                line: 'bg-gray-300',
-                textWeight: 'font-bold',
-                bgHighlight: isCurrent ? 'bg-green-50 border-l-4 border-green-500 pl-4 -ml-6 py-2' : ''
+                line: 'bg-gray-300'
               }
             }
             
-            // ТОЛЬКО текущее событие синим (если не доставлено)
-            if (isCurrent && !isDeliveredEvent) {
+            // ✅ ЗМІНЕНО: Синій тільки для поточного статусу (якщо не доставлено)
+            if (isCurrent && !isDeliveredStatus) {
               return {
-                dot: 'bg-blue-500 border-blue-500 animate-pulse',
-                line: 'bg-gray-300',
-                textWeight: 'font-bold',
-                bgHighlight: 'bg-blue-50 border-l-4 border-blue-500 pl-4 -ml-6 py-2'
+                dot: 'bg-blue-500 border-blue-500 animate-pulse', // ✅ ДОДАНО: анімація
+                line: 'bg-gray-300'
               }
             }
             
-            // ВСЕ остальные события серые
+            // ✅ ЗМІНЕНО: Всі інші сірі
             return {
               dot: 'bg-gray-400 border-gray-400',
-              line: 'bg-gray-300',
-              textWeight: 'font-medium',
-              bgHighlight: ''
+              line: 'bg-gray-300'
             }
           }
 
           const colors = getStatusColor()
 
           return (
-            <div key={index} className={`relative flex ${colors.bgHighlight} rounded-lg`}>
+            <div key={index} className="relative flex">
               {/* Timeline візуальний елемент */}
               <div className="flex flex-col items-center mr-4 pt-1">
                 {/* Dot/Circle - вирівняний з H3 */}
@@ -177,14 +172,7 @@ export default function TrackingTimeline({ events, isDelivered, carrier }: Track
               <div className="flex-1 pb-8">
                 {/* Status Header */}
                 <div className="mb-2">
-                  <h3 className={`text-lg leading-tight text-[#333037] ${colors.textWeight}`}>
-                    {/* Иконка для текущего статуса */}
-                    {isCurrent && !mainText.toLowerCase().includes('доставлено') && (
-                      <span className="text-blue-500 mr-2">🚛</span>
-                    )}
-                    {mainText.toLowerCase().includes('доставлено') && (
-                      <span className="text-green-500 mr-2">✅</span>
-                    )}
+                  <h3 className="font-bold text-[#333037] text-lg leading-tight">
                     {mainText}
                   </h3>
                   
@@ -211,7 +199,7 @@ export default function TrackingTimeline({ events, isDelivered, carrier }: Track
                     </div>
                   )}
                   
-                  {/* Метка "Зараз тут" только для текущего события */}
+                  {/* ✅ ДОДАНО: Метка "Зараз тут" для поточного статусу */}
                   {isCurrent && !mainText.toLowerCase().includes('доставлено') && (
                     <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full font-medium">
                       Зараз тут
@@ -220,7 +208,7 @@ export default function TrackingTimeline({ events, isDelivered, carrier }: Track
                 </div>
 
                 {/* Carrier Badge */}
-                {carrier && index === 0 && (
+                {carrier && (
                   <CarrierBadge carrier={carrier} />
                 )}
               </div>
@@ -234,9 +222,9 @@ export default function TrackingTimeline({ events, isDelivered, carrier }: Track
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <h4 className="font-semibold text-blue-900 mb-2">Допомога з відстеженням</h4>
           <p className="text-blue-800 text-sm">
-            🚛 <strong>&ldquo;Зараз тут&rdquo;</strong> показує поточне місцезнаходження посилки. 
             Якщо статус не оновлювався більше тижня, рекомендуємо звернутися до служби 
-            підтримки перевізника.
+            підтримки перевізника. Деякі міжнародні відправлення можуть мати затримки 
+            через митні процедури.
           </p>
         </div>
       </div>
