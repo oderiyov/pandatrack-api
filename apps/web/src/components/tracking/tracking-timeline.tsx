@@ -1,7 +1,6 @@
-// components/tracking/tracking-timeline.tsx - В СТИЛЕ КОНКУРЕНТОВ
+// components/tracking/tracking-timeline.tsx - З CarrierBadge
 'use client'
 
-import React from 'react'
 import { CarrierBadge } from '@/components/ui/carrier-badge'
 
 interface TrackingEvent {
@@ -12,8 +11,6 @@ interface TrackingEvent {
   location?: string
   statusCode?: string
   displayDate?: string
-  eventStatus?: 'future' | 'now' | 'passed'
-  eventType?: string
 }
 
 interface TrackingTimelineProps {
@@ -32,41 +29,18 @@ export default function TrackingTimeline({ events, isDelivered, carrier }: Track
     )
   }
 
-  // Сортуємо події по даті (новіші зверху як у конкурентів)
+  // Sort events by date (newest first for display)
   const sortedEvents = [...events].sort((a, b) => {
     const dateA = new Date(a.date).getTime()
     const dateB = new Date(b.date).getTime()
     return dateB - dateA // Newest first
   })
 
-  // ✅ КЛЮЧОВА ЛОГІКА: визначаємо поточне положення посилки
-  const getCurrentEventIndex = () => {
-    if (isDelivered) {
-      // Якщо доставлено - знаходимо перше delivered event
-      return sortedEvents.findIndex(e => 
-        e.status.toLowerCase().includes('доставлено') ||
-        e.status.toLowerCase().includes('отримано') ||
-        e.status.toLowerCase().includes('delivered')
-      )
-    }
-
-    // Для в дорозі - знаходимо останню реальну (не майбутню) подію
-    const lastRealEventIndex = sortedEvents.findIndex(e => 
-      e.eventStatus !== 'future' && 
-      !e.status.toLowerCase().includes('will ') &&
-      !e.status.toLowerCase().includes('прибуде') &&
-      !e.status.toLowerCase().includes('виїде з') // Виключаємо майбутні
-    )
-    
-    return lastRealEventIndex !== -1 ? lastRealEventIndex : 0
-  }
-
-  const currentEventIndex = getCurrentEventIndex()
-
-  // Функція очищення тексту
+  // Функція для очищення тексту від дублювання
   const cleanStatusText = (status: string, description: string | string[], location?: string) => {
     const descText = Array.isArray(description) ? description.join(', ') : description
     
+    // Якщо status і description ідентичні, показуємо тільки один раз
     if (status === descText) {
       return {
         mainText: status,
@@ -74,84 +48,119 @@ export default function TrackingTimeline({ events, isDelivered, carrier }: Track
       }
     }
     
+    // Якщо description містить додаткову інформацію
+    if (descText && descText !== status) {
+      // Перевіряємо чи description не просто повторює status
+      const statusLower = status.toLowerCase()
+      const descLower = descText.toLowerCase()
+      
+      if (descLower.includes(statusLower) || statusLower.includes(descLower)) {
+        // Якщо один містить інший, беремо довший
+        const mainText = descText.length > status.length ? descText : status
+        return {
+          mainText,
+          subText: location || null
+        }
+      } else {
+        // Якщо різні, показуємо статус як заголовок, опис як підтекст
+        return {
+          mainText: status,
+          subText: location ? `${descText} • ${location}` : descText
+        }
+      }
+    }
+    
+    // За замовчуванням
     return {
       mainText: status,
       subText: location || null
     }
   }
 
-  // ✅ ВИЗНАЧЕННЯ типу події для стилювання
-  const getEventType = (event: TrackingEvent, index: number) => {
-    const isCurrent = index === currentEventIndex
-    const isFuture = event.eventStatus === 'future' || 
-                    event.status.toLowerCase().includes('will ') ||
-                    event.status.toLowerCase().includes('прибуде')
-    const isDeliveredEvent = event.status.toLowerCase().includes('доставлено') ||
-                           event.status.toLowerCase().includes('отримано') ||
-                           event.status.toLowerCase().includes('delivered')
-
-    if (isCurrent && !isFuture) return 'current'
-    if (isDeliveredEvent) return 'delivered'  
-    if (isFuture) return 'future'
-    return 'past'
-  }
-
   return (
     <div className="bg-white rounded-lg shadow-sm p-6">
       <h2 className="text-xl font-bold mb-6 text-[#333037]">Історія відправлення</h2>
       
-      {/* ✅ ПРОСТИЙ СПИСОК як у Vidstezhyty */}
-      <div className="space-y-4">
+      <div className="relative">
         {sortedEvents.map((event, index) => {
+          const isLastEvent = index === sortedEvents.length - 1
+          const isFirstEvent = index === 0
           const { mainText, subText } = cleanStatusText(event.status, event.description, event.location)
-          const eventType = getEventType(event, index)
+
+          // Поліпшена логіка кольорів timeline
+          const getStatusColor = () => {
+            // Зелений для доставлених
+            if (isFirstEvent && isDelivered) {
+              return {
+                dot: 'bg-green-500 border-green-500',
+                line: 'bg-gray-300'
+              }
+            }
+            
+            // Перевірка чи це доставлений статус
+            const deliveredKeywords = ['доставлено', 'отримано', 'вручено', 'delivered', 'received'];
+            const isDeliveredStatus = deliveredKeywords.some(keyword => 
+              mainText.toLowerCase().includes(keyword) || 
+              (subText && subText.toLowerCase().includes(keyword))
+            );
+            
+            if (isDeliveredStatus) {
+              return {
+                dot: 'bg-green-500 border-green-500',
+                line: 'bg-gray-300'
+              }
+            }
+            
+            // Синій для активних (останні 2-3 статуси якщо не доставлено)
+            if (!isDelivered && index < 3) {
+              return {
+                dot: 'bg-blue-500 border-blue-500',
+                line: 'bg-gray-300'
+              }
+            }
+            
+            // Сірий для старих статусів
+            return {
+              dot: 'bg-gray-400 border-gray-400',
+              line: 'bg-gray-300'
+            }
+          }
+
+          const colors = getStatusColor()
 
           return (
-            <div key={index} className={`relative flex items-start space-x-4 p-4 rounded-lg transition-all ${
-              eventType === 'current' ? 'bg-blue-50 border-l-4 border-blue-500' : 
-              eventType === 'delivered' ? 'bg-green-50 border-l-4 border-green-500' :
-              eventType === 'future' ? 'bg-purple-50 border-l-4 border-purple-300' :
-              'hover:bg-gray-50'
-            }`}>
-              
-              {/* ✅ Індикатор статусу */}
-              <div className={`w-3 h-3 rounded-full mt-2 flex-shrink-0 ${
-                eventType === 'current' ? 'bg-blue-500 animate-pulse' :
-                eventType === 'delivered' ? 'bg-green-500' :
-                eventType === 'future' ? 'bg-purple-300' :
-                'bg-gray-400'
-              }`} />
+            <div key={index} className="relative flex">
+              {/* Timeline візуальний елемент */}
+              <div className="flex flex-col items-center mr-4 pt-1">
+                {/* Dot/Circle - вирівняний з H3 */}
+                <div className={`w-3 h-3 rounded-full border-2 ${colors.dot} flex-shrink-0`}>
+                </div>
+                
+                {/* Vertical Line - показується тільки якщо не останній елемент */}
+                {!isLastEvent && (
+                  <div className={`w-0.5 flex-1 mt-2 ${colors.line} min-h-[80px]`}></div>
+                )}
+              </div>
 
-              {/* Контент події */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-start justify-between mb-2">
-                  {/* Статус - ЖИРНИМ як у Nova Poshta для поточного */}
-                  <h3 className={`text-base leading-tight text-[#333037] ${
-                    eventType === 'current' || eventType === 'future' ? 'font-bold' : 'font-medium'
-                  }`}>
-                    {/* ✅ Іконки як у конкурентів */}
-                    {eventType === 'current' && '🚛 '}
-                    {eventType === 'delivered' && '✅ '}
-                    {eventType === 'future' && '📅 '}
+              {/* Event Content */}
+              <div className="flex-1 pb-8">
+                {/* Status Header */}
+                <div className="mb-2">
+                  <h3 className="font-bold text-[#333037] text-lg leading-tight">
                     {mainText}
                   </h3>
-
-                  {/* Мітка поточного положення */}
-                  {eventType === 'current' && (
-                    <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded-full">
-                      Зараз тут
-                    </span>
+                  
+                  {/* Додаткова інформація - показуємо тільки якщо є */}
+                  {subText && (
+                    <p className="text-[#333037]/80 text-sm mt-1">
+                      {subText}
+                    </p>
                   )}
                 </div>
 
-                {/* Локація якщо є */}
-                {subText && (
-                  <p className="text-sm text-[#333037]/70 mb-2">{subText}</p>
-                )}
-
-                {/* Дата та час */}
-                <div className="flex items-center text-sm text-[#333037]/60 space-x-3">
-                  <div className="font-medium">
+                {/* Date and Time на одному рядку */}
+                <div className="flex items-center text-sm text-[#333037]/70 mb-2">
+                  <div className="font-semibold mr-2">
                     {event.displayDate || new Date(event.date).toLocaleDateString('uk-UA', {
                       day: 'numeric',
                       month: 'short',
@@ -159,22 +168,15 @@ export default function TrackingTimeline({ events, isDelivered, carrier }: Track
                     }) + ' р.'}
                   </div>
                   {event.time && (
-                    <div className="font-medium">{event.time}</div>
-                  )}
-                  
-                  {/* Перевізник тільки для першої події */}
-                  {index === 0 && carrier && (
-                    <CarrierBadge carrier={carrier} />
+                    <div className="font-semibold">
+                      {event.time}
+                    </div>
                   )}
                 </div>
 
-                {/* Додаткова інформація для прогнозних подій */}
-                {eventType === 'future' && (
-                  <div className="mt-2">
-                    <span className="inline-block px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded">
-                      Прогнозована подія
-                    </span>
-                  </div>
+                {/* Carrier Badge */}
+                {carrier && (
+                  <CarrierBadge carrier={carrier} />
                 )}
               </div>
             </div>
@@ -182,34 +184,15 @@ export default function TrackingTimeline({ events, isDelivered, carrier }: Track
         })}
       </div>
 
-      {/* ✅ Статистика внизу як у OrderTracker */}
+      {/* Help Section */}
       <div className="mt-6 pt-6 border-t border-gray-200">
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="font-semibold text-blue-900">Статистика відстеження</h4>
-            <span className="text-xs text-blue-600">Оновлено щойно</span>
-          </div>
-          
-          <div className="grid grid-cols-3 gap-4 text-sm">
-            <div className="text-center">
-              <div className="font-bold text-blue-600 text-lg">
-                {events.filter(e => e.eventStatus !== 'future').length}
-              </div>
-              <div className="text-blue-800">Подій пройдено</div>
-            </div>
-            <div className="text-center">
-              <div className="font-bold text-blue-600 text-lg">
-                {events.filter(e => e.eventStatus === 'future').length}
-              </div>
-              <div className="text-blue-800">Заплановано</div>
-            </div>
-            <div className="text-center">
-              <div className="font-bold text-blue-600 text-lg">
-                {carrier || 'Nova Poshta'}
-              </div>
-              <div className="text-blue-800">Перевізник</div>
-            </div>
-          </div>
+          <h4 className="font-semibold text-blue-900 mb-2">Допомога з відстеженням</h4>
+          <p className="text-blue-800 text-sm">
+            Якщо статус не оновлювався більше тижня, рекомендуємо звернутися до служби 
+            підтримки перевізника. Деякі міжнародні відправлення можуть мати затримки 
+            через митні процедури.
+          </p>
         </div>
       </div>
     </div>
