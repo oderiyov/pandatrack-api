@@ -125,7 +125,7 @@ export function PandaTrackComments({
   const [lastKnownCommentTime, setLastKnownCommentTime] = useState<string | null>(null);
   
   const commentsRef = useRef<HTMLDivElement>(null);
-  const commentsPerPage = 20;
+  const commentsPerPage = 15;
   
   const globalPageId = pageId;
 
