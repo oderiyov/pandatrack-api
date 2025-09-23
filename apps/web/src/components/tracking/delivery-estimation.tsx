@@ -1,4 +1,4 @@
-// components/tracking/delivery-estimation.tsx
+// components/tracking/delivery-estimation.tsx - ОСТАТОЧНО ВИПРАВЛЕНО
 'use client'
 
 interface TrackingData {
@@ -19,6 +19,19 @@ interface DeliveryEstimationProps {
   isDelivered: boolean
 }
 
+interface EstimationData {
+  min: number
+  max: number
+  confidence: number
+}
+
+interface CarrierEstimations {
+  [key: string]: EstimationData | {
+    domestic: EstimationData
+    international: EstimationData
+  }
+}
+
 // Функція для форматування дат в українському форматі
 const formatUkrainianDate = (dateString: string): string => {
   try {
@@ -37,7 +50,7 @@ const formatUkrainianDate = (dateString: string): string => {
     const minutes = date.getMinutes().toString().padStart(2, '0')
 
     return `${day} ${month} ${year} р. ${hours}:${minutes}`
-  } catch (error) {
+  } catch {
     return 'Невідома дата'
   }
 }
@@ -47,8 +60,8 @@ export default function DeliveryEstimation({ trackingData, isDelivered }: Delive
   const getDeliveryEstimation = () => {
     const { sourcesChecked, originCountry, destinationCountry } = trackingData
     
-    // Base estimation logic
-    const estimations = {
+    // Base estimation logic with proper typing
+    const estimations: CarrierEstimations = {
       'novaposhta': { min: 1, max: 3, confidence: 95 },
       'ukrposhta': { 
         domestic: { min: 3, max: 7, confidence: 90 },
@@ -67,7 +80,7 @@ export default function DeliveryEstimation({ trackingData, isDelivered }: Delive
     const isInternational = originCountry && destinationCountry && 
                            originCountry !== destinationCountry
 
-    let estimation = { min: 7, max: 21, confidence: 80 } // default
+    let estimation: EstimationData = { min: 7, max: 21, confidence: 80 } // default
 
     if (primaryCarrier) {
       const carrierKey = primaryCarrier.includes('nova') ? 'novaposhta' :
@@ -78,12 +91,13 @@ export default function DeliveryEstimation({ trackingData, isDelivered }: Delive
                         primaryCarrier.includes('usps') ? 'usps' : null
 
       if (carrierKey && estimations[carrierKey]) {
+        const carrierData = estimations[carrierKey]
         if (carrierKey === 'ukrposhta' && isInternational) {
-          estimation = estimations[carrierKey].international
+          estimation = (carrierData as { domestic: EstimationData; international: EstimationData }).international
         } else if (carrierKey === 'ukrposhta') {
-          estimation = estimations[carrierKey].domestic
+          estimation = (carrierData as { domestic: EstimationData; international: EstimationData }).domestic
         } else {
-          estimation = estimations[carrierKey]
+          estimation = carrierData as EstimationData
         }
       }
     }

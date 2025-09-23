@@ -1,5 +1,7 @@
-// components/tracking/tracking-metadata.tsx
+// components/tracking/tracking-metadata.tsx - ВИПРАВЛЕНО ESLint
 'use client'
+
+import { CarrierIcon } from '@/components/ui/carrier-icon'
 
 interface TrackingData {
   trackingNumber: string
@@ -31,27 +33,36 @@ export default function TrackingMetadata({ trackingData }: TrackingMetadataProps
     }
   }
 
-  const getCarrierOfficialLinks = (carrier: string, trackingNumber: string) => {
-    const carrierData: Record<string, { name: string; url: string; logo?: string }> = {
+  // ВИПРАВЛЕНО: видалено unused trackingNumber parameter
+  const getCarrierOfficialLinks = (carrier: string) => {
+    const carrierData: Record<string, { name: string; url: string }> = {
       'ukrposhta': {
         name: 'Укрпошта',
-        url: `https://www.ukrposhta.ua/`,
-        logo: '🏣'
+        url: `https://www.ukrposhta.ua/`
       },
       'novaposhta': {
         name: 'Нова Пошта',
-        url: `https://novaposhta.ua/tracking/`,
-        logo: '📦'
+        url: `https://tracking.novaposhta.ua/#/uk`
       },
       'dhl': {
         name: 'DHL',
-        url: `https://www.dhl.com/ua-en/home/tracking.html`,
-        logo: '✈️'
+        url: `https://www.dhl.com/ua-en/home/tracking.html`
       },
       'cainiao': {
         name: 'Cainiao',
-        url: `https://global.cainiao.com/`,
-        logo: '🐧'
+        url: `https://global.cainiao.com/`
+      },
+      'meest': {
+        name: 'Meest',
+        url: `https://ua.meest.com/`
+      },
+      'sat': {
+        name: 'SAT',
+        url: `https://sat.ua/`
+      },
+      'delivery': {
+        name: 'Delivery Auto',
+        url: `https://delivery-auto.com/`
       }
     }
 
@@ -59,7 +70,10 @@ export default function TrackingMetadata({ trackingData }: TrackingMetadataProps
     const key = carrierKey.includes('nova') ? 'novaposhta' :
                carrierKey.includes('ukr') ? 'ukrposhta' :
                carrierKey.includes('dhl') ? 'dhl' :
-               carrierKey.includes('cainiao') ? 'cainiao' : null
+               carrierKey.includes('cainiao') || carrierKey.includes('upu') ? 'cainiao' :
+               carrierKey.includes('meest') ? 'meest' :
+               carrierKey.includes('sat') ? 'sat' :
+               carrierKey.includes('delivery') ? 'delivery' : null
 
     return key ? carrierData[key] : null
   }
@@ -70,16 +84,16 @@ export default function TrackingMetadata({ trackingData }: TrackingMetadataProps
       
       <div className="space-y-4">
         {/* Tracking Number */}
-        <div className="flex justify-between items-start">
+        <div className="flex justify-between items-center">
           <span className="text-[#333037]/60 text-sm">Трек-номер</span>
-          <span className="font-mono text-sm font-medium text-[#333037] break-all">
+          <span className="font-mono text-sm font-medium text-[#333037] break-all text-right">
             {trackingData.trackingNumber}
           </span>
         </div>
 
         {/* Origin */}
         {trackingData.originCountry && (
-          <div className="flex justify-between items-start">
+          <div className="flex justify-between items-center">
             <span className="text-[#333037]/60 text-sm">Країна відправлення</span>
             <span className="text-sm text-[#333037]">{trackingData.originCountry}</span>
           </div>
@@ -87,7 +101,7 @@ export default function TrackingMetadata({ trackingData }: TrackingMetadataProps
 
         {/* Destination */}
         {trackingData.destinationCountry && (
-          <div className="flex justify-between items-start">
+          <div className="flex justify-between items-center">
             <span className="text-[#333037]/60 text-sm">Країна отримання</span>
             <span className="text-sm text-[#333037]">{trackingData.destinationCountry}</span>
           </div>
@@ -95,7 +109,7 @@ export default function TrackingMetadata({ trackingData }: TrackingMetadataProps
 
         {/* Days in transit */}
         {trackingData.daysInTransit !== undefined && (
-          <div className="flex justify-between items-start">
+          <div className="flex justify-between items-center">
             <span className="text-[#333037]/60 text-sm">Днів в дорозі</span>
             <span className="text-sm font-medium text-[#333037]">
               {trackingData.daysInTransit}
@@ -104,19 +118,20 @@ export default function TrackingMetadata({ trackingData }: TrackingMetadataProps
         )}
 
         {/* Delivery Company */}
-        <div className="flex justify-between items-start">
+        <div className="flex justify-between items-center">
           <span className="text-[#333037]/60 text-sm">Перевізник</span>
           <span className="text-sm text-[#333037]">{trackingData.carrier}</span>
         </div>
 
-        {/* Sources Checked */}
+        {/* Sources Checked - ВИПРАВЛЕНИЙ border-radius */}
         <div>
           <span className="text-[#333037]/60 text-sm block mb-2">Перевірено в</span>
           <div className="flex flex-wrap gap-2">
             {trackingData.sourcesChecked.map((source, index) => (
               <span 
                 key={index} 
-                className="bg-[#f0e5d9] px-3 py-1 rounded-full text-xs font-medium text-[#333037]"
+                className="bg-[#f0e5d9] px-3 py-1 text-xs font-medium text-[#333037]"
+                style={{ borderRadius: '.25rem' }}
               >
                 {source}
               </span>
@@ -124,8 +139,8 @@ export default function TrackingMetadata({ trackingData }: TrackingMetadataProps
           </div>
         </div>
 
-        {/* Last Updated */}
-        <div className="flex justify-between items-start">
+        {/* Last Updated - ВИПРАВЛЕНО ВИРІВНЮВАННЯ */}
+        <div className="flex justify-between items-center">
           <span className="text-[#333037]/60 text-sm">Останнє оновлення</span>
           <span className="text-xs text-[#333037]/70 text-right">
             {formatDate(trackingData.lastUpdated)}
@@ -133,12 +148,13 @@ export default function TrackingMetadata({ trackingData }: TrackingMetadataProps
         </div>
       </div>
 
-      {/* Official Carrier Links */}
+      {/* Official Carrier Links - З CarrierIcon */}
       <div className="mt-6 pt-6 border-t border-gray-200">
         <h4 className="font-semibold text-[#333037] mb-3">Перевірити на офіційних сайтах</h4>
         <div className="space-y-2">
           {trackingData.sourcesChecked.map((carrier, index) => {
-            const carrierInfo = getCarrierOfficialLinks(carrier, trackingData.trackingNumber)
+            // ВИПРАВЛЕНО: видалено unused trackingNumber parameter
+            const carrierInfo = getCarrierOfficialLinks(carrier)
             if (!carrierInfo) return null
 
             return (
@@ -149,7 +165,10 @@ export default function TrackingMetadata({ trackingData }: TrackingMetadataProps
                 rel="noopener noreferrer"
                 className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors group"
               >
-                <span className="text-lg">{carrierInfo.logo}</span>
+                {/* CarrierIcon замість емодзі */}
+                <div className="flex-shrink-0">
+                  <CarrierIcon carrier={carrier} size={20} />
+                </div>
                 <span className="font-medium text-[#333037] group-hover:text-blue-600">
                   {carrierInfo.name}
                 </span>

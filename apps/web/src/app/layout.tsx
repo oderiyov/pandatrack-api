@@ -1,4 +1,4 @@
-// app/layout.tsx - Fixed TypeScript errors
+// src/app/layout.tsx - БЕЗ CDN, використовуємо npm пакет
 import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
@@ -98,9 +98,13 @@ export default function RootLayout({
         
         {/* Disable automatic link detection */}
         <meta name="format-detection" content="telephone=no, date=no, email=no, address=no" />
+        
+        {/* ВИДАЛЕНО CDN залежності - використовуємо npm пакет artalk */}
       </head>
       <body className="antialiased bg-[#f5f5f5] text-[#333037]">
         {children}
+        
+        {/* ВИДАЛЕНО Artalk CDN скрипт - використовуємо динамічний імпорт */}
       </body>
     </html>
   )
