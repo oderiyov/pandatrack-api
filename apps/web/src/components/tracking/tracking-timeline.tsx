@@ -1,4 +1,4 @@
-// components/tracking/tracking-timeline.tsx - З CarrierBadge
+// components/tracking/tracking-timeline.tsx - v 3.0
 'use client'
 
 import { CarrierBadge } from '@/components/ui/carrier-badge'
@@ -11,6 +11,8 @@ interface TrackingEvent {
   location?: string
   statusCode?: string
   displayDate?: string
+  eventStatus?: 'future' | 'now' | 'passed'
+  eventType?: string
 }
 
 interface TrackingTimelineProps {
@@ -29,12 +31,45 @@ export default function TrackingTimeline({ events, isDelivered, carrier }: Track
     )
   }
 
+  //  СТРАТЕГSЯ КОНКУРЕНТSВ: Фильтруем future події
+  const realEvents = events.filter(event => {
+    // Прибираем події с eventStatus = 'future'
+    if (event.eventStatus === 'future') return false
+    
+    // Прибираем події які починаються з "Will" або "Прибуде"
+    if (event.status.toLowerCase().includes('will ')) return false
+    if (event.status.toLowerCase().includes('прибуде')) return false
+    if (event.status.toLowerCase().includes('виїде з') && 
+        event.status.toLowerCase().includes('прибуде')) return false
+    
+    return true
+  })
+
   // Sort events by date (newest first for display)
-  const sortedEvents = [...events].sort((a, b) => {
+  const sortedEvents = [...realEvents].sort((a, b) => {
     const dateA = new Date(a.date).getTime()
     const dateB = new Date(b.date).getTime()
     return dateB - dateA // Newest first
   })
+
+  // Fix: Визначаемо ТІЛЬКИ ОДИН текущій статус
+  const getCurrentEventIndex = () => {
+    if (isDelivered) {
+      // Якщо доставлено - знайти доставленну подію
+      return sortedEvents.findIndex(event => {
+        const status = event.status.toLowerCase()
+        return status.includes('доставлено') || 
+               status.includes('отримано') || 
+               status.includes('delivered') ||
+               status.includes('вручено')
+      })
+    }
+    
+    // Якщо в дорозі - перша подія (саме нове по даті)
+    return 0
+  }
+
+  const currentEventIndex = getCurrentEventIndex()
 
   // Функція для очищення тексту від дублювання
   const cleanStatusText = (status: string, description: string | string[], location?: string) => {
@@ -84,52 +119,48 @@ export default function TrackingTimeline({ events, isDelivered, carrier }: Track
       <div className="relative">
         {sortedEvents.map((event, index) => {
           const isLastEvent = index === sortedEvents.length - 1
-          const isFirstEvent = index === 0
+          const isCurrent = index === currentEventIndex
           const { mainText, subText } = cleanStatusText(event.status, event.description, event.location)
 
-          // Поліпшена логіка кольорів timeline
+          // ✅ ИСПРАВЛЕНО: Простая логика цветов
           const getStatusColor = () => {
-            // Зелений для доставлених
-            if (isFirstEvent && isDelivered) {
+            // Проверяем является ли это доставленным событием
+            const isDeliveredEvent = ['доставлено', 'отримано', 'вручено', 'delivered'].some(keyword => 
+              mainText.toLowerCase().includes(keyword)
+            )
+            
+            if (isDeliveredEvent) {
               return {
                 dot: 'bg-green-500 border-green-500',
-                line: 'bg-gray-300'
+                line: 'bg-gray-300',
+                textWeight: 'font-bold',
+                bgHighlight: isCurrent ? 'bg-green-50 border-l-4 border-green-500 pl-4 -ml-6 py-2' : ''
               }
             }
             
-            // Перевірка чи це доставлений статус
-            const deliveredKeywords = ['доставлено', 'отримано', 'вручено', 'delivered', 'received'];
-            const isDeliveredStatus = deliveredKeywords.some(keyword => 
-              mainText.toLowerCase().includes(keyword) || 
-              (subText && subText.toLowerCase().includes(keyword))
-            );
-            
-            if (isDeliveredStatus) {
+            // ТОЛЬКО текущее событие синим (если не доставлено)
+            if (isCurrent && !isDeliveredEvent) {
               return {
-                dot: 'bg-green-500 border-green-500',
-                line: 'bg-gray-300'
+                dot: 'bg-blue-500 border-blue-500 animate-pulse',
+                line: 'bg-gray-300',
+                textWeight: 'font-bold',
+                bgHighlight: 'bg-blue-50 border-l-4 border-blue-500 pl-4 -ml-6 py-2'
               }
             }
             
-            // Синій для активних (останні 2-3 статуси якщо не доставлено)
-            if (!isDelivered && index < 3) {
-              return {
-                dot: 'bg-blue-500 border-blue-500',
-                line: 'bg-gray-300'
-              }
-            }
-            
-            // Сірий для старих статусів
+            // ВСЕ остальные события серые
             return {
               dot: 'bg-gray-400 border-gray-400',
-              line: 'bg-gray-300'
+              line: 'bg-gray-300',
+              textWeight: 'font-medium',
+              bgHighlight: ''
             }
           }
 
           const colors = getStatusColor()
 
           return (
-            <div key={index} className="relative flex">
+            <div key={index} className={`relative flex ${colors.bgHighlight} rounded-lg`}>
               {/* Timeline візуальний елемент */}
               <div className="flex flex-col items-center mr-4 pt-1">
                 {/* Dot/Circle - вирівняний з H3 */}
@@ -146,7 +177,14 @@ export default function TrackingTimeline({ events, isDelivered, carrier }: Track
               <div className="flex-1 pb-8">
                 {/* Status Header */}
                 <div className="mb-2">
-                  <h3 className="font-bold text-[#333037] text-lg leading-tight">
+                  <h3 className={`text-lg leading-tight text-[#333037] ${colors.textWeight}`}>
+                    {/* Иконка для текущего статуса */}
+                    {isCurrent && !mainText.toLowerCase().includes('доставлено') && (
+                      <span className="text-blue-500 mr-2">🚛</span>
+                    )}
+                    {mainText.toLowerCase().includes('доставлено') && (
+                      <span className="text-green-500 mr-2">✅</span>
+                    )}
                     {mainText}
                   </h3>
                   
@@ -172,10 +210,17 @@ export default function TrackingTimeline({ events, isDelivered, carrier }: Track
                       {event.time}
                     </div>
                   )}
+                  
+                  {/* Метка "Зараз тут" только для текущего события */}
+                  {isCurrent && !mainText.toLowerCase().includes('доставлено') && (
+                    <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full font-medium">
+                      Зараз тут
+                    </span>
+                  )}
                 </div>
 
                 {/* Carrier Badge */}
-                {carrier && (
+                {carrier && index === 0 && (
                   <CarrierBadge carrier={carrier} />
                 )}
               </div>
@@ -189,9 +234,9 @@ export default function TrackingTimeline({ events, isDelivered, carrier }: Track
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <h4 className="font-semibold text-blue-900 mb-2">Допомога з відстеженням</h4>
           <p className="text-blue-800 text-sm">
+            🚛 <strong>"Зараз тут"</strong> показує поточне місцезнаходження посилки. 
             Якщо статус не оновлювався більше тижня, рекомендуємо звернутися до служби 
-            підтримки перевізника. Деякі міжнародні відправлення можуть мати затримки 
-            через митні процедури.
+            підтримки перевізника.
           </p>
         </div>
       </div>
