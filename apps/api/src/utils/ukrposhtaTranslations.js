@@ -69,10 +69,32 @@ const EXACT_TRANSLATIONS = {
     'Ready for pickup': 'Готово до отримання',
     'Notification sent': 'Надіслано сповіщення',
     
-    // Міжнародні
+    // Міжнародні статуси UPU (з вашого прикладу)
+    'Acceptance ': 'Відправлення прийняте',
+    'Acceptance': 'Відправлення прийняте',
+    'Arrival at outward office of exchange ': 'Прибуло до установи обміну відправлення',
+    'Arrival at outward office of exchange': 'Прибуло до установи обміну відправлення',
+    'Departure from outward office of exchange ': 'Виїхало з установи обміну відправлення',
+    'Departure from outward office of exchange': 'Виїхало з установи обміну відправлення',
+    'Arrival at inward office of exchange': 'Прибуло до установи обміну призначення',
+    'Departure from inward office of exchange': 'Виїхало з установи обміну призначення',
+    'Transmission for customs control': 'Передано для митного контролю',
+    'Released from customs for further delivery': 'Випущено з митниці для доставки',
+    'Released from customs': 'Випущено з митниці',
+    
+    // Інші міжнародні статуси з документації
     'Left country of origin': 'Залишило країну відправлення',
     'Arrived in destination country': 'Прибуло до країни призначення',
     'International transit': 'Міжнародний транзит',
+    'Item tendered to Customs': 'Передано до митниці',
+    'Held in Customs': 'Затримано митницею',
+    'Processed through facility': 'Оброблено на об\'єкті',
+    'Arrival at sorting center': 'Прибуло до сортувального центру',
+    'Departure from sorting center': 'Виїхало з сортувального центру',
+    'Item out for delivery': 'Відправлено на доставку',
+    'Unsuccessful delivery attempt': 'Невдала спроба доставки',
+    'Available for pickup': 'Готово до отримання',
+    'Item collected': 'Відправлення отримано',
     
     // З документації Укрпошти (реальні статуси)
     'Приймання': 'Прийнято',
