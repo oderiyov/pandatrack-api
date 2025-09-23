@@ -55,10 +55,12 @@ class CarrierDetector {
             ],
 
             // Інші українські (lower priority)
-            'meest-express': [
+            'meest': [
                 { pattern: /^ME\d{10,12}$/, confidence: 'high', stage: 'domestic' },
-                { pattern: /^M\d{8,10}$/, confidence: 'low', stage: 'domestic' },
-                { pattern: /^MEST\d{8,12}$/, confidence: 'high', stage: 'domestic' }
+                { pattern: /^MEE\d{8,10}$/, confidence: 'high', stage: 'domestic' },
+                { pattern: /^M[0-9A-Z]{8,12}$/, confidence: 'medium', stage: 'domestic' },
+                { pattern: /^[0-9]{8}-[0-9]{3}$/, confidence: 'high', stage: 'domestic' },
+                { pattern: /^\d{10,14}$/, confidence: 'very-low', stage: 'domestic' }
             ],
             'justin': [
                 { pattern: /^J\d{10,12}$/, confidence: 'high', stage: 'domestic' },
@@ -197,7 +199,7 @@ class CarrierDetector {
     }
 
     getApiType(carrierCode) {
-        const nativeCarriers = ['ukrposhta', 'nova-poshta', 'dhl', 'delivery-auto', 'sat'];
+        const nativeCarriers = ['ukrposhta', 'nova-poshta', 'meest', 'dhl', 'delivery-auto', 'sat'];
         return nativeCarriers.includes(carrierCode) ? 'native' : 'trackingmore';
     }
 
@@ -206,9 +208,10 @@ class CarrierDetector {
             const nativePriorities = {
                 'ukrposhta': 1,
                 'nova-poshta': 2,
-                'dhl': 3,
-                'delivery-auto': 4,
-                'sat': 5
+                'meest': 3,
+                'dhl': 4,
+                'delivery-auto': 5,
+                'sat': 6
             };
             return nativePriorities[carrierCode] || 6;
         }
@@ -216,7 +219,6 @@ class CarrierDetector {
         const trackingMorePriorities = {
             'china-post': 10,
             'cainiao': 15,
-            'meest-express': 12,
             'justin': 13,
             'fedex': 14,
             'ups': 11,
@@ -232,7 +234,7 @@ class CarrierDetector {
         const carrierIds = {
             'ukrposhta': 2,
             'nova-poshta': 1,
-            'meest-express': 3,
+            'meest': 3,
             'justin': 4,
             'delivery-auto': 5,
             'sat': 6,
@@ -253,7 +255,7 @@ class CarrierDetector {
         const carrierNames = {
             'ukrposhta': 'Укрпошта',
             'nova-poshta': 'Nova Poshta',
-            'meest-express': 'Meest Express',
+            'meest': 'Meest Express',
             'justin': 'Justin',
             'delivery-auto': 'Delivery Auto',
             'sat': 'SAT Satellite Express',

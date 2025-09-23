@@ -5,6 +5,7 @@ const TrackingMoreProvider = require('./TrackingMoreProvider');
 const DHLProvider = require('./DHLProvider');
 const DeliveryAutoProvider = require('./DeliveryAutoProvider');
 const SATProvider = require('./SATProvider');
+const MeestProvider = require('./MeestProvider');
 
 class ProviderFactory {
     static providers = new Map();
@@ -64,6 +65,15 @@ class ProviderFactory {
             enabled: true,
             supportsInternational: false,
             stages: ['domestic']
+        });
+        
+        this.register('meest', MeestProvider, {
+            name: 'meest',
+            cost: 0,
+            quota: { daily: 1000, used: 0 }, // Орієнтовно, можна скорегувати
+            enabled: true,
+            supportsInternational: true,
+            stages: ['domestic', 'international', 'export', 'import']
         });
     }
 
