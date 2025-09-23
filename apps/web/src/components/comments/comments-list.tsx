@@ -1,5 +1,5 @@
-// src/components/comments/comments-list.tsx v17.0 - Stacked Cards Effect
-// ДОДАНО: Stacked Cards UI pattern для replies
+// src/components/comments/comments-list.tsx v15.0 - ВИПРАВЛЕНО
+// ВИПРАВЛЕНО: Connecting lines від аватара до аватара + Show More Replies
 
 'use client';
 
@@ -74,13 +74,6 @@ const findParentAuthorName = (comments: Comment[], parentId: string): string | n
   return null;
 };
 
-// Функція для підрахунку всіх replies в гілці
-const countTotalRepliesInThread = (replies: Comment[]): number => {
-  return replies.reduce((total, reply) => {
-    return total + 1 + countTotalRepliesInThread(reply.replies || []);
-  }, 0);
-};
-
 export function CommentsList({
   comments,
   onVote,
@@ -147,32 +140,26 @@ function CommentItem({
   const [voting, setVoting] = useState<'up' | 'down' | null>(null);
   const [userVote, setUserVote] = useState<'up' | 'down' | null>(null);
   
-  // STACKED CARDS FUNCTIONALITY
+  // ВИПРАВЛЕНО: Show more для replies - збільшений ліміт
   const [showAllReplies, setShowAllReplies] = useState(false);
-  const VISIBLE_REPLIES = 1; // Показуємо тільки 1 reply повністю, решта як стек
+  const REPLIES_LIMIT = 0; // ПОВЕРНЕНО до 2 для правильної роботи
   
-  const hasReplies = (comment.replies?.length || 0) > 0;
-  const totalReplies = comment.replies?.length || 0;
-  const hasHiddenReplies = totalReplies > VISIBLE_REPLIES;
-  const hiddenRepliesCount = totalReplies - VISIBLE_REPLIES;
-  
-  const visibleReplies = showAllReplies 
-    ? (comment.replies || [])
-    : (comment.replies || []).slice(0, VISIBLE_REPLIES);
-    
-  const stackedReplies = showAllReplies 
-    ? []
-    : (comment.replies || []).slice(VISIBLE_REPLIES);
+  const hasMoreReplies = (comment.replies?.length || 0) > REPLIES_LIMIT;
+  const visibleReplies = showAllReplies ? (comment.replies || []) : (comment.replies || []).slice(0, REPLIES_LIMIT);
+  const hiddenRepliesCount = hasMoreReplies ? (comment.replies?.length || 0) - REPLIES_LIMIT : 0;
 
   const canReply = depth < maxRepliesDepth;
 
-  console.log('CommentItem stacked cards debug:', {
+  console.log('CommentItem debug:', {
     commentId: comment.id,
     depth,
-    totalReplies,
-    hasHiddenReplies,
+    maxRepliesDepth,
+    canReply,
+    totalReplies: comment.replies?.length || 0,
+    hasMoreReplies,
+    showAllReplies,
     hiddenRepliesCount,
-    stackedRepliesCount: stackedReplies.length
+    REPLIES_LIMIT
   });
 
   const handleVote = async (voteType: number) => {
@@ -240,7 +227,7 @@ function CommentItem({
   return (
     <div className="comment-item" data-comment-id={comment.id}>
       
-      {/* ОСНОВНИЙ КОМЕНТАР */}
+      {/* ОСНОВНИЙ КОМЕНТАР - завжди ПОВНА ширина без відступів */}
       <div className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-sm transition-shadow w-full">
         
         {/* Заголовок коментаря */}
@@ -275,7 +262,7 @@ function CommentItem({
               {/* Development debug info */}
               {process.env.NODE_ENV === 'development' && comment.commentType && (
                 <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">
-                  {comment.commentType} | depth: {depth} | stacked: {stackedReplies.length}
+                  {comment.commentType} | depth: {depth} | canReply: {canReply.toString()}
                 </span>
               )}
 
@@ -291,10 +278,10 @@ function CommentItem({
               </p>
             </div>
 
-            {/* Дії */}
+            {/* Дії поряд */}
             <div className="flex items-center gap-3 text-sm">
               
-              {/* Голосування */}
+              {/* 1. Голосування */}
               <div className="flex items-center gap-1 flex-shrink-0">
                 <button
                   onClick={() => handleVote(1)}
@@ -331,7 +318,7 @@ function CommentItem({
                 </button>
               </div>
 
-              {/* Report */}
+              {/* 2. Report */}
               <button
                 onClick={() => setShowFlagForm(!showFlagForm)}
                 className="p-1.5 rounded-md hover:bg-red-50 hover:text-red-600 transition-colors text-gray-600 flex-shrink-0"
@@ -342,7 +329,7 @@ function CommentItem({
                 </svg>
               </button>
 
-              {/* Share */}
+              {/* 3. Share */}
               <button
                 onClick={copyCommentLink}
                 className="p-1.5 rounded-md hover:bg-gray-100 hover:text-gray-800 transition-colors text-gray-600 flex-shrink-0"
@@ -353,7 +340,7 @@ function CommentItem({
                 </svg>
               </button>
 
-              {/* Reply */}
+              {/* 4. Reply кнопка */}
               {canReply && (
                 <button
                   onClick={() => setShowReplyForm(!showReplyForm)}
@@ -427,103 +414,29 @@ function CommentItem({
         )}
       </div>
 
-      {/* STACKED CARDS REPLIES SECTION */}
-      {hasReplies && (
+      {/* ВИПРАВЛЕНІ REPLIES з правильними connecting lines */}
+      {comment.replies && comment.replies.length > 0 && (
         <div className="mt-6 relative w-full">
           
-          {/* Connecting line */}
-          <div 
-            className="absolute bg-gray-300" 
-            style={{ 
-              left: '35px',
-              top: '-25px', 
-              width: '2px',
-              height: '26px',
-              zIndex: 1
-            }}
-          ></div>
-          
-          {/* VISIBLE REPLIES (повністю показані) */}
+          {/* REPLIES - ПОВНА ширина БЕЗ відступів */}
           <div className="space-y-6 w-full">
             {visibleReplies.map((reply, index) => (
-              <div key={reply.id} className="w-full">
-                <CommentItem
-                  comment={reply}
-                  onVote={onVote}
-                  onFlag={onFlag}
-                  onReply={onReply}
-                  maxRepliesDepth={maxRepliesDepth}
-                  submittingReply={submittingReply}
-                  allComments={allComments}
-                  isLastInLevel={index === visibleReplies.length - 1}
-                  depth={depth + 1}
-                />
-              </div>
-            ))}
-          </div>
-
-          {/* STACKED PREVIEW CARDS (тільки краї видимі) */}
-          {!showAllReplies && stackedReplies.length > 0 && (
-            <div className="relative mt-4">
-              {stackedReplies.map((reply, index) => (
-                <div
-                  key={reply.id}
-                  className="absolute bg-white border border-gray-200 rounded-lg shadow-sm cursor-pointer"
-                  style={{
-                    top: `${(index + 1) * 8}px`,
-                    left: `${(index + 1) * 12}px`,
-                    right: '0px',
-                    height: '60px',
-                    zIndex: 10 - index,
-                    opacity: 1 - (index * 0.2)
+              <div key={reply.id} className="relative w-full">
+                
+                {/* ВИПРАВЛЕНА ОДНА ВЕРТИКАЛЬНА ЛІНІЯ від аватара до аватара */}
+                <div 
+                  className="absolute bg-gray-300" 
+                  style={{ 
+                    left: '35px', // центр аватара батьківського (40px / 2)
+                    top: '-25px', // підняти до батьківського аватара
+                    width: '2px',
+                    height: '26px', // довжина до дочірнього аватара (36 + 40)
+                    zIndex: 1
                   }}
-                >
-                  {/* Частковий контент для preview */}
-                  <div className="p-3 flex items-start space-x-2 overflow-hidden">
-                    <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center flex-shrink-0">
-                      <span className="text-white font-medium text-xs">
-                        {reply.authorName.charAt(0).toUpperCase()}
-                      </span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-gray-900 truncate">
-                        {reply.authorName}
-                      </div>
-                      <div className="text-sm text-gray-600 truncate">
-                        {reply.content}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-              
-              {/* Spacer для stacked cards */}
-              <div style={{ height: `${stackedReplies.length * 20 + 60}px` }}></div>
-            </div>
-          )}
-
-          {/* SHOW MORE REPLIES BUTTON */}
-          {hasHiddenReplies && !showAllReplies && (
-            <div className="mt-4">
-              <button
-                onClick={() => setShowAllReplies(true)}
-                className="flex items-center gap-2 px-4 py-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-                <span>
-                  показати ще {hiddenRepliesCount} {hiddenRepliesCount === 1 ? 'відповідь' : hiddenRepliesCount < 5 ? 'відповіді' : 'відповідей'}
-                </span>
-              </button>
-            </div>
-          )}
-
-          {/* SHOW ALL REPLIES (після розгортання) */}
-          {showAllReplies && stackedReplies.length > 0 && (
-            <div className="mt-6 space-y-6 w-full">
-              {stackedReplies.map((reply, index) => (
-                <div key={reply.id} className="w-full">
+                ></div>
+                
+                {/* Reply коментар ПОВНОЇ ширини БЕЗ margin-left */}
+                <div className="w-full">
                   <CommentItem
                     comment={reply}
                     onVote={onVote}
@@ -532,11 +445,26 @@ function CommentItem({
                     maxRepliesDepth={maxRepliesDepth}
                     submittingReply={submittingReply}
                     allComments={allComments}
-                    isLastInLevel={index === stackedReplies.length - 1}
+                    isLastInLevel={index === visibleReplies.length - 1 && !hasMoreReplies}
                     depth={depth + 1}
                   />
                 </div>
-              ))}
+              </div>
+            ))}
+          </div>
+
+          {/* ВИПРАВЛЕНО: Show more кнопка для replies */}
+          {hasMoreReplies && !showAllReplies && (
+            <div className="mt-4 pl-12">
+              <button
+                onClick={() => setShowAllReplies(true)}
+                className="flex items-center gap-2 px-3 py-1.5 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+                <span>показати ще {hiddenRepliesCount} відпов{hiddenRepliesCount === 1 ? 'ідь' : hiddenRepliesCount < 5 ? 'іді' : 'ідей'}</span>
+              </button>
             </div>
           )}
         </div>

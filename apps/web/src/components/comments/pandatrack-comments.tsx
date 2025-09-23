@@ -635,7 +635,7 @@ export function PandaTrackComments({
                 className={`px-8 py-3 rounded-lg font-medium text-sm inline-flex items-center space-x-2 transition-colors ${
                   loadingMore 
                     ? 'bg-gray-400 cursor-not-allowed text-white' 
-                    : 'bg-blue-600 hover:bg-blue-700 text-white'
+                    : 'bg-gray-800 hover:bg-gray-900 text-white'
                 }`}
               >
                 {loadingMore ? (
