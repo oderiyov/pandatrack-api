@@ -14,6 +14,12 @@ const EXACT_TRANSLATIONS = {
     'Виїхало з the Відділення': 'Виїхало з Відділення',
     'Arrived to the Відділення': 'Прибуло до Відділення',
     
+    // ДОДАНО: Всі варіації змішаних статусів
+    'Arrived to the Logistics center': 'Прибуло до Логістичного центру',
+    'Departed from the Logistics center': 'Виїхало з Логістичного центру',
+    'Arrived to the Branch': 'Прибуло до Відділення',
+    'Departed from the Branch': 'Виїхало з Відділення',
+    
     // Прибуття
     'Arrived at Branch': 'Прибуло до Відділення',
     'Arrived at Sorting depot': 'Прибуло до Сортувального депо',
@@ -149,12 +155,32 @@ function translateStatus(englishStatus) {
     // Pattern-based переклади для складних статусів
     let translated = englishStatus;
 
+    // ДОДАНО: Спеціальна обробка змішаних англо-українських статусів
     translated = translated
-        // Arrived patterns
+        // Фікси для змішаних статусів з вашого API
+        .replace(/Виїхало з the (.+)/g, 'Виїхало з $1')
+        .replace(/Arrived to the (.+)/g, 'Прибуло до $1')
+        .replace(/Departed from the (.+)/g, 'Виїхало з $1')
+        
+        // Заміна конкретних англійських термінів
+        .replace(/Logistics center/gi, 'Логістичного центру')
+        .replace(/Логістичний центр/gi, 'Логістичного центру')
+        .replace(/Branch/gi, 'Відділення')  
+        .replace(/Відділення/gi, 'Відділення')
+        .replace(/Sorting depot/gi, 'Сортувального депо')
+        .replace(/Distribution center/gi, 'Центру розподілу')
+        .replace(/Processing center/gi, 'Центру обробки')
+        .replace(/Post office/gi, 'Поштового відділення')
+        
+        // Registered -> Прийнято
+        .replace(/^Registered$/gi, 'Прийнято')
+        
+        // Стандартні patterns
         .replace(/^Arrived at (.+)$/g, 'Прибуло до $1')
         .replace(/^Arrived in (.+)$/g, 'Прибуло до $1')
+        .replace(/^Arrived to (.+)$/g, 'Прибуло до $1')
         
-        // Departed patterns
+        // Departed patterns  
         .replace(/^Departed from (.+)$/g, 'Виїхало з $1')
         .replace(/^Left (.+)$/g, 'Залишило $1')
         
