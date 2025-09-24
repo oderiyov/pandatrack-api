@@ -1,424 +1,418 @@
-// /apps/api/src/providers/MeestProvider.js
+// apps/api/src/providers/MeestProvider.js - ВИПРАВЛЕНО
 const BaseProvider = require('./BaseProvider');
 const { translateStatus, translateLocation } = require('../utils/meestTranslations');
 
 class MeestProvider extends BaseProvider {
     constructor(config) {
         super(config);
-        this.apiToken = process.env.MEEST_API_TOKEN; // Використовуємо готовий токен
+        this.login = process.env.MEEST_LOGIN;
+        this.password = process.env.MEEST_PASSWORD;
+        this.contractId = process.env.MEEST_CONTRACT_ID;
+        this.apiToken = process.env.MEEST_API_TOKEN; // Додатковий токен якщо є
         this.baseUrl = 'https://api.meest.com/v3.0/openAPI';
         
-        if (!this.apiToken) {
-            console.warn('Meest API token not configured');
-        }
+        // Кеш для session token
+        this.sessionToken = null;
+        this.tokenExpiry = null;
+        this.refreshToken = null;
+        
+        console.log('MeestProvider initialized (fixed):', {
+            hasCredentials: !!(this.login && this.password),
+            hasApiToken: !!this.apiToken,
+            contractId: this.contractId ? this.contractId.substring(0,8) + '...' : 'NOT SET'
+        });
     }
 
     async track(trackingNumber, options = {}) {
-        if (!this.apiToken) {
-            throw new Error('Meest API token not configured');
-        }
-
+        console.log(`Meest: Starting multi-strategy track for ${trackingNumber}`);
+        const startTime = Date.now();
+        
         try {
-            // Спробуємо різні методи tracking
-            const strategies = [
-                () => this.tryTrackingByNumber(trackingNumber),
-                () => this.trySearchByNumber(trackingNumber),
-                () => this.tryTrackingByOrderId(trackingNumber)
-            ];
-
-            let lastError = null;
-
-            for (const strategy of strategies) {
-                try {
-                    const result = await strategy();
-                    if (result.success) {
-                        console.log(`Meest: успішний запит стратегією ${strategy.name}`);
-                        return result;
-                    }
-                } catch (error) {
-                    console.warn(`Meest strategy failed: ${error.message}`);
-                    lastError = error;
-                    
-                    // Якщо 401/403 - не пробуємо інші стратегії
-                    if (error.response?.status === 401 || error.response?.status === 403) {
-                        throw error;
-                    }
+            // Стратегія 1: Якщо є готовий API токен - використовуємо його
+            if (this.apiToken) {
+                console.log('Meest: Trying strategy 1 - Direct API token');
+                const result = await this.trackWithApiToken(trackingNumber);
+                if (result.success) {
+                    console.log(`Meest: Strategy 1 success in ${Date.now() - startTime}ms`);
+                    return result;
                 }
             }
 
-            if (lastError) {
-                throw lastError;
-            }
-
-            return {
-                success: false,
-                error: 'Meest: Номер не знайдено в жодному endpoint',
-                provider: this.name,
-                trackingNumber: trackingNumber
-            };
+            // Стратегія 2: Отримуємо session token через /auth
+            console.log('Meest: Trying strategy 2 - Session token');
+            const sessionToken = await this.getValidToken();
+            const result = await this.trackWithMultipleEndpoints(trackingNumber, sessionToken);
+            
+            console.log(`Meest: Completed in ${Date.now() - startTime}ms`);
+            return result;
 
         } catch (error) {
-            console.error(`${this.name} API error:`, error.message);
-            
-            if (error.response) {
-                return {
-                    success: false,
-                    error: `Meest API HTTP ${error.response.status}: ${error.response.statusText}`,
-                    provider: this.name,
-                    trackingNumber: trackingNumber
-                };
-            }
-            
-            throw new Error(`${this.name} API unavailable: ${error.message}`);
-        }
-    }
-
-    async tryTrackingByNumber(trackingNumber) {
-        const trackingData = {
-            function: 'Tracking',
-            tracking_number: trackingNumber
-        };
-
-        const response = await this.makeRequest(this.baseUrl, {
-            method: 'POST',
-            headers: {
-                'token': this.apiToken, // Простий токен в header
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-            data: trackingData,
-            timeout: 15000
-        });
-
-        if (response.data && (response.data.result || response.data.tracking_info)) {
-            return this.normalizeMeestResponse(response.data, trackingNumber);
-        }
-
-        return { success: false };
-    }
-
-    async trySearchByNumber(trackingNumber) {
-        const searchData = {
-            function: 'Search',
-            filter: {
-                number: trackingNumber
-            }
-        };
-
-        const response = await this.makeRequest(this.baseUrl, {
-            method: 'POST',
-            headers: {
-                'token': this.apiToken, // Простий токен в header
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-            data: searchData,
-            timeout: 15000
-        });
-
-        if (response.data && response.data.result && response.data.result.length > 0) {
-            return this.normalizeMeestResponse(response.data.result[0], trackingNumber);
-        }
-
-        return { success: false };
-    }
-
-    async tryTrackingByOrderId(trackingNumber) {
-        const orderData = {
-            function: 'GetOrderInfo',
-            order_id: trackingNumber
-        };
-
-        const response = await this.makeRequest(this.baseUrl, {
-            method: 'POST',
-            headers: {
-                'token': this.apiToken, // Простий токен в header
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-            data: orderData,
-            timeout: 15000
-        });
-
-        if (response.data && response.data.order_info) {
-            return this.normalizeMeestResponse(response.data.order_info, trackingNumber);
-        }
-
-        return { success: false };
-    }
-
-    normalizeMeestResponse(data, trackingNumber) {
-        try {
-            // Витягуємо події відстеження
-            const events = this.extractTrackingEvents(data);
-            const currentStatus = this.getCurrentStatus(data, events);
-            const metadata = this.extractMetadata(data);
-
-            return {
-                success: true,
-                data: {
-                    trackingNumber: trackingNumber,
-                    carrier: 'Meest Express',
-                    status: currentStatus.status,
-                    normalizedStatus: this.mapMeestStatus(currentStatus.statusCode),
-                    statusCode: currentStatus.statusCode,
-                    lastUpdate: currentStatus.date || new Date().toISOString(),
-                    events: events,
-                    estimatedDelivery: data.estimated_delivery || null,
-                    actualDelivery: data.actual_delivery || null,
-                    deliveryType: data.delivery_type || 'Unknown',
-                    destinationCountry: data.destination_country || 'UKRAINE',
-                    daysInTransit: this.calculateDaysInTransit(events),
-                    totalEvents: events.length,
-                    ...metadata,
-                    raw: data
-                },
-                provider: this.name,
-                cost: 0, // Нативний API безкоштовний
-                supportsInternational: true,
-                timestamp: new Date().toISOString()
-            };
-
-        } catch (error) {
-            console.error('Meest response normalization error:', error.message);
+            console.error(`Meest error (${Date.now() - startTime}ms):`, error.message);
             return {
                 success: false,
-                error: `Failed to process Meest response: ${error.message}`,
+                error: `Meest API: ${error.message}`,
                 provider: this.name,
-                trackingNumber: trackingNumber
+                trackingNumber: trackingNumber,
+                suggestions: [
+                    'Перевірте права доступу до tracking endpoints',
+                    'Можливо потрібен спеціальний тип контракту для tracking',
+                    'Спробуйте зв\'язатися з техпідтримкою Meest'
+                ]
             };
         }
     }
 
-    extractTrackingEvents(data) {
-        const events = [];
-
-        // Спробуємо різні можливі структури даних
-        const trackingData = data.tracking_info || data.tracking_events || data.events || data.history || [];
+    async trackWithApiToken(trackingNumber) {
+        console.log('Meest: Using direct API token approach');
         
-        if (Array.isArray(trackingData)) {
-            trackingData.forEach((event, index) => {
-                const originalStatus = event.status || event.event_name || event.description || 'Unknown Event';
-                const originalLocation = this.buildLocationFromEvent(event);
-
-                events.push({
-                    date: this.parseISODate(event.date || event.event_date || event.timestamp),
-                    status: translateStatus(originalStatus),
-                    description: translateStatus(originalStatus),
-                    location: translateLocation(originalLocation),
-                    statusCode: event.status_code || event.code || index + 1,
-                    eventType: event.event_type || 'tracking',
-                    source: 'Meest Express',
-                    confidence: 1
-                });
+        const trackingUrl = `${this.baseUrl}/tracking/${trackingNumber}`;
+        
+        try {
+            const response = await this.makeRequest(trackingUrl, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${this.apiToken}`,
+                    'Accept': 'application/json'
+                },
+                timeout: 30000
             });
-        }
 
-        // Якщо немає подій, створимо базову подію з основного статусу
-        if (events.length === 0 && data.status) {
-            events.push({
-                date: this.parseISODate(data.status_date || data.last_update),
-                status: translateStatus(data.status),
-                description: translateStatus(data.status),
-                location: translateLocation(data.location || 'Unknown'),
-                statusCode: data.status_code || '1',
-                eventType: 'status',
-                source: 'Meest Express',
-                confidence: 1
-            });
-        }
+            if (response.data?.status === 'OK' && response.data?.result) {
+                return this.normalizeTrackingResponse(response.data, trackingNumber);
+            }
 
-        // Сортуємо за датою (від старіших до новіших)
-        return events.sort((a, b) => new Date(a.date) - new Date(b.date));
+            throw new Error(`API token strategy failed: ${response.data?.info?.message || 'No data'}`);
+
+        } catch (error) {
+            console.warn('Meest: API token strategy failed:', error.message);
+            throw error;
+        }
     }
 
-    getCurrentStatus(data, events) {
-        // Якщо є поточний статус в даних
-        if (data.current_status || data.status) {
+    async trackWithMultipleEndpoints(trackingNumber, token) {
+        const strategies = [
+            { name: 'tracking', url: `/tracking/${trackingNumber}` },
+            { name: 'parcelStatus', url: `/parcelStatus/${trackingNumber}` },
+            { name: 'getParcel', url: `/getParcel/${trackingNumber}/parcelNumber/objectData` },
+            { name: 'parcelInfoTracking', url: `/parcelInfoTracking/${trackingNumber}` },
+            // ДОДАНО: Спробуємо з contract ID параметром
+            { name: 'trackingWithContract', url: `/tracking/${trackingNumber}?contractId=${this.contractId}` }
+        ];
+
+        let lastError = null;
+
+        for (const strategy of strategies) {
+            try {
+                console.log(`Meest: Trying ${strategy.name} endpoint`);
+                
+                const response = await this.makeRequest(`${this.baseUrl}${strategy.url}`, {
+                    method: 'GET',
+                    headers: {
+                        'token': token,
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    timeout: 30000
+                });
+
+                console.log(`Meest ${strategy.name} response:`, {
+                    status: response.data?.status,
+                    resultType: Array.isArray(response.data?.result) ? 'array' : typeof response.data?.result,
+                    resultLength: response.data?.result?.length || 'N/A'
+                });
+
+                if (response.data?.status === 'OK') {
+                    if (strategy.name === 'tracking' && Array.isArray(response.data.result) && response.data.result.length > 0) {
+                        return this.normalizeTrackingResponse(response.data, trackingNumber);
+                    } else if (strategy.name === 'getParcel' && response.data.result && typeof response.data.result === 'object') {
+                        return this.normalizeParcelResponse(response.data, trackingNumber);
+                    } else if (response.data.result && response.data.result.length > 0) {
+                        return this.normalizeTrackingResponse(response.data, trackingNumber);
+                    }
+                }
+
+            } catch (error) {
+                console.warn(`Meest ${strategy.name} failed:`, error.message);
+                lastError = error;
+                
+                // Якщо token expired, оновлюємо його
+                if (error.response?.status === 401) {
+                    console.log('Meest: Token expired, clearing cache');
+                    this.sessionToken = null;
+                    this.tokenExpiry = null;
+                    // Не продовжуємо з іншими endpoints якщо токен недійсний
+                    break;
+                }
+                
+                continue; // Спробуємо наступний endpoint
+            }
+        }
+
+        // Якщо жоден endpoint не спрацював
+        throw new Error(`All tracking endpoints failed. Last error: ${lastError?.message || 'Unknown error'}`);
+    }
+
+    async getValidToken() {
+        // Перевіряємо чи токен ще валідний
+        if (this.sessionToken && this.tokenExpiry && Date.now() < this.tokenExpiry) {
+            return this.sessionToken;
+        }
+
+        console.log('Meest: Getting new session token via /auth endpoint');
+
+        const authUrl = `${this.baseUrl}/auth`;
+        const authData = {
+            username: this.login,
+            password: this.password
+        };
+
+        try {
+            const response = await this.makeRequest(authUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                data: authData,
+                timeout: 30000
+            });
+
+            if (response.data?.status === 'OK' && response.data?.result?.token) {
+                this.sessionToken = response.data.result.token;
+                this.refreshToken = response.data.result.refresh_token;
+                
+                const expiresIn = response.data.result.expiresIn || 86400;
+                this.tokenExpiry = Date.now() + (expiresIn * 1000);
+                
+                console.log(`Meest: Token valid for ${Math.floor(expiresIn / 3600)} hours`);
+                return this.sessionToken;
+            }
+
+            throw new Error(`Authentication failed: ${response.data?.info?.message || 'Unknown error'}`);
+
+        } catch (error) {
+            console.error('Meest auth error:', error.message);
+            throw new Error(`Authentication failed: ${error.message}`);
+        }
+    }
+
+    normalizeTrackingResponse(apiData, trackingNumber) {
+        const events = this.extractEventsFromResult(apiData.result || []);
+        
+        if (events.length === 0) {
             return {
-                status: translateStatus(data.current_status || data.status),
-                statusCode: data.current_status_code || data.status_code || '1',
-                date: data.current_status_date || data.status_date || data.last_update
+                success: false,
+                error: 'No tracking events found. This may indicate:\n' +
+                       '• Package not yet in Meest system\n' +
+                       '• Insufficient API permissions for tracking\n' +
+                       '• Package number format not recognized',
+                provider: this.name,
+                trackingNumber: trackingNumber,
+                debug: {
+                    resultType: typeof apiData.result,
+                    resultLength: Array.isArray(apiData.result) ? apiData.result.length : 'N/A'
+                }
             };
         }
 
-        // Інакше беремо останню подію
-        if (events.length > 0) {
-            const latestEvent = events[events.length - 1];
-            return {
-                status: latestEvent.status,
-                statusCode: latestEvent.statusCode,
-                date: latestEvent.date
-            };
-        }
-
-        // Fallback
+        const latestEvent = events[events.length - 1];
+        
         return {
-            status: 'Невідомий статус',
-            statusCode: '999',
-            date: new Date().toISOString()
+            success: true,
+            data: {
+                trackingNumber: trackingNumber,
+                carrier: 'Meest Express',
+                status: latestEvent.status,
+                normalizedStatus: this.mapEventCodeToStatus(latestEvent.eventCode),
+                statusCode: latestEvent.eventCode,
+                lastUpdate: latestEvent.date,
+                events: events,
+                daysInTransit: this.calculateDaysInTransit(events),
+                totalEvents: events.length,
+                raw: apiData
+            },
+            provider: this.name,
+            cost: 0,
+            supportsInternational: true,
+            timestamp: new Date().toISOString()
         };
     }
 
-    extractMetadata(data) {
-        const metadata = {};
+    normalizeParcelResponse(apiData, trackingNumber) {
+        // Для /getParcel endpoint результат має іншу структуру
+        const parcel = apiData.result;
+        
+        if (!parcel) {
+            return {
+                success: false,
+                error: 'No parcel information found',
+                provider: this.name,
+                trackingNumber: trackingNumber
+            };
+        }
 
-        // Інформація про посилку
-        if (data.weight) metadata.weight = data.weight;
-        if (data.declared_value) metadata.declaredValue = data.declared_value;
-        if (data.currency) metadata.currency = data.currency;
-        if (data.description) metadata.description = data.description;
-        if (data.service_type) metadata.serviceType = data.service_type;
+        // Створюємо базову подію з інформації про посилку
+        const events = [{
+            date: new Date().toISOString(),
+            status: 'Package Information Retrieved',
+            description: `Package found: ${parcel.parcelNumber || trackingNumber}`,
+            location: 'Meest System',
+            eventCode: 'info',
+            statusCode: 'info',
+            eventType: 'info',
+            source: 'Meest Express',
+            confidence: 1
+        }];
 
-        // Адреси
-        if (data.sender) metadata.sender = data.sender;
-        if (data.receiver) metadata.receiver = data.receiver;
-        if (data.origin_address) metadata.originAddress = data.origin_address;
-        if (data.destination_address) metadata.destinationAddress = data.destination_address;
+        return {
+            success: true,
+            data: {
+                trackingNumber: trackingNumber,
+                carrier: 'Meest Express',
+                status: 'Package Information Retrieved',
+                normalizedStatus: 'info',
+                statusCode: 'info',
+                lastUpdate: new Date().toISOString(),
+                events: events,
+                totalEvents: events.length,
+                parcelInfo: parcel, // Додаткова інформація про посилку
+                raw: apiData
+            },
+            provider: this.name,
+            cost: 0,
+            supportsInternational: true,
+            timestamp: new Date().toISOString()
+        };
+    }
 
-        return metadata;
+    extractEventsFromResult(resultArray) {
+        if (!Array.isArray(resultArray) || resultArray.length === 0) {
+            return [];
+        }
+
+        return resultArray.map(event => {
+            const eventDescr = event.eventDescr?.descrUA || 
+                             event.eventDescr?.descrRU || 
+                             event.eventDescr?.descrEN || 
+                             'Unknown Event';
+            
+            const location = this.buildLocationFromEvent(event);
+
+            return {
+                date: this.parseEventDateTime(event.eventDateTime),
+                status: translateStatus(eventDescr),
+                description: translateStatus(eventDescr),
+                location: translateLocation(location),
+                eventCode: event.eventCode || 'unknown',
+                statusCode: String(event.eventCode || '0'),
+                eventType: 'tracking',
+                source: 'Meest Express',
+                confidence: 1,
+                raw: event
+            };
+        }).sort((a, b) => new Date(a.date) - new Date(b.date));
     }
 
     buildLocationFromEvent(event) {
-        const locationParts = [];
+        const parts = [];
         
-        if (event.city) locationParts.push(event.city);
-        if (event.region) locationParts.push(event.region);
-        if (event.country) locationParts.push(event.country);
-        if (event.location) locationParts.push(event.location);
-        if (event.facility) locationParts.push(event.facility);
+        if (event.eventCityDescr?.descrUA) {
+            parts.push(event.eventCityDescr.descrUA);
+        }
         
-        return locationParts.join(', ') || 'Невідоме місце';
+        if (event.eventCountryDescr?.descrUA) {
+            parts.push(event.eventCountryDescr.descrUA);
+        }
+        
+        return parts.join(', ') || 'Unknown Location';
     }
 
-    parseISODate(dateString) {
-        if (!dateString) return new Date().toISOString();
+    parseEventDateTime(dateTimeString) {
+        if (!dateTimeString) return new Date().toISOString();
         
         try {
-            const date = new Date(dateString);
+            const date = new Date(dateTimeString.replace(' ', 'T') + 'Z');
             return isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
         } catch {
             return new Date().toISOString();
         }
     }
 
-    calculateDaysInTransit(events) {
-        if (!events || events.length === 0) return 0;
-
-        const firstEvent = events[0];
-        const lastEvent = events[events.length - 1];
-        
-        if (!firstEvent?.date) return 0;
-        
-        const startDate = new Date(firstEvent.date);
-        const endDate = lastEvent?.date ? new Date(lastEvent.date) : new Date();
-        
-        if (isNaN(startDate.getTime())) return 0;
-        
-        const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
-        return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    }
-
-    mapMeestStatus(statusCode) {
+    mapEventCodeToStatus(eventCode) {
         const statusMap = {
-            '1': 'accepted',      // Прийнято
-            '2': 'in_transit',    // В дорозі
-            '3': 'out_for_delivery', // Доставляється
-            '4': 'delivered',     // Доставлено
-            '5': 'exception',     // Проблема
-            '6': 'returned',      // Повернуто
-            '7': 'cancelled',     // Скасовано
-            '8': 'storage',       // На складі
-            '9': 'customs',       // Митниця
-            '10': 'at_pickup',    // Готово до отримання
-            '999': 'unknown'      // Невідомо
+            '101': 'accepted',
+            '1622': 'delivered', 
+            '1825': 'returned',
+            '1214': 'at_pickup',
+            '1315': 'out_for_delivery',
+            '808': 'in_transit',
+            '505': 'in_transit',
+            '2230': 'customs'
         };
 
-        return statusMap[String(statusCode)] || 'unknown';
+        return statusMap[String(eventCode)] || 'in_transit';
+    }
+
+    calculateDaysInTransit(events) {
+        if (!events || events.length < 2) return 0;
+        
+        const firstDate = new Date(events[0].date);
+        const lastDate = new Date(events[events.length - 1].date);
+        
+        if (isNaN(firstDate.getTime()) || isNaN(lastDate.getTime())) return 0;
+        
+        const diffTime = Math.abs(lastDate.getTime() - firstDate.getTime());
+        return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     }
 
     canHandle(trackingNumber, carrierCode = null) {
         const number = trackingNumber.trim().toUpperCase();
         
-        // Формати номерів Meest Express
         const patterns = [
-            /^ME\d{10,12}$/,              // Meest Express формат ME + цифри
-            /^MEE\d{8,10}$/,              // Meest Express Extended
-            /^\d{10,14}$/,                // Числові номери 10-14 цифр
-            /^[A-Z]{2}\d{9}[A-Z]{2}$/,    // Міжнародні формати
-            /^M[0-9A-Z]{8,12}$/,          // Починається з M
-            /^[0-9]{8}-[0-9]{3}$/,        // Формат з тире (xxxxxxxx-xxx)
+            /^ME\d{10,12}$/,
+            /^MEE\d{8,10}$/,
+            /^CV\d{9}UA$/,
+            /^M[0-9A-Z]{8,12}$/,
+            /^[0-9]{8}-[0-9]{3}$/,
+            /^TAC-\d+$/,
+            /^717-\d+$/,
+            /^[0-9]{8}[A-Z0-9]{7}$/,
+            /^UA\d+[A-Z]{2}\d+[A-Z]$/  // Додано новий pattern
         ];
 
-        // Специфічні ознаки Meest номерів
-        const meestIndicators = [
-            number.startsWith('ME'),
-            number.startsWith('MEE'),
-            /^M\d/.test(number),
-            carrierCode === 'meest',
-            carrierCode === 'meest-express'
-        ];
-
-        return patterns.some(pattern => pattern.test(number)) || 
-               meestIndicators.some(indicator => indicator);
+        const matches = patterns.some(pattern => pattern.test(number));
+        
+        if (matches) {
+            console.log(`Meest: Pattern matched for ${number}`);
+        }
+        
+        return matches;
     }
 
     async healthCheck() {
-        if (!this.apiToken) {
-            return {
-                status: 'error',
-                provider: this.name,
-                error: 'API token not configured',
-                timestamp: new Date().toISOString()
-            };
-        }
-
         try {
-            // Простий тест з готовим токеном
-            const testData = {
-                function: 'Search',
-                filter: {
-                    number: 'TEST123'
-                }
-            };
-
-            const response = await this.makeRequest(this.baseUrl, {
-                method: 'POST',
-                headers: {
-                    'token': this.apiToken,
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                },
-                data: testData,
-                timeout: 10000
-            });
+            // Перевіряємо чи можемо отримати токен
+            const token = await this.getValidToken();
             
             return {
                 status: 'ok',
                 provider: this.name,
-                apiVersion: 'v3.0',
-                features: ['Direct Token Auth', 'Tracking', 'Search'],
-                tokenValid: true,
-                endpoint: this.baseUrl,
+                authenticated: !!token,
+                tokenExpiry: this.tokenExpiry ? new Date(this.tokenExpiry).toISOString() : null,
+                hasApiToken: !!this.apiToken,
+                strategies: ['Direct API Token', 'Session Token', 'Multiple Endpoints'],
                 timestamp: new Date().toISOString()
             };
-
         } catch (error) {
-            // Навіть якщо тестовий номер не знайдено, API працює
-            if (error.response?.status === 404 || error.response?.status === 400) {
-                return {
-                    status: 'ok',
-                    provider: this.name,
-                    note: 'API доступний (404/400 для тестового номера нормально)',
-                    responseCode: error.response.status,
-                    timestamp: new Date().toISOString()
-                };
-            }
-
             return {
                 status: 'error',
                 provider: this.name,
                 error: error.message,
+                recommendations: [
+                    'Перевірте логін/пароль у .env файлі',
+                    'Перевірте чи є MEEST_API_TOKEN у .env',
+                    'Зв\'яжіться з техпідтримкою Meest щодо tracking permissions'
+                ],
                 timestamp: new Date().toISOString()
             };
         }

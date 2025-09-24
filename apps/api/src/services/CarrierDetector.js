@@ -29,20 +29,28 @@ class CarrierDetector {
             
             'delivery-auto': [
                 { pattern: /^DA\d{8,12}$/, confidence: 'high', stage: 'domestic' },
-                { pattern: /^\d{8,10}DA$/, confidence: 'medium', stage: 'domestic' },
+                { pattern: /^\d{8,10}DA$/, confidence: 'high', stage: 'domestic' },
                 { pattern: /^DELIVERY\d{6,10}$/, confidence: 'high', stage: 'domestic' },
-                { pattern: /^DLV\d{8,12}$/, confidence: 'medium', stage: 'domestic' },
-                // Підтримка звичайних номерів з нижчим пріоритетом
-                { pattern: /^0\d{9,10}$/, confidence: 'low', stage: 'domestic' },
-                { pattern: /^\d{10,12}$/, confidence: 'very-low', stage: 'domestic' }
+                { pattern: /^DLV\d{8,12}$/, confidence: 'high', stage: 'domestic' },
+
+                // КРИТИЧНО ВАЖЛИВО: Специфічні префікси Delivery Auto
+                { pattern: /^058\d{7}$/, confidence: 'high', stage: 'domestic' },  // 0580402558
+                { pattern: /^057\d{7}$/, confidence: 'medium', stage: 'domestic' }, // Інші коди Delivery Auto
+                { pattern: /^056\d{7}$/, confidence: 'medium', stage: 'domestic' },
+                { pattern: /^055\d{7}$/, confidence: 'medium', stage: 'domestic' },
+
+                // Загальні patterns з НИЖЧИМ пріоритетом
+                { pattern: /^0\d{9}$/, confidence: 'low', stage: 'domestic' },         // Знижено з medium
+                { pattern: /^\d{10}$/, confidence: 'very-low', stage: 'domestic' }     // Знижено з very-low
             ],
             
             'sat': [
                 { pattern: /^SAT\d{8,12}$/, confidence: 'high', stage: 'domestic' },
                 { pattern: /^ST\d{10,12}$/, confidence: 'medium', stage: 'domestic' },
                 { pattern: /^SATELLITE\d{6,10}$/, confidence: 'high', stage: 'domestic' },
-                // Підтримка звичайних номерів з дуже низьким пріоритетом
-                { pattern: /^\d{8,12}$/, confidence: 'very-low', stage: 'domestic' }
+                // ВИПРАВЛЕННЯ: Специфічні SAT префікси (якщо відомі)
+                { pattern: /^020\d{7}$/, confidence: 'medium', stage: 'domestic' },    // Припущення для SAT
+                { pattern: /^021\d{7}$/, confidence: 'medium', stage: 'domestic' },
             ],
 
             'dhl': [
@@ -60,6 +68,8 @@ class CarrierDetector {
                 { pattern: /^MEE\d{8,10}$/, confidence: 'high', stage: 'domestic' },
                 { pattern: /^M[0-9A-Z]{8,12}$/, confidence: 'medium', stage: 'domestic' },
                 { pattern: /^[0-9]{8}-[0-9]{3}$/, confidence: 'high', stage: 'domestic' },
+                { pattern: /^CV\d{9}UA$/, confidence: 'high', stage: 'international' },
+                { pattern: /^[0-9]{8}[A-Z0-9]{7}$/, confidence: 'high', stage: 'international' }, // 25090855TN5R2BG3 format
                 { pattern: /^\d{10,14}$/, confidence: 'very-low', stage: 'domestic' }
             ],
             'justin': [
@@ -208,12 +218,12 @@ class CarrierDetector {
             const nativePriorities = {
                 'ukrposhta': 1,
                 'nova-poshta': 2,
-                'meest': 3,
-                'dhl': 4,
-                'delivery-auto': 5,
+                'delivery-auto': 3,
+                'meest': 4,
+                'dhl': 5,
                 'sat': 6
             };
-            return nativePriorities[carrierCode] || 6;
+            return nativePriorities[carrierCode] || 7;
         }
         
         const trackingMorePriorities = {
