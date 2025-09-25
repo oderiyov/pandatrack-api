@@ -1,4 +1,4 @@
-// components/tracking/tracking-timeline.tsx - З CarrierBadge + фільтрація + "Зараз тут"
+// components/tracking/tracking-timeline.tsx - ВИПРАВЛЕНО: помилка mainTextLower
 'use client'
 
 import { CarrierBadge } from '@/components/ui/carrier-badge'
@@ -36,7 +36,7 @@ export default function TrackingTimeline({ events, isDelivered, carrier }: Track
     // Убираем события с eventStatus = 'future'
     if (event.eventStatus === 'future') return false
     
-    // Убираем события которые начинаются с "Will" или "Прибуде"
+    // Убираем события которые начинаются с "Will" або "Прибуде"
     if (event.status.toLowerCase().includes('will ')) return false
     if (event.status.toLowerCase().includes('прибуде')) return false
     
@@ -59,7 +59,8 @@ export default function TrackingTimeline({ events, isDelivered, carrier }: Track
         return status.includes('доставлено') || 
                status.includes('отримано') || 
                status.includes('delivered') ||
-               status.includes('вручено')
+               status.includes('вручено') ||
+               status.includes('видана')  // ✅ ДОДАНО: для Delivery Auto
       })
     }
     
@@ -120,16 +121,23 @@ export default function TrackingTimeline({ events, isDelivered, carrier }: Track
           const isCurrent = index === currentEventIndex // ✅ ДОДАНО: поточна подія
           const { mainText, subText } = cleanStatusText(event.status, event.description, event.location)
 
-          // ✅ ЗМІНЕНО: Поліпшена логіка кольорів - тільки один синій
+          // ✅ ВИПРАВЛЕНО: Логіка кольорів з правильними змінними
           const getStatusColor = () => {
             // Перевірка чи це доставлений статус
-            const deliveredKeywords = ['доставлено', 'отримано', 'вручено', 'delivered', 'received'];
+            const deliveredKeywords = [
+              'доставлено', 'отримано', 'вручено', 'delivered', 'received',
+              'видана'  // ✅ КЛЮЧОВЕ: додано для Delivery Auto
+            ];
+            
+            // ✅ ВИПРАВЛЕНО: Правильно оголошені змінні
+            const mainTextLower = mainText.toLowerCase();
+            const subTextLower = subText ? subText.toLowerCase() : '';
+            
             const isDeliveredStatus = deliveredKeywords.some(keyword => 
-              mainText.toLowerCase().includes(keyword) || 
-              (subText && subText.toLowerCase().includes(keyword))
+              mainTextLower.includes(keyword) || subTextLower.includes(keyword)
             );
             
-            // Зелений для доставлених
+            // ✅ ЗЕЛЕНИЙ для всіх доставлених статусів (включно з "Видана")
             if (isDeliveredStatus) {
               return {
                 dot: 'bg-green-500 border-green-500',
@@ -137,15 +145,15 @@ export default function TrackingTimeline({ events, isDelivered, carrier }: Track
               }
             }
             
-            // ✅ ЗМІНЕНО: Синій тільки для поточного статусу (якщо не доставлено)
+            // Синій тільки для поточного статусу (якщо не доставлено)
             if (isCurrent && !isDeliveredStatus) {
               return {
-                dot: 'bg-blue-500 border-blue-500 animate-pulse', // ✅ ДОДАНО: анімація
+                dot: 'bg-blue-500 border-blue-500 animate-pulse',
                 line: 'bg-gray-300'
               }
             }
             
-            // ✅ ЗМІНЕНО: Всі інші сірі
+            // Всі інші сірі
             return {
               dot: 'bg-gray-400 border-gray-400',
               line: 'bg-gray-300'
@@ -199,8 +207,9 @@ export default function TrackingTimeline({ events, isDelivered, carrier }: Track
                     </div>
                   )}
                   
-                  {/* ✅ ДОДАНО: Метка "Зараз тут" для поточного статусу */}
-                  {isCurrent && !mainText.toLowerCase().includes('доставлено') && (
+                  {/* ✅ ВИПРАВЛЕНО: Метка "Зараз тут" тільки для неДоставлених */}
+                  {isCurrent && !mainText.toLowerCase().includes('доставлено') && 
+                   !mainText.toLowerCase().includes('видана') && (
                     <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full font-medium">
                       Зараз тут
                     </span>

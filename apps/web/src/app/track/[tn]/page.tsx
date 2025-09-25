@@ -375,13 +375,31 @@ export default function TrackingPage() {
     trackingData?.status?.toLowerCase().includes('вручено') ||
     trackingData?.status?.toLowerCase().includes('отримано') ||
     trackingData?.status?.toLowerCase().includes('доставлено') ||
-    trackingData?.events?.some(event => 
-      event.status?.toLowerCase().includes('доставлено') ||
-      event.status?.toLowerCase().includes('отримано') ||
-      event.status?.toLowerCase().includes('delivered') ||
-      event.status?.toLowerCase().includes('вручено')
-    )
-  )
+    trackingData?.status?.toLowerCase().includes('видана') ||  // ✅ КЛЮЧОВЕ: статус Delivery Auto
+
+    // Перевіряємо події
+    trackingData?.events?.some(event => {
+      const status = event.status?.toLowerCase() || '';
+      const description = typeof event.description === 'string' 
+        ? event.description.toLowerCase() 
+        : Array.isArray(event.description) 
+          ? event.description.join(' ').toLowerCase()
+          : '';
+
+      return (
+        status.includes('доставлено') ||
+        status.includes('отримано') ||
+        status.includes('delivered') ||
+        status.includes('вручено') ||
+        status.includes('видана') ||    // ✅ КЛЮЧОВЕ: для подій Delivery Auto
+        description.includes('доставлено') ||
+        description.includes('отримано') ||
+        description.includes('delivered') ||
+        description.includes('вручено') ||
+        description.includes('видана')   // ✅ КЛЮЧОВЕ: в описі події    
+    );
+  })
+);  
 
   if (loading) {
     return (
