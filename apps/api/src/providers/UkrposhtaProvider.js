@@ -220,8 +220,8 @@ class UkrposhtaProvider extends BaseProvider {
             const originalLocation = status.name || status.index || '';
             
             // Якщо дані українською - перекладаємо на українську
-            const translatedStatus = isUkrainian ? originalStatus : translateStatus(originalStatus);
-            const translatedLocation = isUkrainian ? originalLocation : translateLocation(originalLocation);
+            const translatedStatus = translateStatus(originalStatus);
+            const translatedLocation = translateLocation(originalLocation);
             
             return {
                 date: this.parseISODate(status.date),
@@ -263,9 +263,7 @@ class UkrposhtaProvider extends BaseProvider {
         const normalizedStatus = statusMapping[statusCode] || 'in_transit';
         
         // Перекладений статус для відображення
-        const displayStatus = isUkrainian ? 
-            latestStatus?.eventName : 
-            translateStatus(latestStatus?.eventName || 'Unknown Status');
+        const displayStatus = translateStatus(latestStatus?.eventName || 'Unknown Status');
         
         return {
             success: true,
