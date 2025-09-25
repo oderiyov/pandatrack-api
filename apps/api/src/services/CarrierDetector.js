@@ -52,13 +52,16 @@ class CarrierDetector {
                 { pattern: /^ST\d{10,12}$/, confidence: 'medium', stage: 'domestic' },
                 { pattern: /^SATELLITE\d{6,10}$/, confidence: 'high', stage: 'domestic' },
                 
-                // Специфічні SAT префікси (якщо відомі)
+                // ДОДАТИ ЦІ РЯДКИ:
+                { pattern: /^029\d{6}$/, confidence: 'high', stage: 'domestic' },    // 029000710
+                { pattern: /^001\d{6}$/, confidence: 'high', stage: 'domestic' },    // 001000288
+                { pattern: /^0\d{8}$/, confidence: 'medium', stage: 'domestic' },    // 9-digit numbers starting with 0
+                
+                // Existing patterns with lower priority:
                 { pattern: /^020\d{7}$/, confidence: 'medium', stage: 'domestic' },    
                 { pattern: /^021\d{7}$/, confidence: 'medium', stage: 'domestic' },
                 { pattern: /^022\d{7}$/, confidence: 'medium', stage: 'domestic' },
-                
-                // Загальні patterns тільки з дуже низьким пріоритетом
-                { pattern: /^\d{10,12}$/, confidence: 'very-low', stage: 'domestic' }  // Fallback тільки
+                { pattern: /^\d{10,12}$/, confidence: 'very-low', stage: 'domestic' }
             ],
 
             'dhl': [

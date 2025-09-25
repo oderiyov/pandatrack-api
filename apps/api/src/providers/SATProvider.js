@@ -1,47 +1,34 @@
-// apps/api/src/providers/SATProvider.js - ВИПРАВЛЕНА ВЕРСІЯ
+// apps/api/src/providers/SATProvider.js - ПОВНІСТЮ ПЕРЕПИСАНО ЗА ДОКУМЕНТАЦІЄЮ
 const BaseProvider = require('./BaseProvider');
+const { translateStatus, translateLocation } = require('../utils/satTranslations');
 
 class SATProvider extends BaseProvider {
     constructor(config) {
         super(config);
         this.apiKey = process.env.SAT_API_KEY;
         
-        // ВИПРАВЛЕННЯ: Правильні endpoints SAT API
-        this.baseUrl = 'https://api.sat.ua/study/hs/api/v1.0'; // Тестування
-        this.prodUrl = 'http://urm.sat.ua/openws/hs/api/v1.0'; // Продакшн
+        // ВИПРАВЛЕНО: URL згідно з офіційною документацією SAT
+        this.baseUrl = 'https://api.sat.ua/study/hs/api/v1.0';
         this.webTrackingUrl = 'https://www.sat.ua/tracking';
         
         if (!this.apiKey) {
-            console.warn('SAT API key not configured - will use web fallback');
+            throw new Error('SAT API key not configured');
         }
     }
 
     async track(trackingNumber, options = {}) {
+        console.log(`SAT Provider: Tracking ${trackingNumber} with API key`);
+        
         try {
-            // Спочатку пробуємо API (якщо є ключ)
-            if (this.apiKey) {
-                const apiResult = await this.tryAPITracking(trackingNumber);
-                if (apiResult.success) {
-                    return apiResult;
-                }
-            }
-            
-            // Fallback до web tracking
-            return await this.tryWebTracking(trackingNumber);
-            
-        } catch (error) {
-            console.error(`${this.name} error:`, error.message);
-            throw new Error(`${this.name} unavailable: ${error.message}`);
-        }
-    }
-
-    async tryAPITracking(trackingNumber) {
-        try {
-            // ВИПРАВЛЕННЯ: Правильний endpoint згідно з документацією
-            const url = `${this.baseUrl}/tracking/json?number=${trackingNumber}&apiKey=${this.apiKey}`;
+            // ВИПРАВЛЕНО: GET запит згідно з документацією
+            const url = `${this.baseUrl}/tracking/json`;
             
             const response = await this.makeRequest(url, {
                 method: 'GET',
+                params: {
+                    number: trackingNumber,
+                    apiKey: this.apiKey
+                },
                 headers: {
                     'Accept': 'application/json',
                     'User-Agent': 'PandaTrack/2.0'
@@ -49,39 +36,16 @@ class SATProvider extends BaseProvider {
                 timeout: 15000
             });
 
-            if (response.data && response.data.success !== false) {
-                return this.normalizeSATResponse(response.data, trackingNumber, 'api');
+            console.log(`SAT API Response for ${trackingNumber}:`, JSON.stringify(response.data, null, 2));
+
+            // Перевіряємо структуру відповіді згідно з документацією
+            if (response.data && response.data.success && response.data.data) {
+                return this.normalizeSATResponse(response.data.data, trackingNumber);
             }
 
-            return {
-                success: false,
-                error: response.data?.message || 'SAT API: Номер не знайдено'
-            };
-
-        } catch (error) {
-            console.warn(`SAT API failed: ${error.message}`);
-            return { success: false, error: error.message };
-        }
-    }
-
-    async tryWebTracking(trackingNumber) {
-        try {
-            // ВИПРАВЛЕННЯ: Використовуємо GET запит до веб-трекінгу
-            const url = `https://www.sat.ua/tracking?number=${encodeURIComponent(trackingNumber)}`;
-            
-            const response = await this.makeRequest(url, {
-                method: 'GET',
-                headers: {
-                    'Accept': 'text/html,application/xhtml+xml',
-                    'User-Agent': 'Mozilla/5.0 (compatible; PandaTrack/2.0)'
-                },
-                timeout: 20000
-            });
-
-            const trackingData = this.parseHTMLResponse(response.data, trackingNumber);
-            
-            if (trackingData.found) {
-                return this.normalizeSATResponse(trackingData, trackingNumber, 'web');
+            // Якщо data без success wrapper
+            if (response.data && response.data.number) {
+                return this.normalizeSATResponse(response.data, trackingNumber);
             }
 
             return {
@@ -92,168 +56,127 @@ class SATProvider extends BaseProvider {
             };
 
         } catch (error) {
+            console.error(`SAT Provider error for ${trackingNumber}:`, error.message);
+            
+            if (error.response) {
+                const status = error.response.status;
+                const statusText = error.response.statusText;
+                
+                if (status === 404) {
+                    return {
+                        success: false,
+                        error: 'SAT: Номер відправлення не знайдено',
+                        provider: this.name,
+                        trackingNumber: trackingNumber
+                    };
+                }
+                
+                if (status === 401 || status === 403) {
+                    return {
+                        success: false,
+                        error: 'SAT: Недійсний API ключ або доступ заборонено',
+                        provider: this.name,
+                        trackingNumber: trackingNumber
+                    };
+                }
+                
+                return {
+                    success: false,
+                    error: `SAT API HTTP ${status}: ${statusText}`,
+                    provider: this.name,
+                    trackingNumber: trackingNumber
+                };
+            }
+            
+            throw new Error(`SAT API unavailable: ${error.message}`);
+        }
+    }
+
+    normalizeSATResponse(data, trackingNumber) {
+        try {
+            // Будуємо події з states масиву згідно з документацією
+            const events = this.buildEventsFromStates(data.states || []);
+            
+            // Поточний статус з currentStatus поля
+            const currentStatus = data.currentStatus || 'Невідомо';
+            const normalizedStatus = this.mapSATStatus(currentStatus);
+            
+            // Метадані з документації
+            const metadata = {
+                weight: data.weight,
+                volume: data.volume,
+                seatsAmount: data.seatsAmount,
+                width: data.width,
+                length: data.length,
+                height: data.height,
+                cargoType: data.cargoType,
+                serviceType: data.type,
+                sum: data.sum,
+                rspFrom: data.rspFrom,
+                rspTo: data.rspTo
+            };
+
+            return {
+                success: true,
+                data: {
+                    trackingNumber: trackingNumber,
+                    carrier: 'SAT Satellite Express',
+                    status: this.translateStatus(currentStatus),
+                    normalizedStatus: normalizedStatus,
+                    statusCode: normalizedStatus,
+                    lastUpdate: this.getLastEventDate(events),
+                    events: events,
+                    estimatedDelivery: data.arrivalDate ? this.parseDate(data.arrivalDate) : null,
+                    shipmentDate: data.date ? this.parseDate(data.date) : null,
+                    ...metadata,
+                    raw: data
+                },
+                provider: this.name,
+                cost: 0,
+                supportsInternational: false,
+                timestamp: new Date().toISOString()
+            };
+
+        } catch (error) {
+            console.error('SAT response normalization error:', error.message);
             return {
                 success: false,
-                error: `SAT web tracking failed: ${error.message}`,
+                error: `Failed to process SAT response: ${error.message}`,
                 provider: this.name,
                 trackingNumber: trackingNumber
             };
         }
     }
 
-    async healthCheck() {
-        if (!this.apiKey) {
-            // Перевіряємо тільки web fallback
-            try {
-                const webResponse = await this.makeRequest('https://www.sat.ua/tracking', {
-                    method: 'GET',
-                    timeout: 5000
-                });
-                
-                return {
-                    status: 'warning',
-                    provider: this.name,
-                    message: 'API key missing - using web fallback only',
-                    webFallbackWorking: webResponse.status < 500,
-                    timestamp: new Date().toISOString()
-                };
-                
-            } catch (error) {
-                return {
-                    status: 'error',
-                    provider: this.name,
-                    error: 'Both API and web fallback unavailable',
-                    timestamp: new Date().toISOString()
-                };
-            }
-        }
-
-        try {
-            // ВИПРАВЛЕННЯ: Тестуємо правильний API endpoint
-            const response = await this.makeRequest(
-                `${this.baseUrl}/tracking/json?number=test&apiKey=${this.apiKey}`,
-                {
-                    method: 'GET',
-                    headers: {
-                        'Accept': 'application/json'
-                    },
-                    timeout: 10000
-                }
-            );
-            
-            return {
-                status: response.status < 500 ? 'ok' : 'error',
-                provider: this.name,
-                apiKeyValid: !!this.apiKey,
-                responseCode: response.status,
-                baseUrl: this.baseUrl,
-                timestamp: new Date().toISOString()
-            };
-            
-        } catch (error) {
-            // Fallback до web перевірки
-            try {
-                const webResponse = await this.makeRequest('https://www.sat.ua/tracking', {
-                    method: 'GET',
-                    timeout: 5000
-                });
-                
-                return {
-                    status: 'warning',
-                    provider: this.name,
-                    apiError: error.message,
-                    webFallbackWorking: webResponse.status < 500,
-                    note: 'API unavailable, web fallback available',
-                    timestamp: new Date().toISOString()
-                };
-                
-            } catch (webError) {
-                return {
-                    status: 'error',
-                    provider: this.name,
-                    apiError: error.message,
-                    webError: webError.message,
-                    timestamp: new Date().toISOString()
-                };
-            }
-        }
-    }
-
-    parseHTMLResponse(html, trackingNumber) {
-        try {
-            const statusMatch = html.match(/<div[^>]*class[^>]*status[^>]*>([^<]+)/i);
-            const dateMatch = html.match(/<div[^>]*class[^>]*date[^>]*>([^<]+)/i);
-            const locationMatch = html.match(/<div[^>]*class[^>]*location[^>]*>([^<]+)/i);
-            
-            const foundMatch = html.includes(trackingNumber) || 
-                              html.includes('статус') || 
-                              html.includes('відправлення');
-
-            if (!foundMatch) {
-                return { found: false };
-            }
-
-            return {
-                found: true,
-                status: statusMatch ? statusMatch[1].trim() : 'В обробці',
-                lastUpdate: dateMatch ? dateMatch[1].trim() : new Date().toISOString(),
-                location: locationMatch ? locationMatch[1].trim() : '',
-                source: 'web'
-            };
-
-        } catch (error) {
-            console.warn('SAT HTML parsing failed:', error.message);
-            return { found: false };
-        }
-    }
-
-    normalizeSATResponse(data, trackingNumber, source = 'api') {
+    buildEventsFromStates(states) {
         const events = [];
         
-        if (data.history && Array.isArray(data.history)) {
-            data.history.forEach(historyItem => {
-                events.push({
-                    date: historyItem.date || historyItem.dateTime || new Date().toISOString(),
-                    status: historyItem.status || historyItem.statusName || 'Невідомо',
-                    location: historyItem.location || historyItem.office || '',
-                    description: historyItem.description || historyItem.status || '',
-                    statusCode: historyItem.statusCode || historyItem.id
-                });
-            });
+        if (!Array.isArray(states)) {
+            return events;
         }
         
-        if (events.length === 0) {
+        states.forEach(state => {
+            const status = state.status || 'Невідомо';
             events.push({
-                date: data.lastUpdate || data.date || new Date().toISOString(),
-                status: data.status || 'В обробці',
-                location: data.location || '',
-                description: data.status || 'Відправлення в системі',
-                statusCode: data.statusCode || 'processing'
+                date: this.parseDate(state.date),
+                status: this.translateStatus(status),
+                description: this.translateStatus(status),
+                location: translateLocation(state.town || ''),
+                statusCode: this.mapSATStatus(status),
+                originalStatus: status
             });
-        }
+        });
 
-        return {
-            success: true,
-            data: {
-                trackingNumber: trackingNumber,
-                carrier: 'sat',
-                status: data.status || 'В обробці',
-                normalizedStatus: this.mapSATStatus(data.status),
-                statusCode: data.statusCode || data.status_code,
-                lastUpdate: data.lastUpdate || data.last_update || new Date().toISOString(),
-                events: events,
-                estimatedDelivery: data.estimatedDelivery || data.estimated_delivery,
-                senderCity: data.senderCity,
-                recipientCity: data.recipientCity,
-                service: data.serviceType || 'Стандартна доставка',
-                raw: data
-            },
-            provider: this.name,
-            cost: 0,
-            supportsInternational: false,
-            source: source,
-            timestamp: new Date().toISOString()
-        };
+        // Сортуємо події по даті (найновіші перші для відображення)
+        events.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        
+        console.log(`SAT: Built ${events.length} events from states`);
+        return events;
+    }
+
+    translateStatus(status) {
+        // Використовуємо зовнішній файл перекладів
+        return translateStatus(status);
     }
 
     mapSATStatus(status) {
@@ -261,37 +184,126 @@ class SATProvider extends BaseProvider {
         
         const statusLower = status.toLowerCase();
         
-        if (statusLower.includes('доставлен') || statusLower.includes('вручен') || statusLower.includes('отримано')) {
+        // Доставлені статуси
+        if (statusLower.includes('выдан') || statusLower.includes('видано') || 
+            statusLower.includes('получен') || statusLower.includes('отримано')) {
             return 'delivered';
         }
-        if (statusLower.includes('прийнят') || statusLower.includes('створен') || statusLower.includes('в обробці')) {
-            return 'accepted';
-        }
-        if (statusLower.includes('в дорозі') || statusLower.includes('транспорт') || statusLower.includes('відправлен')) {
+        
+        // В дорозі/транзиті
+        if (statusLower.includes('вышел') || statusLower.includes('виїхав') || 
+            statusLower.includes('в пути') || statusLower.includes('дорозі') ||
+            statusLower.includes('курьер') || statusLower.includes('кур\'єр')) {
             return 'in_transit';
         }
-        if (statusLower.includes('на відділенн') || statusLower.includes('прибув') || statusLower.includes('готов')) {
+        
+        // Прибув/готовий до видачі
+        if (statusLower.includes('поступил') || statusLower.includes('прибув') ||
+            statusLower.includes('склад') || statusLower.includes('відділенн')) {
             return 'at_destination';
         }
-        if (statusLower.includes('неуспішн') || statusLower.includes('проблем') || statusLower.includes('затримк')) {
-            return 'exception';
-        }
-        if (statusLower.includes('повернен') || statusLower.includes('відмов')) {
-            return 'returning';
+        
+        // Прийнято
+        if (statusLower.includes('принят') || statusLower.includes('прийнято')) {
+            return 'accepted';
         }
         
-        return 'in_transit';
+        // Проблеми
+        if (statusLower.includes('возврат') || statusLower.includes('отказ') ||
+            statusLower.includes('повернення') || statusLower.includes('відмова')) {
+            return 'exception';
+        }
+        
+        return 'in_transit'; // За замовчуванням
+    }
+
+    parseDate(dateString) {
+        if (!dateString) return new Date().toISOString();
+        
+        try {
+            // SAT повертає дати в форматі dd.mm.yyyy
+            if (dateString.includes('.')) {
+                const [day, month, year] = dateString.split('.');
+                const date = new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`);
+                return isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
+            }
+            
+            // Fallback для інших форматів
+            const date = new Date(dateString);
+            return isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
+        } catch {
+            return new Date().toISOString();
+        }
+    }
+
+    getLastEventDate(events) {
+        if (events.length === 0) return new Date().toISOString();
+        
+        // Події вже відсортовані по даті (найновіші перші)
+        return events[0].date;
     }
 
     canHandle(trackingNumber, carrierCode = null) {
         const number = trackingNumber.trim().toUpperCase();
         
+        // Специфічні SAT префікси з реальних прикладів
         if (/^SAT\d{8,12}$/.test(number)) return true;
         if (/^ST\d{10,12}$/.test(number)) return true;
         if (/^SATELLITE\d{6,10}$/.test(number)) return true;
-        if (/^\d{8,12}$/.test(number)) return true;
+        
+        // Реальні формати SAT згідно з прикладами
+        if (/^029\d{6}$/.test(number)) return true;  // 029000710
+        if (/^001\d{6}$/.test(number)) return true;  // 001000288
+        if (/^0\d{8}$/.test(number)) return true;    // 9-digit starting with 0
         
         return false;
+    }
+
+    async healthCheck() {
+        if (!this.apiKey) {
+            return {
+                status: 'error',
+                provider: this.name,
+                error: 'API key not configured',
+                timestamp: new Date().toISOString()
+            };
+        }
+
+        try {
+            // Тестуємо API з неіснуючим номером для перевірки з'єднання
+            const response = await this.makeRequest(`${this.baseUrl}/tracking/json`, {
+                method: 'GET',
+                params: {
+                    number: 'test123456',
+                    apiKey: this.apiKey
+                },
+                headers: {
+                    'Accept': 'application/json'
+                },
+                timeout: 10000
+            });
+            
+            // Навіть якщо номер не знайдено, API працює
+            return {
+                status: 'ok',
+                provider: this.name,
+                apiVersion: 'v1.0',
+                features: ['Tracking', 'States History', 'Metadata'],
+                apiKeyValid: !!this.apiKey,
+                responseCode: response.status,
+                baseUrl: this.baseUrl,
+                timestamp: new Date().toISOString()
+            };
+            
+        } catch (error) {
+            return {
+                status: 'error',
+                provider: this.name,
+                error: error.message,
+                apiKeyProvided: !!this.apiKey,
+                timestamp: new Date().toISOString()
+            };
+        }
     }
 }
 
