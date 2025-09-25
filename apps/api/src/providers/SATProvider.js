@@ -16,43 +16,102 @@ class SATProvider extends BaseProvider {
         }
     }
 
+    /**
+     * Генерує різні формати номерів для спроб з SAT API
+     * @param {string} trackingNumber - Оригінальний номер
+     * @returns {Array<string>} - Масив форматів для спроби
+     */
+    generateNumberFormats(trackingNumber) {
+        const number = trackingNumber.trim();
+        const formats = [];
+        
+        // 1. Оригінальний формат
+        formats.push(number);
+        
+        // 2. З пробілами через кожні 3 цифри (029 000 710)
+        if (/^\d+$/.test(number)) {
+            const withSpaces = number.replace(/(\d{3})(?=\d)/g, '$1 ');
+            formats.push(withSpaces);
+        }
+        
+        // 3. Формат XXX-XXX-XXX
+        if (/^\d{9}$/.test(number)) {
+            const withDashes = `${number.slice(0,3)}-${number.slice(3,6)}-${number.slice(6)}`;
+            formats.push(withDashes);
+        }
+        
+        // 4. Без ведучих нулів
+        if (number.startsWith('0')) {
+            const withoutLeadingZero = number.replace(/^0+/, '');
+            if (withoutLeadingZero.length > 0) {
+                formats.push(withoutLeadingZero);
+            }
+        }
+        
+        // 5. З додаванням нулів (якщо коротший)
+        if (number.length < 9 && /^\d+$/.test(number)) {
+            const padded = number.padStart(9, '0');
+            formats.push(padded);
+        }
+        
+        // Видаляємо дублікати
+        return [...new Set(formats)];
+    }
+
     async track(trackingNumber, options = {}) {
         console.log(`SAT Provider: Tracking ${trackingNumber} with API key`);
         
         try {
-            // ВИПРАВЛЕНО: GET запит згідно з документацією
-            const url = `${this.baseUrl}/tracking/json`;
+            // Спробуємо різні формати номерів
+            const numberFormats = this.generateNumberFormats(trackingNumber);
             
-            const response = await this.makeRequest(url, {
-                method: 'GET',
-                params: {
-                    number: trackingNumber,
-                    apiKey: this.apiKey
-                },
-                headers: {
-                    'Accept': 'application/json',
-                    'User-Agent': 'PandaTrack/2.0'
-                },
-                timeout: 15000
-            });
+            for (const numberFormat of numberFormats) {
+                console.log(`SAT: Trying format: ${numberFormat}`);
+                
+                const url = `${this.baseUrl}/tracking/json`;
+                
+                const response = await this.makeRequest(url, {
+                    method: 'GET',
+                    params: {
+                        number: numberFormat,
+                        apiKey: this.apiKey
+                    },
+                    headers: {
+                        'Accept': 'application/json',
+                        'User-Agent': 'PandaTrack/2.0'
+                    },
+                    timeout: 15000
+                });
 
-            console.log(`SAT API Response for ${trackingNumber}:`, JSON.stringify(response.data, null, 2));
+                console.log(`SAT API Response for ${numberFormat}:`, JSON.stringify(response.data, null, 2));
 
-            // Перевіряємо структуру відповіді згідно з документацією
-            if (response.data && response.data.success && response.data.data) {
-                return this.normalizeSATResponse(response.data.data, trackingNumber);
+                // Перевіряємо структуру відповіді згідно з документацією
+                if (response.data && response.data.success && response.data.data) {
+                    return this.normalizeSATResponse(response.data.data, trackingNumber);
+                }
+
+                // Якщо data без success wrapper
+                if (response.data && response.data.number) {
+                    return this.normalizeSATResponse(response.data, trackingNumber);
+                }
+                
+                // Перевіряємо чи це помилка "не знайдено"
+                if (response.data && response.data.success === "false") {
+                    const error = response.data.error;
+                    if (error && error.code === "PD2") {
+                        console.log(`SAT: Format ${numberFormat} not found, trying next...`);
+                        continue; // Спробуємо наступний формат
+                    }
+                }
             }
 
-            // Якщо data без success wrapper
-            if (response.data && response.data.number) {
-                return this.normalizeSATResponse(response.data, trackingNumber);
-            }
-
+            // Якщо жоден формат не знайшов результат
             return {
                 success: false,
-                error: 'SAT: Номер відправлення не знайдено',
+                error: 'SAT: Номер відправлення не знайдено в жодному з форматів',
                 provider: this.name,
-                trackingNumber: trackingNumber
+                trackingNumber: trackingNumber,
+                attemptedFormats: numberFormats
             };
 
         } catch (error) {
