@@ -1,3 +1,4 @@
+// apps/api/src/services/CarrierDetector.js - FIXED patterns
 class CarrierDetector {
     constructor() {
         this.patterns = this.initializePatterns();
@@ -7,16 +8,13 @@ class CarrierDetector {
         return {
             // Українські перевізники
             'ukrposhta': [
-                // ВИПРАВЛЕННЯ: Додано 13 цифр (як показав bulk endpoint)
                 { pattern: /^[0-9]{13}$/, confidence: 'high', stage: 'domestic' },
                 { pattern: /^[0-9]{14}$/, confidence: 'high', stage: 'domestic' },
                 { pattern: /^[A-Z]{2}\d{9}UA$/, confidence: 'high', stage: 'import' },
                 { pattern: /^EM\d{9}UA$/, confidence: 'high', stage: 'import' },
                 { pattern: /^CP\d{9}UA$/, confidence: 'high', stage: 'import' },
                 { pattern: /^RG\d{9}UA$/, confidence: 'high', stage: 'import' },
-                // ВИПРАВЛЕННЯ: Додано всі UPU міжнародні формати
                 { pattern: /^[A-Z]{2}\d{9}[A-Z]{2}$/, confidence: 'high', stage: 'international' },
-                // Розширені UPU patterns з документації
                 { pattern: /^(RA|RB|RC|RD|RE|RG|RH|RI|RJ|RK|RL|RM|RN|RO|RP|RQ|RR|RS|RT|RU|RV|RW|RX|RY|RZ)\d{9}[A-Z]{2}$/, confidence: 'high', stage: 'international' },
                 { pattern: /^(CA|CB|CC|CD|CE|CF|CG|CH|CI|CJ|CK|CL|CM|CN|CO|CP|CQ|CR|CS|CT|CU|CV|CW|CX|CY|CZ)\d{9}[A-Z]{2}$/, confidence: 'high', stage: 'international' },
                 { pattern: /^(EA|EB|EC|ED|EE|EF|EG|EH|EI|EJ|EK|EL|EM|EN|EO|EP|EQ|ER|ES|ET|EU|EV|EW|EX|EY|EZ)\d{9}[A-Z]{2}$/, confidence: 'high', stage: 'international' },
@@ -27,30 +25,40 @@ class CarrierDetector {
                 { pattern: /^59\d{12}$/, confidence: 'high', stage: 'domestic' }
             ],
             
+            // ВИПРАВЛЕННЯ: Delivery Auto patterns з правильним пріоритетом
             'delivery-auto': [
+                // КРИТИЧНО: Специфічні префікси Delivery Auto (найвищий пріоритет)
+                { pattern: /^058\d{7}$/, confidence: 'high', stage: 'domestic' },    // 0580402558 - ВИСОКИЙ пріоритет
+                { pattern: /^057\d{7}$/, confidence: 'high', stage: 'domestic' },    
+                { pattern: /^056\d{7}$/, confidence: 'high', stage: 'domestic' },
+                { pattern: /^055\d{7}$/, confidence: 'high', stage: 'domestic' },
+                { pattern: /^054\d{7}$/, confidence: 'medium', stage: 'domestic' },  // Розширюємо префікси
+                { pattern: /^053\d{7}$/, confidence: 'medium', stage: 'domestic' },
+
+                // Фірмові коди Delivery Auto
                 { pattern: /^DA\d{8,12}$/, confidence: 'high', stage: 'domestic' },
                 { pattern: /^\d{8,10}DA$/, confidence: 'high', stage: 'domestic' },
                 { pattern: /^DELIVERY\d{6,10}$/, confidence: 'high', stage: 'domestic' },
                 { pattern: /^DLV\d{8,12}$/, confidence: 'high', stage: 'domestic' },
 
-                // КРИТИЧНО ВАЖЛИВО: Специфічні префікси Delivery Auto
-                { pattern: /^058\d{7}$/, confidence: 'high', stage: 'domestic' },  // 0580402558
-                { pattern: /^057\d{7}$/, confidence: 'medium', stage: 'domestic' }, // Інші коди Delivery Auto
-                { pattern: /^056\d{7}$/, confidence: 'medium', stage: 'domestic' },
-                { pattern: /^055\d{7}$/, confidence: 'medium', stage: 'domestic' },
-
-                // Загальні patterns з НИЖЧИМ пріоритетом
-                { pattern: /^0\d{9}$/, confidence: 'low', stage: 'domestic' },         // Знижено з medium
-                { pattern: /^\d{10}$/, confidence: 'very-low', stage: 'domestic' }     // Знижено з very-low
+                // Загальні patterns з НИЗЬКИМ пріоритетом (щоб не конфліктувати з SAT)
+                { pattern: /^0\d{9}$/, confidence: 'low', stage: 'domestic' },       // Знижено з medium
+                { pattern: /^\d{10}$/, confidence: 'very-low', stage: 'domestic' }   // Тільки як fallback
             ],
             
+            // SAT patterns - з обмеженими префіксами
             'sat': [
                 { pattern: /^SAT\d{8,12}$/, confidence: 'high', stage: 'domestic' },
                 { pattern: /^ST\d{10,12}$/, confidence: 'medium', stage: 'domestic' },
                 { pattern: /^SATELLITE\d{6,10}$/, confidence: 'high', stage: 'domestic' },
-                // ВИПРАВЛЕННЯ: Специфічні SAT префікси (якщо відомі)
-                { pattern: /^020\d{7}$/, confidence: 'medium', stage: 'domestic' },    // Припущення для SAT
+                
+                // Специфічні SAT префікси (якщо відомі)
+                { pattern: /^020\d{7}$/, confidence: 'medium', stage: 'domestic' },    
                 { pattern: /^021\d{7}$/, confidence: 'medium', stage: 'domestic' },
+                { pattern: /^022\d{7}$/, confidence: 'medium', stage: 'domestic' },
+                
+                // Загальні patterns тільки з дуже низьким пріоритетом
+                { pattern: /^\d{10,12}$/, confidence: 'very-low', stage: 'domestic' }  // Fallback тільки
             ],
 
             'dhl': [
@@ -62,14 +70,14 @@ class CarrierDetector {
                 { pattern: /^\d{9}$/, confidence: 'medium', stage: 'international' }
             ],
 
-            // Інші українські (lower priority)
+            // Інші українські перевізники
             'meest': [
                 { pattern: /^ME\d{10,12}$/, confidence: 'high', stage: 'domestic' },
                 { pattern: /^MEE\d{8,10}$/, confidence: 'high', stage: 'domestic' },
                 { pattern: /^M[0-9A-Z]{8,12}$/, confidence: 'medium', stage: 'domestic' },
                 { pattern: /^[0-9]{8}-[0-9]{3}$/, confidence: 'high', stage: 'domestic' },
                 { pattern: /^CV\d{9}UA$/, confidence: 'high', stage: 'international' },
-                { pattern: /^[0-9]{8}[A-Z0-9]{7}$/, confidence: 'high', stage: 'international' }, // 25090855TN5R2BG3 format
+                { pattern: /^[0-9]{8}[A-Z0-9]{7}$/, confidence: 'high', stage: 'international' },
                 { pattern: /^\d{10,14}$/, confidence: 'very-low', stage: 'domestic' }
             ],
             'justin': [
@@ -83,7 +91,6 @@ class CarrierDetector {
                 { pattern: /^\d{20}$/, confidence: 'high', stage: 'international' },
                 { pattern: /^\d{22}$/, confidence: 'high', stage: 'international' },
                 { pattern: /^96\d{20}$/, confidence: 'high', stage: 'international' },
-                // Знижено пріоритет для коротких номерів
                 { pattern: /^\d{12,14}$/, confidence: 'very-low', stage: 'international' }
             ],
             'ups': [
@@ -97,7 +104,7 @@ class CarrierDetector {
                 { pattern: /^R[A-Z]\d{9}CN$/, confidence: 'high', stage: 'export' }
             ],
             'cainiao': [
-                { pattern: /^[A-Z]{2}\d{9}[A-Z]{2}$/, confidence: 'very-low', stage: 'export' } // Дуже низький пріоритет
+                { pattern: /^[A-Z]{2}\d{9}[A-Z]{2}$/, confidence: 'very-low', stage: 'export' }
             ],
 
             // Європейські пошти
@@ -121,6 +128,8 @@ class CarrierDetector {
         const sources = [];
         const matches = [];
         
+        console.log(`CarrierDetector: Analyzing tracking number: ${number}`);
+        
         for (const [carrierCode, patterns] of Object.entries(this.patterns)) {
             for (const patternInfo of patterns) {
                 if (patternInfo.pattern.test(number)) {
@@ -128,7 +137,7 @@ class CarrierDetector {
                     const confidenceScore = this.getConfidenceScore(patternInfo.confidence);
                     const priorityScore = this.getPriority(carrierCode, apiType);
                     
-                    matches.push({
+                    const match = {
                         id: this.getCarrierId(carrierCode),
                         code: carrierCode,
                         name: this.getCarrierName(carrierCode),
@@ -137,24 +146,29 @@ class CarrierDetector {
                         confidence: patternInfo.confidence,
                         confidenceScore: confidenceScore,
                         priority: priorityScore,
-                        totalScore: confidenceScore * 10 + (100 - priorityScore)
-                    });
+                        totalScore: confidenceScore * 10 + (100 - priorityScore),
+                        pattern: patternInfo.pattern.toString() // Для debug
+                    };
+                    
+                    matches.push(match);
+                    console.log(`CarrierDetector: Match found - ${carrierCode} (confidence: ${patternInfo.confidence}, totalScore: ${match.totalScore})`);
                 }
             }
         }
 
-        // Сортуємо за загальним скором
+        // Сортуємо за загальним скором (вищий скор = кращий match)
         matches.sort((a, b) => b.totalScore - a.totalScore);
         
-        // ВИПРАВЛЕННЯ: Беремо до 5 найкращих збігів замість 3
+        console.log(`CarrierDetector: Top matches for ${number}:`, matches.slice(0, 3).map(m => `${m.name} (${m.totalScore})`));
+        
+        // Беремо до 5 найкращих збігів
         const bestMatches = matches.slice(0, 5);
         sources.push(...bestMatches);
 
-        // ВИПРАВЛЕННЯ: Завжди додаємо міжнародні джерела для UPU форматів
+        // Завжди додаємо міжнародні джерела для UPU форматів
         if (/^[A-Z]{2}\d{9}[A-Z]{2}$/.test(number)) {
             const internationalSources = this.detectInternationalSources(number);
             
-            // Додаємо міжнародні джерела з нижчим пріоритетом якщо їх ще немає
             for (const intSource of internationalSources) {
                 if (!sources.find(s => s.code === intSource.code)) {
                     sources.push({
@@ -182,9 +196,7 @@ class CarrierDetector {
     detectInternationalSources(number) {
         const sources = [];
         
-        // ВИПРАВЛЕННЯ: Спрощена логіка для міжнародних номерів
         if (/^[A-Z]{2}\d{9}[A-Z]{2}$/.test(number)) {
-            // Завжди додаємо Укрпошту для UPU форматів
             sources.push({
                 code: 'ukrposhta',
                 name: 'Укрпошта (UPU)',
@@ -194,7 +206,6 @@ class CarrierDetector {
                 priority: 1
             });
 
-            // Додаємо TrackingMore як fallback
             sources.push({
                 code: 'trackingmore-international',
                 name: 'International Tracking',
@@ -218,7 +229,7 @@ class CarrierDetector {
             const nativePriorities = {
                 'ukrposhta': 1,
                 'nova-poshta': 2,
-                'delivery-auto': 3,
+                'delivery-auto': 3,  // Високий пріоритет для нативного API
                 'meest': 4,
                 'dhl': 5,
                 'sat': 6
@@ -296,6 +307,8 @@ class CarrierDetector {
         }
         
         const primary = sources[0];
+        console.log(`CarrierDetector: Primary carrier selected: ${primary.name} (${primary.code})`);
+        
         return {
             id: primary.id,
             code: primary.code,
