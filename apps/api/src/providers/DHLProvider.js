@@ -1,6 +1,6 @@
-// apps/api/src/providers/DHLProvider.js - ВИПРАВЛЕНО з dual API support
+// apps/api/src/providers/DHLProvider.js - ПОВНІСТЮ ВИПРАВЛЕНО з Unified API
 const BaseProvider = require('./BaseProvider');
-const { translateStatus, translateLocation, translateDHLData } = require('../utils/dhlTranslations');
+const { translateStatus, translateLocation } = require('../utils/dhlTranslations');
 
 class DHLProvider extends BaseProvider {
     constructor(config) {
@@ -8,8 +8,14 @@ class DHLProvider extends BaseProvider {
         this.apiKey = process.env.DHL_API_KEY;
         this.apiSecret = process.env.DHL_API_SECRET;
         
-        // ВИПРАВЛЕНО: Один Unified API endpoint для всіх DHL сервісів
+        // ВИПРАВЛЕНО: Unified API endpoint для всіх DHL сервісів
         this.unifiedUrl = 'https://api-eu.dhl.com/track/shipments';
+        
+        console.log('DHL Provider initialized:', {
+            hasApiKey: !!this.apiKey,
+            hasApiSecret: !!this.apiSecret,
+            endpoint: this.unifiedUrl
+        });
         
         if (!this.apiKey) {
             console.warn('DHL API key not configured');
@@ -17,77 +23,42 @@ class DHLProvider extends BaseProvider {
     }
 
     detectServiceType(trackingNumber) {
-        const number = trackingNumber.trim().toUpperCase();
+        const number = trackingNumber.trim().toUpperCase().replace(/\s/g, '');
         
-        // DHL Global Mail/eCommerce patterns (найпопулярніші для українців)
+        // DHL Global Mail/eCommerce patterns (найпопулярніші для українців з AliExpress/eBay)
         if (/^[A-Z]{2}\d{9}[A-Z]{2}$/.test(number)) {
-            // Міжнародні формати: RG123456789CN, LM123456789UK, тощо
+            const prefix = number.substring(0, 2);
+            // RG, GM, LM, EM префікси для eCommerce
+            if (['RG', 'GM', 'LM', 'EM', 'LK', 'LZ'].includes(prefix)) {
+                return 'ecommerce';
+            }
             return 'global-mail';
         }
         
         // DHL Express patterns 
         if (/^\d{10}$/.test(number)) {
-            // 10-значні: 1234567890
+            return 'express';
+        }
+        
+        if (/^\d{11}$/.test(number)) {
             return 'express';
         }
         
         if (/^JD\d{18}$/.test(number)) {
-            // JD формат Express
             return 'express';
         }
         
-        // DHL Global Forwarding (freight) patterns
-        if (/^[A-Z]{4}\d{7,10}$/.test(number)) {
-            return 'forwarding';
+        // DHL Freight/Forwarding patterns
+        if (/^\d{9}$/.test(number)) {
+            return 'freight';
         }
         
-        // За замовчуванням - спробуємо всі
-        return 'unknown';
-    }
-
-    async tryGlobalMailAPI(trackingNumber) {
-        try {
-            // Global Mail використовує той же endpoint що й Express, але з іншими параметрами
-            const response = await this.makeRequest(this.globalMailUrl, {
-                method: 'GET',
-                params: {
-                    trackingNumber: trackingNumber,
-                    service: 'dgf,parcel,ecommerce,mail', // КЛЮЧОВА ВІДМІННІСТЬ - включаємо mail
-                    requesterCountryCode: 'UA'
-                },
-                headers: {
-                    'DHL-API-Key': this.apiKey,
-                    'Accept': 'application/json',
-                    'User-Agent': 'PandaTrack/2.0'
-                },
-                timeout: 15000
-            });
-
-            console.log(`DHL Global Mail API response:`, JSON.stringify(response.data, null, 2));
-
-            if (response.data?.shipments?.length > 0) {
-                return this.normalizeGlobalMailResponse(response.data.shipments[0], trackingNumber);
-            }
-
-            return {
-                success: false,
-                error: 'DHL Global Mail: Номер не знайдено',
-                api: 'Global Mail'
-            };
-
-        } catch (error) {
-            console.log(`DHL Global Mail API error: ${error.response?.status} - ${error.message}`);
-            
-            if (error.response?.status === 404) {
-                return {
-                    success: false,
-                    error: 'DHL Global Mail: Номер не знайдено',
-                    api: 'Global Mail'
-                };
-            }
-            
-            throw error;
+        if (/^[A-Z]{4}\d{7,10}$/.test(number)) {
+            return 'freight';
         }
+        
+        // За замовчуванням - почнемо з express
+        return 'express';
     }
 
     async track(trackingNumber, options = {}) {
@@ -95,244 +66,254 @@ class DHLProvider extends BaseProvider {
             throw new Error('DHL API key not configured');
         }
 
-        console.log(`DHL Provider: Tracking ${trackingNumber} - trying both Express and Global Forwarding APIs`);
+        console.log(`DHL Provider: Tracking ${trackingNumber} via Unified API`);
+        const startTime = Date.now();
 
         try {
-            // Визначаємо тип DHL сервісу по номеру
+            // Визначаємо тип DHL сервісу
             const serviceType = this.detectServiceType(trackingNumber);
             console.log(`DHL: Detected service type: ${serviceType} for ${trackingNumber}`);
 
-            // Пробуємо APIs в порядку пріоритету
-            let apiResults = [];
-
-            if (serviceType === 'global-mail' || serviceType === 'unknown') {
-                const globalMailResult = await this.tryUnifiedAPI(trackingNumber, 'ecommerce');
-                apiResults.push({ type: 'Global Mail/eCommerce', result: globalMailResult });
-                if (globalMailResult.success) {
-                    console.log('DHL eCommerce service успішний');
-                    return globalMailResult;
-                }
-            }
-
-            if (serviceType === 'express' || serviceType === 'unknown') {
-                const expressResult = await this.tryUnifiedAPI(trackingNumber, 'express');
-                apiResults.push({ type: 'Express', result: expressResult });
-                if (expressResult.success) {
-                    console.log('DHL Express service успішний');
-                    return expressResult;
-                }
-            }
-
-            if (serviceType === 'forwarding' || serviceType === 'unknown') {
-                const forwardingResult = await this.tryUnifiedAPI(trackingNumber, 'freight');
-                apiResults.push({ type: 'Freight', result: forwardingResult });
-                if (forwardingResult.success) {
-                    console.log('DHL Freight service успішний');
-                    return forwardingResult;
+            // Пробуємо різні DHL сервіси в порядку пріоритету
+            const serviceStrategies = this.getServiceStrategies(serviceType);
+            
+            for (const strategy of serviceStrategies) {
+                console.log(`DHL: Trying ${strategy.name} service...`);
+                
+                const result = await this.tryUnifiedAPI(trackingNumber, strategy.service);
+                
+                if (result.success) {
+                    console.log(`DHL: ${strategy.name} service успішний (${Date.now() - startTime}ms)`);
+                    return result;
                 }
                 
-                // Також пробуємо DGF окремо
-                const dgfResult = await this.tryUnifiedAPI(trackingNumber, 'dgf');
-                apiResults.push({ type: 'DGF', result: dgfResult });
-                if (dgfResult.success) {
-                    console.log('DHL DGF service успішний');
-                    return dgfResult;
-                }
+                console.log(`DHL: ${strategy.name} service не знайшов: ${result.error}`);
             }
 
-            // Якщо жоден API не спрацював
+            // Якщо жоден сервіс не спрацював
             return {
                 success: false,
                 error: 'DHL: Номер не знайдено у жодній DHL системі',
                 provider: this.name,
                 trackingNumber: trackingNumber,
-                apisTried: apiResults.map(r => r.type),
-                serviceTypeDetected: serviceType
+                serviceTypeDetected: serviceType,
+                servicesAttempted: serviceStrategies.map(s => s.name),
+                responseTime: Date.now() - startTime
             };
 
         } catch (error) {
             console.error(`DHL Provider error for ${trackingNumber}:`, error.message);
-            throw error;
+            
+            if (error.response) {
+                const status = error.response.status;
+                
+                if (status === 401 || status === 403) {
+                    return {
+                        success: false,
+                        error: 'DHL: Недійсний API ключ або доступ заборонено',
+                        provider: this.name,
+                        trackingNumber: trackingNumber,
+                        httpStatus: status
+                    };
+                }
+                
+                if (status === 429) {
+                    return {
+                        success: false,
+                        error: 'DHL: Перевищено ліміт запитів (250/день)',
+                        provider: this.name,
+                        trackingNumber: trackingNumber,
+                        httpStatus: status
+                    };
+                }
+            }
+            
+            throw new Error(`DHL API unavailable: ${error.message}`);
         }
     }
 
-    async tryExpressAPI(trackingNumber) {
+    getServiceStrategies(detectedType) {
+        const strategies = [
+            // Почніть з детектованого типу
+            { name: detectedType, service: detectedType, priority: 1 }
+        ];
+        
+        // Додайте інші сервіси як fallback
+        const allServices = ['express', 'ecommerce', 'parcel', 'freight', 'dgf'];
+        
+        allServices.forEach((service, index) => {
+            if (service !== detectedType) {
+                strategies.push({ 
+                    name: service, 
+                    service: service, 
+                    priority: index + 2 
+                });
+            }
+        });
+        
+        return strategies.sort((a, b) => a.priority - b.priority);
+    }
+
+    /**
+     * НОВИЙ МЕТОД: Unified DHL API для всіх сервісів
+     */
+    async tryUnifiedAPI(trackingNumber, service) {
+        console.log(`DHL Unified API: Trying service "${service}" for ${trackingNumber}`);
+        
         try {
-            const response = await this.makeRequest(this.expressUrl, {
+            const response = await this.makeRequest(this.unifiedUrl, {
                 method: 'GET',
                 params: {
                     trackingNumber: trackingNumber,
-                    service: 'express,parcel,ecommerce',
-                    requesterCountryCode: 'UA'
+                    service: service,
+                    requesterCountryCode: 'UA',
+                    originCountryCode: this.guessOriginCountry(trackingNumber),
+                    language: 'en'
                 },
                 headers: {
-                    // ВИПРАВЛЕНО: Новий header name (старий deprecated)
                     'DHL-API-Key': this.apiKey,
                     'Accept': 'application/json',
-                    'User-Agent': 'PandaTrack/2.0'
+                    'User-Agent': 'PandaTrack/2.0',
+                    'Content-Type': 'application/json'
                 },
-                timeout: 15000
+                timeout: 20000
             });
 
-            console.log(`DHL Express API response:`, JSON.stringify(response.data, null, 2));
+            console.log(`DHL ${service} API Response:`, JSON.stringify(response.data, null, 2));
 
+            // Перевіряємо структуру відповіді згідно з OpenAPI v1.5.6
             if (response.data?.shipments?.length > 0) {
-                return this.normalizeExpressResponse(response.data.shipments[0], trackingNumber);
+                const shipment = response.data.shipments[0];
+                return this.normalizeUnifiedResponse(shipment, trackingNumber, service);
+            }
+
+            // Якщо немає shipments але є інша структура
+            if (response.data?.data?.shipments?.length > 0) {
+                const shipment = response.data.data.shipments[0];
+                return this.normalizeUnifiedResponse(shipment, trackingNumber, service);
             }
 
             return {
                 success: false,
-                error: 'DHL Express: Номер не знайдено',
-                api: 'Express'
+                error: `DHL ${service}: Номер не знайдено`,
+                service: service,
+                responseStructure: Object.keys(response.data || {})
             };
 
         } catch (error) {
-            console.log(`DHL Express API error: ${error.response?.status} - ${error.message}`);
+            console.log(`DHL Unified API (${service}) error:`, error.response?.status, error.message);
             
             if (error.response?.status === 404) {
                 return {
                     success: false,
-                    error: 'DHL Express: Номер не знайдено',
-                    api: 'Express'
+                    error: `DHL ${service}: Номер не знайдено`,
+                    service: service,
+                    httpStatus: 404
                 };
             }
             
-            // Інші помилки пробросимо далі
+            // Інші помилки кидаємо далі
             throw error;
         }
     }
 
-    async tryGlobalForwardingAPI(trackingNumber) {
+    guessOriginCountry(trackingNumber) {
+        const number = trackingNumber.trim().toUpperCase();
+        
+        // Якщо міжнародний формат з країною
+        if (/^[A-Z]{2}\d{9}[A-Z]{2}$/.test(number)) {
+            const countryCode = number.slice(-2);
+            return countryCode;
+        }
+        
+        // За замовчуванням - найпопулярніші для українців
+        return 'CN'; // Китай для більшості eCommerce посилок
+    }
+
+    normalizeUnifiedResponse(shipment, trackingNumber, service) {
         try {
-            // Global Forwarding використовує housebill number
-            const response = await this.makeRequest(`${this.forwardingUrl}/${trackingNumber}`, {
-                method: 'GET',
-                headers: {
-                    'DHL-API-Key': this.apiKey,
-                    'Accept': 'application/json',
-                    'User-Agent': 'PandaTrack/2.0'
-                },
-                timeout: 15000
-            });
+            // Будуємо події згідно з OpenAPI v1.5.6 структурою
+            const events = this.buildEventsFromShipment(shipment);
+            
+            // Поточний статус з shipment.status
+            const currentStatus = shipment.status?.description || 
+                                shipment.status?.status || 
+                                'Unknown';
+            
+            const statusCode = shipment.status?.statusCode || 
+                              shipment.status?.code || 
+                              'unknown';
 
-            console.log(`DHL Global Forwarding API response:`, JSON.stringify(response.data, null, 2));
+            // Детальна інформація про посилку
+            const shipmentInfo = {
+                service: this.mapServiceName(service),
+                productCode: shipment.details?.product?.productCode,
+                productName: shipment.details?.product?.productName,
+                totalWeight: shipment.details?.weight?.value,
+                weightUnit: shipment.details?.weight?.unitText,
+                dimensions: shipment.details?.dimensions,
+                pieces: shipment.details?.pieces?.length || 0
+            };
 
-            if (response.data?.shipment) {
-                return this.normalizeForwardingResponse(response.data.shipment, trackingNumber);
-            }
+            // Адреси
+            const origin = this.buildAddressFromDetails(shipment.origin);
+            const destination = this.buildAddressFromDetails(shipment.destination);
 
             return {
-                success: false,
-                error: 'DHL Global Forwarding: Номер не знайдено',
-                api: 'Global Forwarding'
+                success: true,
+                data: {
+                    trackingNumber: trackingNumber,
+                    carrier: `DHL ${this.mapServiceName(service)}`,
+                    status: translateStatus(currentStatus),
+                    normalizedStatus: this.mapDHLStatus(statusCode),
+                    statusCode: statusCode,
+                    lastUpdate: this.getLastEventDate(events),
+                    events: events,
+                    estimatedDelivery: shipment.details?.estimatedTimeOfDelivery || 
+                                     shipment.details?.proofOfDelivery?.timestamp,
+                    shipmentDate: shipment.details?.estimatedTimeOfDeliveryRemark,
+                    origin: origin,
+                    destination: destination,
+                    ...shipmentInfo,
+                    service: service,
+                    apiVersion: 'unified',
+                    raw: shipment
+                },
+                provider: this.name,
+                cost: 0,
+                supportsInternational: true,
+                timestamp: new Date().toISOString()
             };
 
         } catch (error) {
-            console.log(`DHL Global Forwarding API error: ${error.response?.status} - ${error.message}`);
-            
-            if (error.response?.status === 404) {
-                return {
-                    success: false,
-                    error: 'DHL Global Forwarding: Номер не знайдено',
-                    api: 'Global Forwarding'
-                };
-            }
-            
-            // Інші помилки пробросимо далі
-            throw error;
+            console.error('DHL response normalization error:', error.message);
+            return {
+                success: false,
+                error: `Failed to process DHL response: ${error.message}`,
+                provider: this.name,
+                trackingNumber: trackingNumber,
+                service: service
+            };
         }
     }
 
-    normalizeExpressResponse(shipment, trackingNumber) {
+    buildEventsFromShipment(shipment) {
         const events = [];
         
+        // Події з shipment.events згідно з OpenAPI
         if (shipment.events && Array.isArray(shipment.events)) {
             shipment.events.forEach(event => {
+                const location = this.buildLocationFromEvent(event);
+                
                 events.push({
                     date: event.timestamp || new Date().toISOString(),
-                    status: event.description || 'Unknown event',
-                    location: this.buildLocation(event.location),
-                    description: event.description || 'Unknown event',
-                    statusCode: event.statusCode || 'unknown'
-                });
-            });
-        }
-
-        return {
-            success: true,
-            data: {
-                trackingNumber: trackingNumber,
-                carrier: 'DHL Express',
-                status: shipment.status?.description || 'Unknown',
-                normalizedStatus: this.mapExpressStatus(shipment.status?.statusCode),
-                statusCode: shipment.status?.statusCode || 'unknown',
-                lastUpdate: shipment.status?.timestamp || new Date().toISOString(),
-                events: events,
-                estimatedDelivery: shipment.estimatedTimeOfDelivery,
-                service: shipment.service || 'DHL Express',
-                destination: shipment.destination,
-                origin: shipment.origin,
-                raw: shipment
-            },
-            provider: this.name,
-            cost: 0,
-            supportsInternational: true,
-            apiType: 'Express',
-            timestamp: new Date().toISOString()
-        };
-    }
-
-    normalizeGlobalMailResponse(shipment, trackingNumber) {
-        const events = [];
-        
-        if (shipment.events && Array.isArray(shipment.events)) {
-            shipment.events.forEach(event => {
-                events.push({
-                    date: event.timestamp || new Date().toISOString(),
-                    status: event.description || 'Unknown event',
-                    location: this.buildLocation(event.location),
-                    description: event.description || 'Unknown event',
-                    statusCode: event.statusCode || 'unknown'
-                });
-            });
-        }
-
-        return {
-            success: true,
-            data: {
-                trackingNumber: trackingNumber,
-                carrier: 'DHL Global Mail (eCommerce)',
-                status: shipment.status?.description || 'Unknown',
-                normalizedStatus: this.mapGlobalMailStatus(shipment.status?.statusCode),
-                statusCode: shipment.status?.statusCode || 'unknown',
-                lastUpdate: shipment.status?.timestamp || new Date().toISOString(),
-                events: events,
-                estimatedDelivery: shipment.estimatedTimeOfDelivery,
-                service: 'DHL Global Mail',
-                destination: shipment.destination,
-                origin: shipment.origin,
-                raw: shipment
-            },
-            provider: this.name,
-            cost: 0,
-            supportsInternational: true,
-            apiType: 'Global Mail',
-            timestamp: new Date().toISOString()
-        };
-    }
-
-    normalizeForwardingResponse(shipment, trackingNumber) {
-        const events = [];
-        
-        // Global Forwarding має іншу структуру подій
-        if (shipment.events && Array.isArray(shipment.events)) {
-            shipment.events.forEach(event => {
-                events.push({
-                    date: event.timestamp || event.date || new Date().toISOString(),
-                    status: event.statusText || event.description || 'Unknown event',
-                    location: event.location || '',
-                    description: event.statusText || event.description || 'Unknown event',
-                    statusCode: event.statusCode || 'unknown'
+                    status: translateStatus(event.description || event.status || 'Unknown event'),
+                    description: translateStatus(event.description || event.status || 'Unknown event'),
+                    location: translateLocation(location),
+                    statusCode: this.mapDHLStatus(event.statusCode || event.code),
+                    originalStatus: event.description || event.status,
+                    eventType: event.typeCode || 'tracking',
+                    source: 'DHL'
                 });
             });
         }
@@ -340,120 +321,149 @@ class DHLProvider extends BaseProvider {
         // Якщо немає подій, створюємо з основного статусу
         if (events.length === 0 && shipment.status) {
             events.push({
-                date: shipment.status.timestamp || new Date().toISOString(),
-                status: shipment.status.description || 'Unknown',
-                location: shipment.destination || '',
-                description: shipment.status.description || 'Unknown',
-                statusCode: shipment.status.statusCode || 'unknown'
+                date: new Date().toISOString(),
+                status: translateStatus(shipment.status.description || 'Unknown'),
+                description: translateStatus(shipment.status.description || 'Unknown'),
+                location: this.buildAddressFromDetails(shipment.destination || shipment.origin),
+                statusCode: this.mapDHLStatus(shipment.status.statusCode),
+                originalStatus: shipment.status.description,
+                eventType: 'status',
+                source: 'DHL'
             });
         }
 
-        return {
-            success: true,
-            data: {
-                trackingNumber: trackingNumber,
-                carrier: 'DHL Global Forwarding',
-                status: shipment.status?.description || shipment.statusText || 'Unknown',
-                normalizedStatus: this.mapForwardingStatus(shipment.status?.statusCode || shipment.statusCode),
-                statusCode: shipment.status?.statusCode || shipment.statusCode || 'unknown',
-                lastUpdate: shipment.status?.timestamp || shipment.lastUpdate || new Date().toISOString(),
-                events: events,
-                estimatedDelivery: shipment.estimatedDelivery || shipment.estimatedTimeOfDelivery,
-                service: 'DHL Global Forwarding',
-                destination: shipment.destination,
-                origin: shipment.origin,
-                shipmentId: shipment.shipmentId,
-                containerNumbers: shipment.containerNumbers,
-                raw: shipment
-            },
-            provider: this.name,
-            cost: 0,
-            supportsInternational: true,
-            apiType: 'Global Forwarding',
-            timestamp: new Date().toISOString()
-        };
+        // Сортуємо події по даті (найстаріші перші)
+        events.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        
+        console.log(`DHL: Built ${events.length} events from shipment`);
+        return events;
     }
 
-    buildLocationFromAddress(locationObj) {
-        if (!locationObj) return '';
-        
-        // Згідно з OpenAPI: location.address.addressLocality, countryCode тощо
-        if (locationObj.address) {
+    buildLocationFromEvent(event) {
+        // Згідно з OpenAPI: event.location.address
+        if (event.location?.address) {
+            const addr = event.location.address;
             const parts = [];
-            if (locationObj.address.addressLocality) parts.push(locationObj.address.addressLocality);
-            if (locationObj.address.countryCode) parts.push(locationObj.address.countryCode);
+            
+            if (addr.addressLocality) parts.push(addr.addressLocality);
+            if (addr.province) parts.push(addr.province);
+            if (addr.countryCode) parts.push(addr.countryCode);
+            
             return parts.join(', ');
         }
         
         // Fallback для інших форматів
-        if (typeof locationObj === 'string') return locationObj;
+        if (event.location?.city) {
+            const parts = [];
+            if (event.location.city) parts.push(event.location.city);
+            if (event.location.country) parts.push(event.location.country);
+            return parts.join(', ');
+        }
         
         return '';
     }
 
-    buildLocation(location) {
-        // Застаріла функція - використовуємо нову
-        return this.buildLocationFromAddress(location);
+    buildAddressFromDetails(addressDetails) {
+        if (!addressDetails) return '';
+        
+        // Згідно з OpenAPI структурою
+        if (addressDetails.address) {
+            const addr = addressDetails.address;
+            const parts = [];
+            
+            if (addr.addressLocality) parts.push(addr.addressLocality);
+            if (addr.province) parts.push(addr.province);
+            if (addr.countryCode) parts.push(addr.countryCode);
+            
+            return parts.join(', ');
+        }
+        
+        // Fallback
+        if (typeof addressDetails === 'string') {
+            return addressDetails;
+        }
+        
+        return '';
     }
 
-    mapExpressStatus(statusCode) {
-        if (!statusCode) return 'unknown';
-        
-        const statusMap = {
-            'transit': 'in_transit',
-            'delivered': 'delivered',
-            'picked-up': 'accepted',
-            'pre-transit': 'accepted',
-            'out-for-delivery': 'out_for_delivery',
-            'delivery-attempt': 'delivery_attempt',
-            'exception': 'exception',
-            'returned': 'returning',
-            'processed': 'in_transit'
+    mapServiceName(service) {
+        const serviceNames = {
+            'express': 'Express',
+            'ecommerce': 'Global Mail (eCommerce)',
+            'parcel': 'Parcel',
+            'freight': 'Global Forwarding',
+            'dgf': 'Global Forwarding',
+            'mail': 'Global Mail'
         };
         
-        return statusMap[statusCode.toLowerCase()] || 'in_transit';
+        return serviceNames[service] || service;
     }
 
-    mapGlobalMailStatus(statusCode) {
+    mapDHLStatus(statusCode) {
         if (!statusCode) return 'unknown';
         
+        const statusCodeLower = String(statusCode).toLowerCase();
+        
+        // DHL статуси згідно з документацією
         const statusMap = {
             'delivered': 'delivered',
+            'with-delivery-courier': 'out_for_delivery',
             'transit': 'in_transit',
             'picked-up': 'accepted',
             'pre-transit': 'accepted',
             'processed': 'in_transit',
-            'out-for-delivery': 'out_for_delivery',
-            'delivery-attempt': 'delivery_attempt',
-            'exception': 'exception',
-            'returned': 'returning',
-            'customs': 'in_transit',
-            'sorting': 'in_transit',
-            'departed': 'in_transit',
-            'arrived': 'at_destination'
-        };
-        
-        return statusMap[statusCode.toLowerCase()] || 'in_transit';
-    }
-
-    mapForwardingStatus(statusCode) {
-        if (!statusCode) return 'unknown';
-        
-        const statusMap = {
-            'delivered': 'delivered',
-            'in-transit': 'in_transit',
+            'sorted': 'in_transit',
             'departed': 'in_transit',
             'arrived': 'at_destination',
-            'booking-confirmed': 'accepted',
-            'gated-in': 'accepted',
-            'gated-out': 'in_transit',
-            'vessel-departure': 'in_transit',
-            'vessel-arrival': 'at_destination',
-            'customs-cleared': 'in_transit',
-            'exception': 'exception'
+            'customs': 'in_transit',
+            'exception': 'exception',
+            'delivery-attempt': 'delivery_attempt',
+            'returned': 'returning',
+            'cancelled': 'exception'
         };
         
-        return statusMap[statusCode.toLowerCase()] || 'in_transit';
+        // Точний match
+        if (statusMap[statusCodeLower]) {
+            return statusMap[statusCodeLower];
+        }
+        
+        // Pattern matching для складних статусів
+        if (statusCodeLower.includes('deliver')) return 'delivered';
+        if (statusCodeLower.includes('transit') || statusCodeLower.includes('transport')) return 'in_transit';
+        if (statusCodeLower.includes('picked') || statusCodeLower.includes('accept')) return 'accepted';
+        if (statusCodeLower.includes('attempt')) return 'delivery_attempt';
+        if (statusCodeLower.includes('exception') || statusCodeLower.includes('problem')) return 'exception';
+        if (statusCodeLower.includes('return')) return 'returning';
+        if (statusCodeLower.includes('customs')) return 'in_transit';
+        
+        return 'in_transit'; // За замовчуванням
+    }
+
+    getLastEventDate(events) {
+        if (events.length === 0) return new Date().toISOString();
+        
+        // Події відсортовані, остання має найпізнішу дату
+        return events[events.length - 1].date;
+    }
+
+    canHandle(trackingNumber, carrierCode = null) {
+        const number = trackingNumber.trim().replace(/\s/g, '');
+        
+        // DHL Global Mail/eCommerce formats (найпопулярніші для українців)
+        if (/^[A-Z]{2}\d{9}[A-Z]{2}$/.test(number)) return true; // RG123456789CN, LM123456789UK
+        
+        // DHL Express formats
+        if (/^\d{10,11}$/.test(number)) return true; // 1234567890, 12345678901
+        if (/^JD\d{18}$/.test(number)) return true;  // JD формат
+        
+        // DHL Freight/Forwarding formats
+        if (/^\d{9}$/.test(number)) return true;     // 123456789 
+        if (/^[A-Z]{4}\d{7,10}$/.test(number)) return true; // ABCD1234567
+        
+        // DHL Parcel formats
+        if (/^\d{4}\s?\d{4}\s?\d{4}$/.test(number)) return true; // 1234 5678 9012
+        
+        return false;
     }
 
     async healthCheck() {
@@ -466,34 +476,24 @@ class DHLProvider extends BaseProvider {
             };
         }
 
-        // ВИПРАВЛЕННЯ: Не робимо health check для збереження лімітів
+        // НЕ робимо реальний health check для збереження quota
         return {
             status: 'ok',
             provider: this.name,
             note: 'API key configured (health check disabled to preserve quota)',
             quotaLimit: '250 requests/day',
             api: 'Unified Tracking API',
-            services: ['Express', 'eCommerce/Global Mail', 'Freight/Forwarding', 'Parcel', 'Post'],
+            services: ['Express', 'eCommerce/Global Mail', 'Freight/Forwarding', 'Parcel'],
             endpoint: this.unifiedUrl,
+            features: [
+                'Multi-service support',
+                'International tracking',
+                'Event timeline',
+                'Estimated delivery',
+                'Address details'
+            ],
             timestamp: new Date().toISOString()
         };
-    }
-
-    canHandle(trackingNumber, carrierCode = null) {
-        const number = trackingNumber.trim().replace(/\s/g, '');
-        
-        // DHL Global Mail formats (найпопулярніші для українців з AliExpress/eBay)
-        if (/^[A-Z]{2}\d{9}[A-Z]{2}$/.test(number)) return true; // RG123456789CN, LM123456789UK
-        
-        // DHL Express formats
-        if (/^\d{10,11}$/.test(number)) return true; // 1234567890
-        if (/^JD\d{18}$/.test(number)) return true;
-        
-        // DHL Global Forwarding formats (freight)
-        if (/^\d{9,10}$/.test(number)) return true; 
-        if (/^[A-Z]{4}\d{7,10}$/.test(number)) return true;
-        
-        return false;
     }
 }
 
