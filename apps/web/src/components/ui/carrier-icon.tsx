@@ -20,7 +20,11 @@ export function CarrierIcon({ carrier, size = 20, className = "" }: CarrierIconP
     'укр': '/logos/ukrposhta.svg',
     'dhl': '/logos/dhl.svg',
     'meest': '/logos/meest.svg',
-    'міст': '/logos/meest.svg'
+    'міст': '/logos/meest.svg',
+    'sat': '/logos/sat.svg',
+    'сат': '/logos/sat.svg',
+    'delivery': '/logos/delivery-auto.svg',
+    'делівері': '/logos/delivery-auto.svg'
   };
   
   // Знаходимо відповідний файл логотипу
