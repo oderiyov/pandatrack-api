@@ -25,7 +25,20 @@ class DHLProvider extends BaseProvider {
     detectServiceType(trackingNumber) {
         const number = trackingNumber.trim().toUpperCase().replace(/\s/g, '');
         
-        // DHL Global Mail/eCommerce patterns (найпопулярніші для українців з AliExpress/eBay)
+        // КРИТИЧНО: DHL eCommerce 14-digit patterns (найвищий пріоритет)
+        if (/^[3-6]\d{13}$/.test(number)) {
+            // 31549478013000, 60120213284055 тощо
+            console.log(`DHL: 14-digit eCommerce pattern detected for ${number}`);
+            return 'ecommerce';
+        }
+        
+        if (/^4\d{13}$/.test(number)) {
+            // 41903751719763 тощо  
+            console.log(`DHL: 4-prefix eCommerce pattern detected for ${number}`);
+            return 'ecommerce';
+        }
+        
+        // DHL Global Mail/eCommerce patterns (міжнародні)
         if (/^[A-Z]{2}\d{9}[A-Z]{2}$/.test(number)) {
             const prefix = number.substring(0, 2);
             // RG, GM, LM, EM префікси для eCommerce
@@ -57,8 +70,9 @@ class DHLProvider extends BaseProvider {
             return 'freight';
         }
         
-        // За замовчуванням - почнемо з express
-        return 'express';
+        // За замовчуванням - ecommerce для нових форматів
+        console.log(`DHL: Unknown pattern, defaulting to ecommerce for ${number}`);
+        return 'ecommerce';
     }
 
     async track(trackingNumber, options = {}) {
@@ -87,10 +101,16 @@ class DHLProvider extends BaseProvider {
                     return result;
                 }
                 
+                // КРИТИЧНО: Якщо rate limit - зупиняємо спроби
+                if (result.httpStatus === 429) {
+                    console.log(`DHL: Rate limit reached, stopping further attempts`);
+                    return result;
+                }
+                
                 console.log(`DHL: ${strategy.name} service не знайшов: ${result.error}`);
             }
 
-            // Якщо жоден сервіс не спрацював
+            // Якщо жоден сервіс не спрацював (але не rate limit)
             return {
                 success: false,
                 error: 'DHL: Номер не знайдено у жодній DHL системі',
@@ -98,7 +118,8 @@ class DHLProvider extends BaseProvider {
                 trackingNumber: trackingNumber,
                 serviceTypeDetected: serviceType,
                 servicesAttempted: serviceStrategies.map(s => s.name),
-                responseTime: Date.now() - startTime
+                responseTime: Date.now() - startTime,
+                suggestion: 'Перевірити на https://www.dhl.com/tracking або спробувати пізніше'
             };
 
         } catch (error) {
@@ -120,10 +141,11 @@ class DHLProvider extends BaseProvider {
                 if (status === 429) {
                     return {
                         success: false,
-                        error: 'DHL: Перевищено ліміт запитів (250/день)',
+                        error: 'DHL: Перевищено ліміт запитів (250/день). Спробуйте пізніше.',
                         provider: this.name,
                         trackingNumber: trackingNumber,
-                        httpStatus: status
+                        httpStatus: status,
+                        suggestion: 'Перевірити на офіційному сайті: https://www.dhl.com/tracking'
                     };
                 }
             }
@@ -133,25 +155,22 @@ class DHLProvider extends BaseProvider {
     }
 
     getServiceStrategies(detectedType) {
+        // ОПТИМІЗАЦІЯ: Тільки 1-2 спроби замість 5
         const strategies = [
             // Почніть з детектованого типу
             { name: detectedType, service: detectedType, priority: 1 }
         ];
         
-        // Додайте інші сервіси як fallback
-        const allServices = ['express', 'ecommerce', 'parcel', 'freight', 'dgf'];
+        // Додайте тільки 1 fallback для економії запитів
+        if (detectedType === 'ecommerce') {
+            strategies.push({ name: 'express', service: 'express', priority: 2 });
+        } else if (detectedType === 'express') {
+            strategies.push({ name: 'ecommerce', service: 'ecommerce', priority: 2 });
+        } else {
+            strategies.push({ name: 'ecommerce', service: 'ecommerce', priority: 2 });
+        }
         
-        allServices.forEach((service, index) => {
-            if (service !== detectedType) {
-                strategies.push({ 
-                    name: service, 
-                    service: service, 
-                    priority: index + 2 
-                });
-            }
-        });
-        
-        return strategies.sort((a, b) => a.priority - b.priority);
+        return strategies;
     }
 
     /**
@@ -255,9 +274,9 @@ class DHLProvider extends BaseProvider {
                 pieces: shipment.details?.pieces?.length || 0
             };
 
-            // Адреси
-            const origin = this.buildAddressFromDetails(shipment.origin);
-            const destination = this.buildAddressFromDetails(shipment.destination);
+            // ВИПРАВЛЕНО: Адреси з реальних подій замість API fields
+            const origin = this.extractOriginFromEvents(events) || this.buildAddressFromDetails(shipment.origin);
+            const destination = this.extractDestinationFromEvents(events) || this.buildAddressFromDetails(shipment.destination);
 
             return {
                 success: true,
@@ -439,6 +458,22 @@ class DHLProvider extends BaseProvider {
         return 'in_transit'; // За замовчуванням
     }
 
+    extractOriginFromEvents(events) {
+        // Знаходимо першу подію (picked up/departure)
+        if (events.length === 0) return null;
+        
+        const firstEvent = events[0];
+        return firstEvent.location || null;
+    }
+
+    extractDestinationFromEvents(events) {
+        // Знаходимо останню подію з локацією (delivery/arrival)
+        if (events.length === 0) return null;
+        
+        const lastEvent = events[events.length - 1];
+        return lastEvent.location || null;
+    }
+
     getLastEventDate(events) {
         if (events.length === 0) return new Date().toISOString();
         
@@ -455,6 +490,10 @@ class DHLProvider extends BaseProvider {
         // DHL Express formats
         if (/^\d{10,11}$/.test(number)) return true; // 1234567890, 12345678901
         if (/^JD\d{18}$/.test(number)) return true;  // JD формат
+        
+        // DHL eCommerce formats (КРИТИЧНО - ці формати пропускались)
+        if (/^[3-6]\d{13}$/.test(number)) return true; // 31549478013000, 60120213284055
+        if (/^4\d{13}$/.test(number)) return true;     // 41903751719763
         
         // DHL Freight/Forwarding formats
         if (/^\d{9}$/.test(number)) return true;     // 123456789 
