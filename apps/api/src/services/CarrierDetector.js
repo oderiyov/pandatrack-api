@@ -65,6 +65,11 @@ class CarrierDetector {
             ],
 
             'dhl': [
+                // НОВІ eCommerce patterns з високим пріоритетом
+                { pattern: /^[3-6]\d{13}$/, confidence: 'high', stage: 'international' },
+                { pattern: /^4\d{13}$/, confidence: 'high', stage: 'international' },
+                
+                // Існуючі patterns...
                 { pattern: /^\d{10}$/, confidence: 'high', stage: 'international' },
                 { pattern: /^\d{11}$/, confidence: 'high', stage: 'international' },
                 { pattern: /^JD\d{18}$/, confidence: 'high', stage: 'international' },

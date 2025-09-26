@@ -351,7 +351,7 @@ class SATProvider extends BaseProvider {
                 statusCode: this.mapSATStatus(status),
                 originalStatus: status,
                 source: 'SAT Satellite Express',
-                confidence: 1
+                confidence: 1 // ВИПРАВЛЕНО: уніфікований confidence
             };
             
             events.push(event);
@@ -370,22 +370,25 @@ class SATProvider extends BaseProvider {
         
         const statusLower = status.toLowerCase();
         
-        // Доставлені статуси
-        if (statusLower.includes('выдан') || statusLower.includes('видано') || 
-            statusLower.includes('получен') || statusLower.includes('отримано')) {
+        // ВИПРАВЛЕНО: Доставлені статуси
+        if (statusLower.includes('выдан') || statusLower.includes('видан') || 
+            statusLower.includes('получен') || statusLower.includes('отримувач') ||
+            statusLower.includes('доставлено')) {
             return 'delivered';
         }
         
         // В дорозі/транзиті
         if (statusLower.includes('вышел') || statusLower.includes('виїхав') || 
             statusLower.includes('в пути') || statusLower.includes('дорозі') ||
-            statusLower.includes('курьер') || statusLower.includes('кур\'єр')) {
+            statusLower.includes('курьер') || statusLower.includes('кур\'єр') ||
+            statusLower.includes('передано кур')) {
             return 'in_transit';
         }
         
         // Прибув/готовий до видачі
         if (statusLower.includes('поступил') || statusLower.includes('прибув') ||
-            statusLower.includes('склад') || statusLower.includes('відділенн')) {
+            statusLower.includes('склад') || statusLower.includes('відділенн') ||
+            statusLower.includes('на складі видачі')) {
             return 'at_destination';
         }
         
