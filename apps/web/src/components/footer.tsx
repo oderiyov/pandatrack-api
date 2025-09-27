@@ -13,7 +13,7 @@ export function Footer() {
               <li><Link href="/couriers/nova-poshta" className="text-[#333037]/60 hover:text-blue-600">Нова Пошта</Link></li>
               <li><Link href="/couriers/ukrposhta" className="text-[#333037]/60 hover:text-blue-600">Укрпошта</Link></li>
               <li><Link href="/couriers/dhl" className="text-[#333037]/60 hover:text-blue-600">DHL</Link></li>
-              <li><Link href="/couriers/meest" className="text-[#333037]/60 hover:text-blue-600">Міст Експрес</Link></li>
+              <li><Link href="/couriers/meest-express" className="text-[#333037]/60 hover:text-blue-600">Міст Експрес</Link></li>
               <li><Link href="/couriers/sat" className="text-[#333037]/60 hover:text-blue-600">САТ</Link></li>
               <li><Link href="/couriers/delivery-auto" className="text-[#333037]/60 hover:text-blue-600">Делівері</Link></li>
             </ul>
