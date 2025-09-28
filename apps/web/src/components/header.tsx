@@ -35,8 +35,8 @@ export function Header() {
             <Link href="/guides" className="text-[#333037] hover:text-blue-600 transition-colors">
               Довідники
             </Link>
-            <Link href="/business" className="text-[#333037] hover:text-blue-600 transition-colors">
-              Для бізнесу
+            <Link href="/promocodes" className="text-[#333037] hover:text-blue-600 transition-colors">
+              Промокоди
             </Link>
           </nav>
           
@@ -90,11 +90,11 @@ export function Header() {
                 Довідники
               </Link>
               <Link 
-                href="/business" 
+                href="/promocodes" 
                 className="block text-[#333037] hover:text-blue-600 transition-colors py-2"
                 onClick={closeMobileMenu}
               >
-                Для бізнесу
+                Промокоди
               </Link>
             </div>
           </nav>
