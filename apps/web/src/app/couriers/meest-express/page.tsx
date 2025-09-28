@@ -144,7 +144,7 @@ export default function MeestExpressPage() {
                       <li>• Експрес доставка</li>
                       <li>• Доставка документів</li>
                       <li>• Великогабаритні вантажі</li>
-                      <li>• Кур'єрська доставка</li>
+                      <li>• Кур&apos;єрська доставка</li>
                     </ul>
                   </div>
                 </div>
@@ -236,7 +236,7 @@ export default function MeestExpressPage() {
               <div className="bg-[#eaf0f5] rounded-lg p-8">
                 <h2 className="text-2xl font-bold mb-6">Як отримати посилку Meest Express?</h2>
                 <p className="text-[#333037]/80 leading-relaxed mb-6">
-                  Отримання посилки можливе у відділеннях Міст Експрес по всій Україні або через кур'єрську доставку. 
+                  Отримання посилки можливе у відділеннях Міст Експрес по всій Україні або через кур&apos;єрську доставку. 
                   При надходженні посилки отримувач отримує SMS-повідомлення.
                 </p>
                 

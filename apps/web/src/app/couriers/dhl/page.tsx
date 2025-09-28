@@ -74,7 +74,7 @@ export default function DHLExpressPage() {
               <div className="bg-white rounded-lg shadow-sm p-8">
                 <p className="text-[#333037]/80 leading-relaxed mb-6">
                   Міжнародна компанія DHL посідає перше місце у світі серед служб експрес-доставки. Своїм клієнтам надає 
-                  повний комплекс логістичних послуг. Свою діяльність розпочала 20 вересня 1969 року як кур'єрська служба, 
+                  повний комплекс логістичних послуг. Свою діяльність розпочала 20 вересня 1969 року як кур&apos;єрська служба, 
                   завданням якої була доставка пошти з Сан-Франциско до Гонолулу і назад. Заснували компанію Адріан Делсі, 
                   Ларрі Хіллблом та Роберт Лінн. Початкові літери прізвищ цих людей послужили назвою нової служби.
                 </p>
@@ -195,7 +195,7 @@ export default function DHLExpressPage() {
                       </tr>
                       <tr>
                         <td className="px-4 py-3 text-sm">Shipment picked up</td>
-                        <td className="px-4 py-3 text-sm">Посилка скоро буде передана кур'єру</td>
+                        <td className="px-4 py-3 text-sm">Посилка скоро буде передана кур&apos;єру</td>
                       </tr>
                       <tr className="bg-yellow-50">
                         <td className="px-4 py-3 text-sm text-yellow-800">Shipment is on hold</td>

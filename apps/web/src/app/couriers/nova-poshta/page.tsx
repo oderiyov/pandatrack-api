@@ -41,7 +41,7 @@ export default function NovaPoshtaPage() {
               </div>
               <div className="flex-1">
                 <h2 className="text-3xl font-bold text-[#333037] mb-2">Нова Пошта</h2>
-                <p className="text-lg text-[#333037]/70 mb-4">Українська кур'єрська компанія</p>
+                <p className="text-lg text-[#333037]/70 mb-4">Українська кур&apos;єрська компанія</p>
                 <div className="text-sm text-[#333037]/70 space-y-1">
                   <p>Відгуки • 0-800-500-609 • <a href="https://novaposhta.ua" target="_blank" rel="noopener" className="text-blue-600 hover:underline">novaposhta.ua</a></p>
                 </div>
@@ -83,7 +83,7 @@ export default function NovaPoshtaPage() {
                 <p className="text-[#333037]/80 leading-relaxed">
                   До послуг Нової Пошти належать: експрес доставка, відстеження вантажів за трек номером, доставка до дверей 
                   та на поверх, все це за доступними цінами без переплат. Мінімальна вартість доставки по Україні - 60 грн 
-                  до відділення та 50 грн до поштомату, якщо в межах міста то 40 грн. Кур'єрська доставка +30 грн до вартості 
+                  до відділення та 50 грн до поштомату, якщо в межах міста то 40 грн. Кур&apos;єрська доставка +30 грн до вартості 
                   доставки. Детальнішу інформацію про вартість та тарифи можна переглянути на сайті НП 
                   <a href="https://novaposhta.ua/basic_tariffs" target="_blank" rel="noopener" className="text-blue-600 hover:underline ml-1">
                     https://novaposhta.ua/basic_tariffs
@@ -212,7 +212,7 @@ export default function NovaPoshtaPage() {
                     <li>• Зворотна доставка документів та товару</li>
                   </ul>
                   <ul className="space-y-2 text-[#333037]/80">
-                    <li>• Кур'єрські послуги</li>
+                    <li>• Кур&apos;єрські послуги</li>
                     <li>• Пакування</li>
                     <li>• Логістичне обслуговування</li>
                     <li>• Накладений платіж</li>
@@ -294,7 +294,7 @@ export default function NovaPoshtaPage() {
                         <td className="px-4 py-3 text-sm text-gray-500"></td>
                       </tr>
                       <tr>
-                        <td className="px-4 py-3 text-sm">Видано кур'єру</td>
+                        <td className="px-4 py-3 text-sm">Видано кур&apos;єру</td>
                         <td className="px-4 py-3 text-sm text-gray-500"></td>
                       </tr>
                     </tbody>

@@ -1,7 +1,6 @@
 // src/app/couriers/sat/page.tsx
 import { Metadata } from 'next'
 import Image from 'next/image'
-import Link from 'next/link'
 import { TrackingForm } from '@/components/tracking-form'
 import { Header } from '@/components/header'
 import { Footer } from '@/components/footer'
@@ -131,7 +130,7 @@ export default function SATPage() {
                       <li>• Експрес-доставка за 24 години</li>
                       <li>• Стандартна доставка (1-3 дні)</li>
                       <li>• Доставка до відділення</li>
-                      <li>• Кур'єрська доставка</li>
+                      <li>• Кур&apos;єрська доставка</li>
                       <li>• Доставка в день звернення</li>
                     </ul>
                   </div>
@@ -257,7 +256,7 @@ export default function SATPage() {
               <div className="bg-[#eaf0f5] rounded-lg p-8">
                 <h2 className="text-2xl font-bold mb-6">Як отримати вантаж SAT?</h2>
                 <p className="text-[#333037]/80 leading-relaxed mb-6">
-                  Отримання вантажу можливе у відділеннях SAT по всій Україні або через кур'єрську доставку за адресою. 
+                  Отримання вантажу можливе у відділеннях SAT по всій Україні або через кур&apos;єрську доставку за адресою. 
                   При надходженні вантажу отримувач отримає SMS-повідомлення або дзвінок.
                 </p>
                 
@@ -343,7 +342,7 @@ export default function SATPage() {
                         <td className="px-4 py-3 text-sm text-gray-500">Доставка завершена</td>
                       </tr>
                       <tr className="bg-blue-50">
-                        <td className="px-4 py-3 text-sm text-blue-800">Передано кур'єру для доставки</td>
+                        <td className="px-4 py-3 text-sm text-blue-800">Передано кур&apos;єру для доставки</td>
                         <td className="px-4 py-3 text-sm text-gray-500">Доставляється за адресою</td>
                       </tr>
                       <tr className="bg-yellow-50">

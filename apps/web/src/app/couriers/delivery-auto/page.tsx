@@ -128,7 +128,7 @@ export default function DeliveryAutoPage() {
                     <h3 className="text-lg font-semibold mb-4">Стандартні послуги:</h3>
                     <ul className="space-y-2 text-[#333037]/80">
                       <li>• Доставка до відділення (1-3 дні)</li>
-                      <li>• Кур'єрська доставка</li>
+                      <li>• Кур&apos;єрська доставка</li>
                       <li>• Експрес-доставка за 24 години</li>
                       <li>• Доставка великогабаритних товарів</li>
                       <li>• Доставка в день звернення</li>
@@ -165,7 +165,7 @@ export default function DeliveryAutoPage() {
                     <li>• Між обласними центрами: 2-3 дні</li>
                     <li>• До районних центрів: 3-4 дні</li>
                     <li>• Експрес-доставка: наступний день</li>
-                    <li>• Кур'єрська доставка: день в день або наступний день</li>
+                    <li>• Кур&apos;єрська доставка: день в день або наступний день</li>
                   </ul>
                 </div>
               </div>
@@ -242,7 +242,7 @@ export default function DeliveryAutoPage() {
               <div className="bg-white rounded-lg shadow-sm p-8">
                 <h2 className="text-2xl font-bold mb-6">Як отримати посилку Delivery Auto?</h2>
                 <p className="text-[#333037]/80 leading-relaxed mb-6">
-                  Отримання посилки можливе у відділеннях компанії або через кур'єрську доставку. При надходженні 
+                  Отримання посилки можливе у відділеннях компанії або через кур&apos;єрську доставку. При надходженні 
                   посилки клієнт отримує SMS-повідомлення з інформацією про готовність до видачі.
                 </p>
                 
@@ -276,7 +276,7 @@ export default function DeliveryAutoPage() {
                 <h2 className="text-2xl font-bold mb-6">Режим роботи Delivery Auto</h2>
                 <p className="text-[#333037]/80 leading-relaxed mb-4">
                   Відділення Delivery Auto працюють з понеділка по п'ятницю з 9:00 до 18:00, в суботу до 15:00. 
-                  Кур'єрська доставка здійснюється з 10:00 до 19:00 в робочі дні.
+                  Кур&apos;єрська доставка здійснюється з 10:00 до 19:00 в робочі дні.
                 </p>
                 <p className="text-[#333037]/80 leading-relaxed">
                   Актуальний графік роботи конкретного відділення можна уточнити на сайті компанії або зателефонувавши 
@@ -339,7 +339,7 @@ export default function DeliveryAutoPage() {
                         <td className="px-4 py-3 text-sm text-gray-500">Посилка отримана клієнтом</td>
                       </tr>
                       <tr className="bg-blue-50">
-                        <td className="px-4 py-3 text-sm text-blue-800">Передана кур'єру</td>
+                        <td className="px-4 py-3 text-sm text-blue-800">Передана кур&apos;єру</td>
                         <td className="px-4 py-3 text-sm text-gray-500">Доставляється за адресою</td>
                       </tr>
                       <tr className="bg-yellow-50">
