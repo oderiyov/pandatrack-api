@@ -176,7 +176,7 @@ export default function SATPage() {
               <div className="bg-white rounded-lg shadow-sm p-8">
                 <h2 className="text-2xl font-bold mb-6">Тарифи SAT Satellite Express</h2>
                 <p className="text-[#333037]/80 leading-relaxed mb-6">
-                  Вартість доставки розраховується за ваговим або об'ємним принципом - береться більший показник. 
+                  Вартість доставки розраховується за ваговим або об&apos;ємним принципом - береться більший показник. 
                   Компанія пропонує гнучку тарифну політику з знижками для постійних клієнтів.
                 </p>
                 
@@ -277,7 +277,7 @@ export default function SATPage() {
               <div className="bg-white rounded-lg shadow-sm p-8">
                 <h2 className="text-2xl font-bold mb-6">Режим роботи SAT</h2>
                 <p className="text-[#333037]/80 leading-relaxed mb-4">
-                  Більшість відділень SAT працюють з понеділка по п'ятницю з 9:00 до 18:00, в суботу до 16:00. 
+                  Більшість відділень SAT працюють з понеділка по п&apos;ятницю з 9:00 до 18:00, в суботу до 16:00. 
                   Деякі великі відділення можуть працювати до 20:00 та у вихідні дні.
                 </p>
                 <p className="text-[#333037]/80 leading-relaxed">
@@ -300,7 +300,7 @@ export default function SATPage() {
                   <div>0-800-305-404 (безкоштовно)</div>
                 </div>
                 <p className="text-[#333037]/80 leading-relaxed mt-4">
-                  Також можна залишити заявку через форму зворотного зв'язку на офіційному сайті компанії sat.ua
+                  Також можна залишити заявку через форму зворотного зв&apos;язку на офіційному сайті компанії sat.ua
                 </p>
               </div>
             </div>
@@ -347,7 +347,7 @@ export default function SATPage() {
                       </tr>
                       <tr className="bg-yellow-50">
                         <td className="px-4 py-3 text-sm text-yellow-800">Неможливо доставити</td>
-                        <td className="px-4 py-3 text-sm text-gray-500">Зв'яжіться з отримувачем</td>
+                        <td className="px-4 py-3 text-sm text-gray-500">Зв&apos;яжіться з отримувачем</td>
                       </tr>
                       <tr className="bg-red-50">
                         <td className="px-4 py-3 text-sm text-red-800">Повертається відправнику</td>

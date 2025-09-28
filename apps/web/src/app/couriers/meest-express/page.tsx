@@ -269,7 +269,7 @@ export default function MeestExpressPage() {
               <div className="bg-[#eaf0f5] rounded-lg p-8">
                 <h2 className="text-2xl font-bold mb-6">Режим роботи Meest Express</h2>
                 <p className="text-[#333037]/80 leading-relaxed mb-4">
-                  Більшість відділень Міст Експрес працюють з понеділка по п'ятницю з 9:00 до 18:00, в суботу до 16:00. 
+                  Більшість відділень Міст Експрес працюють з понеділка по п&apos;ятницю з 9:00 до 18:00, в суботу до 16:00. 
                   Неділя - вихідний день. Деякі великі відділення можуть мати розширений графік роботи.
                 </p>
                 <p className="text-[#333037]/80 leading-relaxed">
