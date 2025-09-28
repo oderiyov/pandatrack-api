@@ -117,53 +117,6 @@ export default function HomePage() {
           </div>
         </div>
       </section>
-
-      {/* Educational Content */}
-      <section className="bg-[#f5f5f5] py-12">
-        <div className="container mx-auto px-4">
-          <div className="max-w-6xl mx-auto">
-            <h2 className="text-2xl font-bold text-center mb-8">Довідкова інформація</h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              <div className="bg-white rounded-lg shadow-sm p-6">
-                <h3 className="text-lg font-bold mb-3">Що таке номер відстеження?</h3>
-                <p className="text-[#333037]/70 text-sm leading-relaxed mb-4">
-                  Трек номер — це унікальний код посилки для відстеження між країнами. 
-                  Міжнародні номери виглядають як RO123456789CN, де перші букви — тип відправлення, 
-                  останні — код країни відправника.
-                </p>
-                <Link href="/guides/tracking-numbers" className="text-blue-600 text-sm hover:underline">
-                  Детальніше про номери →
-                </Link>
-              </div>
-              
-              <div className="bg-white rounded-lg shadow-sm p-6">
-                <h3 className="text-lg font-bold mb-3">Як відстежити посилку?</h3>
-                <ol className="text-[#333037]/70 text-sm space-y-1 leading-relaxed mb-4">
-                  <li>1. Знайдіть трек-номер в email або на сайті магазину</li>
-                  <li>2. Введіть номер у поле пошуку вище</li>
-                  <li>3. Отримайте актуальну інформацію про статус доставки</li>
-                </ol>
-                <Link href="/guides/how-to-track" className="text-blue-600 text-sm hover:underline">
-                  Покроковий гід →
-                </Link>
-              </div>
-
-              <div className="bg-white rounded-lg shadow-sm p-6">
-                <h3 className="text-lg font-bold mb-3">Проблеми з доставкою?</h3>
-                <p className="text-[#333037]/70 text-sm leading-relaxed mb-4">
-                  Посилка затримується? Неправильний статус? Проблеми з митницею? 
-                  У нашій спільноті ви знайдете відповіді на всі питання про доставку.
-                </p>
-                <Link href="/guides/delivery-problems" className="text-blue-600 text-sm hover:underline">
-                  Вирішення проблем →
-                </Link>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
       <Footer />
     </div>
   )
