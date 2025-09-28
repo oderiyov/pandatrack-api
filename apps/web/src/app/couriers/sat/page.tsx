@@ -378,7 +378,7 @@ export default function SATPage() {
         <div className="container mx-auto px-4">
           <div className="max-w-4xl mx-auto">
             <PandaTrackComments
-              pageId="sat"
+              pageId="homepage"
               title=""
               showStats={false}
               showInfo={false}
