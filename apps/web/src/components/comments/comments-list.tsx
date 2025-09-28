@@ -131,7 +131,7 @@ function CommentItem({
   maxRepliesDepth,
   submittingReply,
   allComments,
-  isLastInLevel = false,
+  // isLastInLevel = false,
   depth
 }: CommentItemProps) {
   const [showReplyForm, setShowReplyForm] = useState(false);

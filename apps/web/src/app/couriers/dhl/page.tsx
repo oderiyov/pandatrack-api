@@ -147,7 +147,7 @@ export default function DHLExpressPage() {
                 
                 <p className="text-[#333037]/80 leading-relaxed">
                   Також можна використовувати функції &quot;DHL e Track&quot;, &quot;DHL ExspresSMS&quot; та &quot;DHL ExpressWAP&quot; для відстеження 
-                  через різні канали зв'язку.
+                  через різні канали зв&apos;язку.
                 </p>
               </div>
             </div>

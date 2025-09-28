@@ -275,7 +275,7 @@ export default function DeliveryAutoPage() {
               <div className="bg-white rounded-lg shadow-sm p-8">
                 <h2 className="text-2xl font-bold mb-6">Режим роботи Delivery Auto</h2>
                 <p className="text-[#333037]/80 leading-relaxed mb-4">
-                  Відділення Delivery Auto працюють з понеділка по п'ятницю з 9:00 до 18:00, в суботу до 15:00. 
+                  Відділення Delivery Auto працюють з понеділка по п&apos;ятницю з 9:00 до 18:00, в суботу до 15:00. 
                   Кур&apos;єрська доставка здійснюється з 10:00 до 19:00 в робочі дні.
                 </p>
                 <p className="text-[#333037]/80 leading-relaxed">
@@ -343,7 +343,7 @@ export default function DeliveryAutoPage() {
                         <td className="px-4 py-3 text-sm text-gray-500">Доставляється за адресою</td>
                       </tr>
                       <tr className="bg-yellow-50">
-                        <td className="px-4 py-3 text-sm text-yellow-800">Неможливо зв'язатися з отримувачем</td>
+                        <td className="px-4 py-3 text-sm text-yellow-800">Неможливо зв&apos;язатися з отримувачем</td>
                         <td className="px-4 py-3 text-sm text-gray-500">Потрібен контакт клієнта</td>
                       </tr>
                       <tr className="bg-red-50">
