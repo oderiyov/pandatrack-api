@@ -56,9 +56,6 @@ class ScraperCore {
         const startTime = Date.now();
         
         try {
-            // Rate limiting
-            await this.requestManager.waitForSlot();
-            
             // Generate headers
             const headers = this.headerGenerator.generate({
                 userAgent: this.userAgentPool.getRandom(),
@@ -71,14 +68,13 @@ class ScraperCore {
             
             console.log(`${this.name}: Making request to ${url}`);
             
-            // Execute request
-            const response = await this.requestManager.request({
-                url: url,
+            // Execute request - ВИПРАВЛЕНО: передаємо url і options окремо
+            const response = await this.requestManager.request(url, {
                 method: options.method || 'GET',
                 headers: headers,
                 data: options.data,
-                timeout: this.timeout,
-                validateStatus: (status) => status < 500
+                params: options.params,
+                timeout: this.timeout
             });
             
             const responseTime = Date.now() - startTime;
