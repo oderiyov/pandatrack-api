@@ -23,9 +23,20 @@ class TrackingService {
         // Ініціалізуємо компоненти нової архітектури
         this.carrierDetector = new CarrierDetector();
         this.quotaManager = new QuotaManager(redisClient);
-        this.multiSourceResolver = new MultiSourceResolver(this.quotaManager);
         this.cacheManager = new CacheManager(redisClient);
         
+        // Створюємо MultiSourceResolver ОДИН РАЗ з обома dependencies
+        this.multiSourceResolver = new MultiSourceResolver(
+            this.quotaManager,
+            this.cacheManager
+        );
+        
+        // Dependencies для direct provider creation (якщо потрібно)
+        this.providerDependencies = {
+            quotaManager: this.quotaManager,
+            cacheManager: this.cacheManager
+        };
+
         // Ініціалізуємо квоти з Redis
         this.initializeQuotas();
     }
