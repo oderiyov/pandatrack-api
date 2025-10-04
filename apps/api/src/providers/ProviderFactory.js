@@ -1,170 +1,170 @@
-// apps/api/src/providers/ProviderFactory.js
-const UkrposhtaProvider = require('./UkrposhtaProvider');
+// apps/api/src/providers/ProviderFactory.js - UPDATED для Hybrid Logic
 const NovaPoshtaProvider = require('./NovaPoshtaProvider');
-const TrackingMoreProvider = require('./TrackingMoreProvider');
+const UkrposhtaProvider = require('./UkrposhtaProvider');
 const DHLProvider = require('./DHLProvider');
-const DeliveryAutoProvider = require('./DeliveryAutoProvider');
-const SATProvider = require('./SATProvider');
 const MeestProvider = require('./MeestProvider');
+const SATProvider = require('./SATProvider');
+const DeliveryAutoProvider = require('./DeliveryAutoProvider');
 
 class ProviderFactory {
-    static providers = new Map();
-    static instances = new Map(); // Кеш інстансів
-
-    static initialize() {
-        // Реєстрація всіх провайдерів з конфігурацією
-        this.register('ukrposhta', UkrposhtaProvider, {
-            name: 'ukrposhta',
-            cost: 0,
-            quota: { daily: 999999, used: 0 },
-            enabled: true,
-            supportsInternational: true,
-            stages: ['domestic', 'import', 'export', 'transit']
-        });
-
-        this.register('nova-poshta', NovaPoshtaProvider, {
-            name: 'nova-poshta',
-            cost: 0,
-            quota: { daily: 10000, used: 0 },
-            enabled: true,
-            supportsInternational: false,
-            stages: ['domestic']
-        });
-
-        this.register('trackingmore', TrackingMoreProvider, {
-            name: 'trackingmore',
-            cost: 0.019,
-            quota: { daily: parseInt(process.env.TRACKINGMORE_DAILY_LIMIT) || 100, used: 0 },
-            enabled: true,
-            supportsInternational: true,
-            stages: ['export', 'transit', 'import']
-        });
-
-        this.register('dhl', DHLProvider, {
-            name: 'dhl',
-            cost: 0,
-            quota: { daily: 250, used: 0 },
-            enabled: true,
-            supportsInternational: true,
-            stages: ['international', 'export', 'import']
-        });
-
-        this.register('delivery-auto', DeliveryAutoProvider, {
-            name: 'delivery-auto',
-            cost: 0,
-            quota: { daily: 1000, used: 0 },
-            enabled: true,
-            supportsInternational: false,
-            stages: ['domestic']
-        });
-
-        this.register('sat', SATProvider, {
-            name: 'sat',
-            cost: 0,
-            quota: { daily: 500, used: 0 },
-            enabled: true,
-            supportsInternational: false,
-            stages: ['domestic']
-        });
+    /**
+     * Створює provider instance з hybrid config
+     */
+    static createProvider(carrierCode, dependencies = {}) {
+        const config = this.getProviderConfig(carrierCode);
         
-        this.register('meest', MeestProvider, {
-            name: 'meest',
-            cost: 0,
-            quota: { daily: 1000, used: 0 }, // Орієнтовно, можна скорегувати
-            enabled: true,
-            supportsInternational: true,
-            stages: ['domestic', 'international', 'export', 'import']
-        });
-    }
-
-    static register(name, providerClass, config) {
-        this.providers.set(name, { class: providerClass, config });
-        console.log(`Registered provider: ${name}`);
-    }
-
-    static create(name) {
-        // Перевіряємо кеш інстансів
-        if (this.instances.has(name)) {
-            return this.instances.get(name);
-        }
-
-        const provider = this.providers.get(name);
-        if (!provider) {
-            throw new Error(`Provider ${name} not registered`);
-        }
-
-        try {
-            const instance = new provider.class(provider.config);
-            
-            // Кешуємо інстанс для повторного використання
-            this.instances.set(name, instance);
-            
-            return instance;
-        } catch (error) {
-            console.error(`Failed to create provider ${name}:`, error.message);
-            throw new Error(`Cannot create provider ${name}: ${error.message}`);
-        }
-    }
-
-    static getAvailable() {
-        return Array.from(this.providers.keys());
-    }
-
-    static getConfig(name) {
-        const provider = this.providers.get(name);
-        return provider ? provider.config : null;
-    }
-
-    static isEnabled(name) {
-        const config = this.getConfig(name);
-        return config ? config.enabled : false;
-    }
-
-    static async healthCheckAll() {
-        const results = {};
+        // Додаємо dependencies (QuotaManager, CacheManager)
+        config.quotaManager = dependencies.quotaManager || null;
+        config.cacheManager = dependencies.cacheManager || null;
         
-        for (const name of this.getAvailable()) {
+        switch (carrierCode) {
+            case 'novaposhta':
+            case 'nova-poshta':
+                return new NovaPoshtaProvider(config);
+                
+            case 'ukrposhta':
+                return new UkrposhtaProvider(config);
+                
+            case 'dhl':
+                return new DHLProvider(config);
+                
+            case 'meest':
+            case 'meest-express':
+                return new MeestProvider(config);
+                
+            case 'sat':
+                return new SATProvider(config);
+                
+            case 'delivery-auto':
+            case 'deliveryauto':
+                return new DeliveryAutoProvider(config);
+                
+            default:
+                throw new Error(`Unknown provider: ${carrierCode}`);
+        }
+    }
+
+    /**
+     * Отримує конфігурацію для провайдера з .env
+     */
+    static getProviderConfig(carrierCode) {
+        const normalizedCode = carrierCode.toLowerCase().replace('-', '_');
+        
+        return {
+            name: carrierCode,
+            enabled: process.env[`${normalizedCode.toUpperCase()}_ENABLED`] !== 'false',
+            scrapingEnabled: process.env[`${normalizedCode.toUpperCase()}_SCRAPING_ENABLED`] === 'true',
+            quota: {
+                daily: parseInt(process.env[`${normalizedCode.toUpperCase()}_DAILY_LIMIT`]) || Infinity
+            },
+            cost: 0, // Native APIs безкоштовні
+            supportsInternational: true,
+            timeout: 15000
+        };
+    }
+
+    /**
+     * Створює всі providers з dependencies
+     */
+    static createAllProviders(dependencies = {}) {
+        const carriers = [
+            'nova-poshta',
+            'ukrposhta',
+            'dhl',
+            'meest',
+            'sat',
+            'delivery-auto'
+        ];
+        
+        const providers = {};
+        
+        carriers.forEach(carrier => {
             try {
-                if (this.isEnabled(name)) {
-                    const provider = this.create(name);
-                    results[name] = await provider.healthCheck();
-                } else {
-                    results[name] = { status: 'disabled', provider: name };
-                }
+                providers[carrier] = this.createProvider(carrier, dependencies);
             } catch (error) {
-                results[name] = { 
-                    status: 'error', 
-                    provider: name, 
-                    error: error.message 
+                console.warn(`Failed to create ${carrier} provider:`, error.message);
+            }
+        });
+        
+        return providers;
+    }
+
+    /**
+     * Health check для всіх providers
+     */
+    static async healthCheckAll(dependencies = {}) {
+        const providers = this.createAllProviders(dependencies);
+        const healthChecks = {};
+        
+        for (const [name, provider] of Object.entries(providers)) {
+            try {
+                healthChecks[name] = await provider.healthCheck();
+            } catch (error) {
+                healthChecks[name] = {
+                    status: 'error',
+                    error: error.message
                 };
             }
         }
         
-        return results;
+        return healthChecks;
     }
 
-    static clearCache() {
-        this.instances.clear();
-        console.log('Provider instance cache cleared');
-    }
-
-    static updateConfig(name, newConfig) {
-        const provider = this.providers.get(name);
-        if (!provider) {
-            throw new Error(`Provider ${name} not found`);
-        }
-
-        // Оновлюємо конфігурацію
-        provider.config = { ...provider.config, ...newConfig };
-        
-        // Очищуємо кешований інстанс щоб він створився з новою конфігурацією
-        this.instances.delete(name);
-        
-        console.log(`Updated config for provider: ${name}`);
+    /**
+     * Отримує інформацію про всі providers
+     */
+    static async getProvidersInfo() {
+        return {
+            'nova-poshta': {
+                name: 'Nova Poshta',
+                country: 'UA',
+                features: ['API', 'Cache', 'Hybrid'],
+                cost: 0,
+                quota: 'Unlimited',
+                reliability: '99%'
+            },
+            'ukrposhta': {
+                name: 'Ukrposhta',
+                country: 'UA',
+                features: ['API', 'Cache', 'Hybrid'],
+                cost: 0,
+                quota: 'Unlimited',
+                reliability: '95%'
+            },
+            'dhl': {
+                name: 'DHL',
+                country: 'Global',
+                features: ['API', 'Cache', 'Hybrid', 'Quota Management'],
+                cost: 0,
+                quota: '250/day',
+                reliability: '99%'
+            },
+            'meest': {
+                name: 'Meest Express',
+                country: 'UA/Global',
+                features: ['API', 'Scraping', 'Cache', 'Hybrid', 'Proxies'],
+                cost: 0.0003, // $3/10K requests (proxy cost)
+                quota: 'Unlimited',
+                reliability: '85%'
+            },
+            'sat': {
+                name: 'SAT',
+                country: 'UA',
+                features: ['API', 'Cache', 'Hybrid'],
+                cost: 0,
+                quota: 'Limited',
+                reliability: '90%'
+            },
+            'delivery-auto': {
+                name: 'Delivery Auto',
+                country: 'UA',
+                features: ['API', 'Cache', 'Hybrid'],
+                cost: 0,
+                quota: 'Limited',
+                reliability: '85%'
+            }
+        };
     }
 }
-
-// Ініціалізуємо фабрику при завантаженні модуля
-ProviderFactory.initialize();
 
 module.exports = ProviderFactory;

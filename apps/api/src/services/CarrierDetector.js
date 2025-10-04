@@ -8,18 +8,33 @@ class CarrierDetector {
         return {
             // Українські перевізники
             'ukrposhta': [
+                // Внутрішні українські формати
                 { pattern: /^[0-9]{13}$/, confidence: 'high', stage: 'domestic' },
                 { pattern: /^[0-9]{14}$/, confidence: 'high', stage: 'domestic' },
+                
+                // Імпорт в Україну (закінчення UA)
                 { pattern: /^[A-Z]{2}\d{9}UA$/, confidence: 'high', stage: 'import' },
                 { pattern: /^EM\d{9}UA$/, confidence: 'high', stage: 'import' },
                 { pattern: /^CP\d{9}UA$/, confidence: 'high', stage: 'import' },
                 { pattern: /^RG\d{9}UA$/, confidence: 'high', stage: 'import' },
-                { pattern: /^[A-Z]{2}\d{9}[A-Z]{2}$/, confidence: 'high', stage: 'international' },
+                
+                // Міжнародні UPU - ВИКЛЮЧАЄМО CV з цього списку
+                // R-series (registered mail)
                 { pattern: /^(RA|RB|RC|RD|RE|RG|RH|RI|RJ|RK|RL|RM|RN|RO|RP|RQ|RR|RS|RT|RU|RV|RW|RX|RY|RZ)\d{9}[A-Z]{2}$/, confidence: 'high', stage: 'international' },
-                { pattern: /^(CA|CB|CC|CD|CE|CF|CG|CH|CI|CJ|CK|CL|CM|CN|CO|CP|CQ|CR|CS|CT|CU|CV|CW|CX|CY|CZ)\d{9}[A-Z]{2}$/, confidence: 'high', stage: 'international' },
+                
+                // C-series БЕЗ CV (CV це Meest)
+                { pattern: /^(CA|CB|CC|CD|CE|CF|CG|CH|CI|CJ|CK|CL|CM|CN|CO|CP|CQ|CR|CS|CT|CU|CW|CX|CY|CZ)\d{9}[A-Z]{2}$/, confidence: 'high', stage: 'international' },
+                
+                // E-series (EMS)
                 { pattern: /^(EA|EB|EC|ED|EE|EF|EG|EH|EI|EJ|EK|EL|EM|EN|EO|EP|EQ|ER|ES|ET|EU|EV|EW|EX|EY|EZ)\d{9}[A-Z]{2}$/, confidence: 'high', stage: 'international' },
-                { pattern: /^(LA|LB|LC|LD|LE|LF|LG|LH|LI|LJ|LK|LL|LM|LN|LO|LP|LQ|LR|LS|LT|LU|LV|LW|LX|LY|LZ)\d{9}[A-Z]{2}$/, confidence: 'high', stage: 'international' }
+                
+                // L-series (letter post) БЕЗ LV якщо LV це також Meest
+                { pattern: /^(LA|LB|LC|LD|LE|LF|LG|LH|LI|LJ|LK|LL|LM|LN|LO|LP|LQ|LR|LS|LT|LU|LW|LX|LY|LZ)\d{9}[A-Z]{2}$/, confidence: 'high', stage: 'international' },
+                
+                // Загальний UPU fallback зі ЗНИЖЕНИМ пріоритетом (на випадок якщо не Meest)
+                { pattern: /^[A-Z]{2}\d{9}[A-Z]{2}$/, confidence: 'low', stage: 'international' }
             ],
+            
             'nova-poshta': [
                 { pattern: /^20\d{12}$/, confidence: 'high', stage: 'domestic' },
                 { pattern: /^59\d{12}$/, confidence: 'high', stage: 'domestic' }
@@ -80,14 +95,24 @@ class CarrierDetector {
 
             // Інші українські перевізники
             'meest': [
+                // Міжнародні CV formats
+                { pattern: /^CV\d{9}(US|CA|PL|UA|GB|DE|FR|IT|ES|NL|BE|AT|CZ)$/i, confidence: 'high', stage: 'international' },
+                { pattern: /^RK\d{9}[A-Z]{2}$/i, confidence: 'high', stage: 'international' },
+                { pattern: /^RB\d{9}[A-Z]{2}$/i, confidence: 'high', stage: 'international' },
+                
+                // Внутрішні формати
+                { pattern: /^719-\d{7}$/, confidence: 'high', stage: 'domestic' },
+                { pattern: /^\d{7}[A-Z0-9]{9}$/, confidence: 'high', stage: 'domestic' }, // 2508205FM9K077RC
+                { pattern: /^\d{11,15}[A-Z0-9]{2,8}$/, confidence: 'medium', stage: 'domestic' },
+                
+                // Фірмові коди
                 { pattern: /^ME\d{10,12}$/, confidence: 'high', stage: 'domestic' },
-                { pattern: /^MEE\d{8,10}$/, confidence: 'high', stage: 'domestic' },
-                { pattern: /^M[0-9A-Z]{8,12}$/, confidence: 'medium', stage: 'domestic' },
                 { pattern: /^[0-9]{8}-[0-9]{3}$/, confidence: 'high', stage: 'domestic' },
-                { pattern: /^CV\d{9}UA$/, confidence: 'high', stage: 'international' },
-                { pattern: /^[0-9]{8}[A-Z0-9]{7}$/, confidence: 'high', stage: 'international' },
+                
+                // Fallback
                 { pattern: /^\d{10,14}$/, confidence: 'very-low', stage: 'domestic' }
             ],
+            
             'justin': [
                 { pattern: /^J\d{10,12}$/, confidence: 'high', stage: 'domestic' },
                 { pattern: /^JU\d{8,12}$/, confidence: 'high', stage: 'domestic' },

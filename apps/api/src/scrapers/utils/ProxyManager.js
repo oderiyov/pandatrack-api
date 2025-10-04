@@ -101,6 +101,41 @@ class ProxyManager {
     }
     
     /**
+     * Format proxy for Playwright
+     */
+    formatForPlaywright(proxyUrl) {
+        if (!proxyUrl) return null;
+        
+        try {
+            const url = new URL(proxyUrl);
+            
+            return {
+                server: `${url.protocol}//${url.hostname}:${url.port}`,
+                username: url.username || undefined,
+                password: url.password || undefined
+            };
+        } catch (error) {
+            console.error('Invalid proxy URL:', proxyUrl);
+            return null;
+        }
+    }
+
+        /**
+     * Switch to next proxy immediately after failure
+     */
+    switchAfterFailure(failedProxy) {
+        this.reportFailure(failedProxy);
+        
+        // Mark as temporary blacklist
+        const blacklistUntil = Date.now() + 60000; // 1 minute
+        this.failedProxies.set(failedProxy, { count: 999, until: blacklistUntil });
+        
+        console.log(`Proxy ${failedProxy} blacklisted for 1 minute`);
+        
+        return this.getNext(); // Return fresh proxy
+    }
+
+    /**
      * Report proxy failure
      */
     reportFailure(proxyUrl) {
