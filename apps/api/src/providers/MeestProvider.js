@@ -1,53 +1,64 @@
-// apps/api/src/providers/MeestProvider.js - HYBRID VERSION
+// apps/api/src/providers/MeestProvider.js - COMPLETE WITH MOBILE API v3.0
+
 const BaseProvider = require('./BaseProvider');
 const MeestAjaxScraper = require('../scrapers/adapters/MeestAjaxScraper');
 const MeestHybridScraper = require('../scrapers/adapters/MeestHybridScraper');
+const MeestMobileAPI = require('./adapters/MeestMobileAPI');
 const { translateStatus, translateLocation } = require('../utils/meestTranslations');
 
 class MeestProvider extends BaseProvider {
     constructor(config) {
         super(config);
         
-        // API Config
+        // Legacy API Config (optional, low reliability ~20%)
         this.apiToken = process.env.MEEST_API_TOKEN;
         this.contractId = process.env.MEEST_CONTRACT_ID;
         this.baseUrl = 'https://api.meest.com/v3.0';
+        this.apiReliability = 0.2;
         
-        // HYBRID CONFIG
+        // Mobile API v3.0 (PRIMARY - 100% coverage)
+        this.useMobileAPI = process.env.MEEST_USE_MOBILE_API === 'true';
+        if (this.useMobileAPI) {
+            try {
+                this.mobileAPI = new MeestMobileAPI();
+                console.log('✅ Meest Mobile API v3.0 enabled');
+            } catch (error) {
+                console.error('❌ Failed to initialize Meest Mobile API:', error.message);
+                this.mobileAPI = null;
+            }
+        }
+        
+        // Web Scraping (FALLBACK)
         this.scrapingEnabled = process.env.MEEST_SCRAPING_ENABLED === 'true';
-        this.apiReliability = 0.2; // API працює тільки для власних контрактів (~20%)
-        
-        // Ініціалізуємо scraper
         if (this.scrapingEnabled) {
-            // Основний scraper - HTTP only
             this.scraper = new MeestAjaxScraper({
                 cacheManager: this.cacheManager
             });
-
-            // Fallback для нових номерів без checksum
             this.scraper.fallbackScraper = new MeestHybridScraper({
                 useProxies: true,
                 headless: true
             });
-                
-            console.log('Meest Provider: Ajax scraper initialized (HTTP with hybrid fallback)');
         }
         
-        console.log('Meest Provider (Hybrid) initialized:', {
-            hasApiToken: !!this.apiToken,
-            scrapingEnabled: this.scrapingEnabled,
+        console.log('Meest Provider initialized:', {
+            mobileAPI: !!this.mobileAPI,
+            legacyAPI: !!this.apiToken,
+            scraping: this.scrapingEnabled,
             apiReliability: `${this.apiReliability * 100}%`
         });
     }
 
     /**
-     * HYBRID LOGIC: Meest-специфічна стратегія
-     * Priority: Cache → API (спроба) → Scraping (основний метод)
+     * HYBRID STRATEGY with Mobile API Priority
+     * 1. Cache (always first)
+     * 2. Mobile API v3.0 (PRIMARY - 100% coverage, free)
+     * 3. Legacy API (fallback - 20% success, own contracts only)
+     * 4. Web Scraping (last resort - 100% but slow)
      */
     getTrackingStrategies() {
         const strategies = [];
         
-        // 1. Cache завжди перший
+        // 1. Cache
         if (this.cacheManager) {
             strategies.push({
                 name: 'cache',
@@ -56,20 +67,29 @@ class MeestProvider extends BaseProvider {
             });
         }
         
-        // 2. API пробуємо (може спрацювати для власних номерів)
+        // 2. Mobile API v3.0 (HIGHEST PRIORITY)
+        if (this.mobileAPI) {
+            strategies.push({
+                name: 'mobile_api',
+                priority: 2,
+                method: 'trackViaMobileAPI'
+            });
+        }
+        
+        // 3. Legacy API (medium priority)
         if (this.apiToken) {
             strategies.push({
                 name: 'native_api',
-                priority: 2,
+                priority: 3,
                 method: 'trackViaAPI'
             });
         }
         
-        // 3. Scraping як основний fallback
+        // 4. Web Scraping (lowest priority)
         if (this.scrapingEnabled && this.scraper) {
             strategies.push({
                 name: 'web_scraping',
-                priority: 3,
+                priority: 4,
                 method: 'trackViaScraping'
             });
         }
@@ -78,17 +98,68 @@ class MeestProvider extends BaseProvider {
     }
 
     /**
-     * HYBRID STRATEGY: Meest API (обмежений)
+     * NEW: Mobile API v3.0 tracking
+     */
+    async trackViaMobileAPI(trackingNumber, options = {}) {
+        console.log(`📱 [Meest Mobile API v3.0] Tracking: ${trackingNumber}`);
+        
+        if (!this.mobileAPI) {
+            throw new Error('Mobile API not initialized');
+        }
+        
+        try {
+            const result = await this.mobileAPI.track(trackingNumber);
+            
+            console.log(`📱 [Mobile API] Result:`, {
+                success: result.success,
+                hasData: !!result.data,
+                eventsCount: result.data?.events?.length || 0,
+                status: result.data?.status,
+                error: result.error
+            });
+            
+            if (!result.success) {
+                throw new Error(result.error || 'Mobile API failed');
+            }
+            
+            // MeestMobileAPI.normalizeResponse() вже повертає готову структуру
+            const normalized = {
+                success: true,
+                data: result.data, // Вже має: trackingNumber, carrier, status, events, etc.
+                provider: this.name,
+                cost: 0,
+                source: 'mobile_api_v3',
+                cached: false,
+                supportsInternational: true
+            };
+            
+            // Cache result
+            if (this.cacheManager && normalized.success && normalized.data.events.length > 0) {
+                const ttl = this.calculateTTL(normalized.data.status);
+                await this.saveToCacheAsync(trackingNumber, normalized, ttl);
+                console.log(`✅ [Mobile API] Cached: ${normalized.data.events.length} events, TTL=${ttl}s`);
+            } else if (normalized.data.events.length === 0) {
+                console.warn(`⚠️ [Mobile API] No events returned for ${trackingNumber}`);
+            }
+            
+            return normalized;
+            
+        } catch (error) {
+            console.error('❌ [Meest Mobile API] Failed:', error.message);
+            throw error;
+        }
+    }
+
+    /**
+     * Legacy API (keep for backward compatibility)
      */
     async trackViaAPI(trackingNumber, options = {}) {
-        console.log(`[Meest] Trying API for ${trackingNumber}`);
+        console.log(`[Meest Legacy API] Tracking: ${trackingNumber}`);
         
         try {
             const response = await this.makeRequest(`${this.baseUrl}/track`, {
                 method: 'GET',
-                params: {
-                    number: trackingNumber
-                },
+                params: { number: trackingNumber },
                 headers: {
                     'Authorization': `Bearer ${this.apiToken}`,
                     'Accept': 'application/json'
@@ -96,16 +167,12 @@ class MeestProvider extends BaseProvider {
                 timeout: 15000
             });
 
-            console.log('[Meest] API Response:', JSON.stringify(response.data, null, 2));
-
-            // API може повернути пустий масив для зовнішніх посилок
             if (!response.data || response.data.length === 0) {
                 throw new Error('API returned empty result (external tracking number)');
             }
 
             const trackingData = this.parseAPIResponse(response.data, trackingNumber);
             
-            // Зберігаємо в cache
             if (this.cacheManager && trackingData.success) {
                 const ttl = this.calculateTTL(trackingData.data?.status);
                 await this.saveToCacheAsync(trackingNumber, trackingData, ttl);
@@ -113,24 +180,23 @@ class MeestProvider extends BaseProvider {
             
             return {
                 ...trackingData,
-                source: 'api'
+                source: 'legacy_api'
             };
             
         } catch (error) {
-            console.log(`[Meest] API failed:`, error.message);
-            // Падаємо до scraping
+            console.log(`[Meest Legacy API] Failed:`, error.message);
             throw error;
         }
     }
 
     /**
-     * HYBRID STRATEGY: Web Scraping (основний метод)
+     * Web Scraping fallback
      */
     async trackViaScraping(trackingNumber, options = {}) {
-        console.log(`[Meest] Starting web scraping for ${trackingNumber}`);
+        console.log(`[Meest Scraping] Starting for ${trackingNumber}`);
         
         if (!this.scraper) {
-            throw new Error('Meest scraper not initialized');
+            throw new Error('Scraper not initialized');
         }
         
         const scrapedData = await this.scraper.scrape(trackingNumber, options);
@@ -139,10 +205,8 @@ class MeestProvider extends BaseProvider {
             throw new Error(scrapedData?.error || 'Scraping failed');
         }
         
-        // Нормалізуємо scraped data
         const normalized = this.normalizeScrapedData(scrapedData, trackingNumber);
         
-        // Зберігаємо в cache
         if (this.cacheManager && normalized.success) {
             const ttl = this.calculateTTL(normalized.data?.status);
             await this.saveToCacheAsync(trackingNumber, normalized, ttl);
@@ -155,11 +219,10 @@ class MeestProvider extends BaseProvider {
     }
 
     /**
-     * Parse Meest API response
+     * Parse Legacy API response
      */
     parseAPIResponse(data, trackingNumber) {
         try {
-            // Припустима структура API (треба адаптувати)
             const item = Array.isArray(data) ? data[0] : data;
             
             if (!item) {
@@ -197,11 +260,10 @@ class MeestProvider extends BaseProvider {
     }
 
     /**
-     * Normalize scraped data from MeestScraper
+     * Normalize scraped data
      */
     normalizeScrapedData(scrapedData, trackingNumber) {
         try {
-            // Перекладаємо події
             const translatedEvents = scrapedData.events.map(event => ({
                 date: event.date,
                 status: translateStatus(event.status),
@@ -224,7 +286,7 @@ class MeestProvider extends BaseProvider {
                     raw: scrapedData
                 },
                 provider: this.name,
-                cost: 0, // Scraping безкоштовний (тільки proxy $3/міс)
+                cost: 0,
                 supportsInternational: true
             };
             
@@ -240,12 +302,11 @@ class MeestProvider extends BaseProvider {
     }
 
     /**
-     * Build events from API response
+     * Build events from Legacy API response
      */
     buildEventsFromAPI(item) {
         const events = [];
         
-        // Припустима структура (треба адаптувати під реальний API)
         if (item.tracking && Array.isArray(item.tracking)) {
             item.tracking.forEach(event => {
                 events.push({
@@ -259,45 +320,80 @@ class MeestProvider extends BaseProvider {
             });
         }
         
-        // Сортуємо події по даті
         events.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
         
         return events;
     }
 
     /**
-     * Can handle tracking number
+     * Check if can handle tracking number
      */
     canHandle(trackingNumber, carrierCode = null) {
         const number = trackingNumber.trim().replace(/\s/g, '');
         
-        // Meest Express formats
-        // Міжнародні: 59001234567890UA
-        if (/^\d{14}[A-Z]{2}$/.test(number)) return true;
+        // Українські формати (Mobile API працює):
+        // 2508205FM9K077RC - 16 символів буквоцифри
+        if (/^\d{16}[A-Z]{0,4}$/i.test(number)) {
+            this.isInternational = false;
+            return true;
+        }
         
-        // Внутрішні: MExxxxxx або різні цифрові формати
-        if (/^ME\d{6,}$/.test(number.toUpperCase())) return true;
-        if (/^\d{10,13}$/.test(number)) return true;
+        // Внутрішні короткі номери
+        if (/^ME\d{6,}$/i.test(number)) {
+            this.isInternational = false;
+            return true;
+        }
+        
+        if (/^\d{10,15}$/.test(number)) {
+            this.isInternational = false;
+            return true;
+        }
+        
+        // Міжнародні формати (Mobile API НЕ працює - 401):
+        // CV925242617US, RR123456789US тощо
+        if (/^[A-Z]{2}\d{9,11}[A-Z]{2}$/.test(number)) {
+            this.isInternational = true;
+            return true;
+        }
         
         return false;
+    }
+    
+    /**
+     * Detect if tracking number is international format
+     */
+    isInternationalTracking(trackingNumber) {
+        const number = trackingNumber.trim().replace(/\s/g, '');
+        return /^[A-Z]{2}\d{9,11}[A-Z]{2}$/.test(number);
     }
 
     /**
      * Health check
      */
     async healthCheck() {
-        return {
+        const health = {
             status: 'ok',
             provider: this.name,
             features: {
-                api: !!this.apiToken,
+                mobileAPI: !!this.mobileAPI,
+                legacyAPI: !!this.apiToken,
                 scraping: this.scrapingEnabled,
                 cache: !!this.cacheManager
             },
-            note: 'Browser health check disabled to save proxy bandwidth',
             timestamp: new Date().toISOString()
         };
         
+        // Add Mobile API stats
+        if (this.mobileAPI) {
+            try {
+                const mobileStats = this.mobileAPI.getStats();
+                health.mobileAPIStats = mobileStats;
+            } catch (error) {
+                health.mobileAPIError = error.message;
+            }
+        }
+        
+        return health;
     }
 }
 
