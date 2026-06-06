@@ -50,21 +50,24 @@ export default function TrackingTimeline({ events, isDelivered, carrier }: Track
     return dateB - dateA // Newest first
   })
 
-  // ✅ ДОДАНО: Визначення поточного статусу для "Зараз тут"
+  // ✅ ВИПРАВЛЕНО: Визначення поточного статусу для "Зараз тут"
   const getCurrentEventIndex = () => {
     if (isDelivered) {
-      // Если доставлено - найти доставленное событие
       return sortedEvents.findIndex(event => {
         const status = event.status.toLowerCase()
         return status.includes('доставлено') || 
                status.includes('отримано') || 
                status.includes('delivered') ||
                status.includes('вручено') ||
-               status.includes('видана')  // ✅ ДОДАНО: для Delivery Auto
+               status.includes('видана')
       })
     }
     
-    // Если в пути - первое событие (самое новое по дате)
+    // ✅ ВИПРАВЛЕНО: Шукаємо подію з eventStatus === 'now' від API
+    const nowIndex = sortedEvents.findIndex(event => event.eventStatus === 'now')
+    if (nowIndex !== -1) return nowIndex
+    
+    // Fallback: перша подія (найновіша за датою)
     return 0
   }
 
@@ -118,18 +121,16 @@ export default function TrackingTimeline({ events, isDelivered, carrier }: Track
       <div className="relative">
         {sortedEvents.map((event, index) => {
           const isLastEvent = index === sortedEvents.length - 1
-          const isCurrent = index === currentEventIndex // ✅ ДОДАНО: поточна подія
+          const isCurrent = index === currentEventIndex // поточна подія
           const { mainText, subText } = cleanStatusText(event.status, event.description, event.location)
 
           // ✅ ВИПРАВЛЕНО: Логіка кольорів з правильними змінними
           const getStatusColor = () => {
-            // Перевірка чи це доставлений статус
             const deliveredKeywords = [
               'доставлено', 'отримано', 'вручено', 'delivered', 'received',
-              'видана'  // ✅ КЛЮЧОВЕ: додано для Delivery Auto
+              'видана'
             ];
             
-            // ✅ ВИПРАВЛЕНО: Правильно оголошені змінні
             const mainTextLower = mainText.toLowerCase();
             const subTextLower = subText ? subText.toLowerCase() : '';
             
@@ -137,7 +138,7 @@ export default function TrackingTimeline({ events, isDelivered, carrier }: Track
               mainTextLower.includes(keyword) || subTextLower.includes(keyword)
             );
             
-            // ✅ ЗЕЛЕНИЙ для всіх доставлених статусів (включно з "Видана")
+            // Зелений для всіх доставлених статусів
             if (isDeliveredStatus) {
               return {
                 dot: 'bg-green-500 border-green-500',
@@ -207,7 +208,7 @@ export default function TrackingTimeline({ events, isDelivered, carrier }: Track
                     </div>
                   )}
                   
-                  {/* ✅ ВИПРАВЛЕНО: Метка "Зараз тут" тільки для неДоставлених */}
+                  {/* Метка "Зараз тут" тільки для неДоставлених */}
                   {isCurrent && !mainText.toLowerCase().includes('доставлено') && 
                    !mainText.toLowerCase().includes('видана') && (
                     <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full font-medium">
