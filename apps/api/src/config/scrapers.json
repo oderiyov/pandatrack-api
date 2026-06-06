@@ -1,0 +1,33 @@
+{
+  "dhl": {
+    "enabled": true,
+    "name": "DHL",
+    "baseUrl": "https://www.dhl.com",
+    "trackingUrlTemplate": "https://www.dhl.com/ua-en/home/tracking/tracking-express.html?submit=1&tracking-id={trackingNumber}",
+    "selectors": {
+      "mainContainer": ".tracking-shipment",
+      "currentStatus": ".tracking-status",
+      "trackingEvents": ".tracking-timeline__event",
+      "eventDate": ".tracking-timeline__date",
+      "eventTime": ".tracking-timeline__time", 
+      "eventStatus": ".tracking-timeline__status",
+      "eventLocation": ".tracking-timeline__location",
+      "serviceType": ".shipment-details__service",
+      "origin": ".shipment-details__origin",
+      "destination": ".shipment-details__destination"
+    },
+    "alternativeSelectors": {
+      "trackingEvents": [
+        ".c-tracking-result__event",
+        ".tracking-event",
+        "[data-tracking-event]"
+      ]
+    },
+    "rateLimit": {
+      "requests": 10,
+      "per": 60000
+    },
+    "cacheTTL": 21600,
+    "timeout": 30000
+  }
+}

@@ -2,8 +2,14 @@
 const ProviderFactory = require('../providers/ProviderFactory');
 
 class MultiSourceResolver {
-    constructor(quotaManager, options = {}) {
+    constructor(quotaManager, cacheManager, options = {}) {
         this.quotaManager = quotaManager;
+        this.cacheManager = cacheManager;
+        this.dependencies = {
+            quotaManager: this.quotaManager,
+            cacheManager: this.cacheManager
+        };
+        
         this.options = {
             maxConcurrentRequests: 3,
             timeoutMs: 30000,
@@ -131,9 +137,9 @@ class MultiSourceResolver {
             try {
                 // Перевіряємо квоти перед запитом
                 await this.quotaManager.checkAndReserve(source.code);
-                
-                const provider = ProviderFactory.create(source.code);
-                
+                console.log('[MultiSourceResolver] Creating provider:', source.code, 'with dependencies:', !!this.dependencies);
+                const provider = ProviderFactory.createProvider(source.code, this.dependencies);
+                console.log('[MultiSourceResolver] Provider created:', provider.name, 'has cacheManager:', !!provider.cacheManager);
                 // Встановлюємо timeout для запиту
                 const timeoutPromise = new Promise((_, reject) => {
                     setTimeout(() => reject(new Error('Request timeout')), options.timeoutMs);
