@@ -1,59 +1,109 @@
-// apps/api/src/utils/novaPoshtaTranslations.js - ТОЧНО как на сайте Nova Poshta
+// apps/api/src/utils/novaPoshtaTranslations.js
+// ✅ ПЕРЕПИСАНО: маппінг по eventType (стабільний машинний код), а не по тексту статусу.
+// Nova Poshta повертає нестабільний текст (мішанина укр/англ), тому текстовий переклад
+// ламався на кожному новому формулюванні. eventType не змінюється — це надійне джерело.
 
-// ✅ ТОЧНЫЕ переводы с сайта Nova Poshta
-const EXACT_TRANSLATIONS = {
-    // Створення та реєстрація
-    'Registered and being prepared': 'Відправник оформив посилку, але ще не відправив',
-    
-    // Прийняття
-    'Accepted at branch': 'Прийняли у відділенні',
-    'Accepted at pickup point': 'Прийнято у пункті прийому',
-    
-    // ✅ МАЙБУТНІ ПОДІЇ - як на офіційному сайті
-    'Will arrive at': 'Прибуде до',
-    'Will leave from': 'Виїде з',
-    'Will depart from': 'Виїде з',
-    
-    // ✅ ВІДПРАВКА - точні формулювання
-    'Left branch': 'Виїхала з відділення',
-    'Left the branch': 'Виїхала з відділення',
-    'Left the terminal': 'Виїхала з терміналу',
-    'Left the KIT': 'Виїхала з КІТ',
-    'Left the address depot': 'Виїхала з депо',
-    'Leaving the': 'Виїхала з', // ✅ ВИПРАВЛЕНО
-    
-    // ✅ ПРИБУТТЯ - точні формулювання  
-    'Arrived at parcel locker': 'Прибула до поштомату',
-    'Arrived at the address depot': 'Прибула в депо',
-    'Arrived at the depot': 'Прибула в депо', 
-    'Arrived at the KIT': 'Прибула до КІТ',
-    'Arrived at terminal': 'Прибула до терміналу',
-    'Arrived at the terminal': 'Прибула до терміналу',
-    
-    // ✅ ДОСТАВКА
-    'Delivered at parcel locker': 'Доставлено до поштомату',
-    'Delivered at address': 'Доставлено за адресою',
+// ─────────────────────────────────────────────────────────────
+// ГОЛОВНИЙ СЛОВНИК: eventType → український статус
+// ─────────────────────────────────────────────────────────────
+// Значення {location} у шаблоні підставляється з location події.
+// Джерело: реальні eventType з Nova Poshta FullTracking API + стандартні коди.
+const EVENT_TYPE_TRANSLATIONS = {
+    // ── Створення / реєстрація ──
+    'CreatedByRecipient': 'Відправник оформив посилку',
+    'OrderCreated': 'Відправник оформив посилку',
+    'ExpectedArrivalOnTheWarehouse': 'Очікується прибуття у відділення',
+
+    // ── Прийняття ──
+    'ArrivalSenderWarehouse': 'Прийняли у відділенні',
+    'AcceptedAtBranch': 'Прийняли у відділенні',
+    'ReceivedFromSender': 'Прийняли у відправника',
+
+    // ── Відправлення з міста відправника ──
+    'DepartureSenderWarehouse': 'Виїхала з відділення',
+    'DepartureSenderCityTerminal': 'Виїхала з сортувального терміналу',
+    'DepartureSenderCityDepot': 'Виїхала з депо',
+    'ArrivalSenderCityTerminal': 'Прибула до сортувального терміналу',
+    'ArrivalSenderCityDepot': 'Прибула до депо',
+
+    // ── Митниця (міжнародні) ──
+    'DeclarationAddedToManifest': 'Готується до передачі на митницю',
+    'DeclarationArrivalCustomTerminal': 'Очікує митного оформлення',
+    'DeclarationRequireCustomsClearance': 'Відправлення потребує митного оформлення',
+    'DeclarationCustomClearanceIsCompleted': 'Митне оформлення завершено',
+    'DeclarationSentToDestinationCountry': 'Митницю пройдено, в дорозі',
+    'DeclarationCustomsInspection': 'Митний контроль',
+
+    // ── Транзит / місто отримувача ──
+    'ArrivalDestinationTerminal': 'Прибула до терміналу',
+    'DepartureDestinationTerminal': 'Виїхала з терміналу',
+    'ArrivalDestinationCityTerminal': 'Прибула до терміналу',
+    'DepartureDestinationCityTerminal': 'Виїхала з терміналу',
+    'ArrivalDestinationDepot': 'Прибула в депо',
+    'DepartureDestinationDepot': 'Виїхала з депо',
+    'ArrivalDestinationDeliveryService': 'Прибула в депо',
+    'DepartureDestinationDeliveryService': 'Виїхала з депо',
+
+    // ── Прибуття до місця видачі ──
+    'ArrivalRecipientWarehouse': 'Прибула до відділення',
+    'ArrivalRecipientPostomat': 'Прибула до поштомату',
+    'ArrivalCargoInCity': 'Прибула у місто отримувача',
+
+    // ── Доставка / вручення (ФІНАЛЬНІ статуси) ──
+    'ReceivedWarehouse': 'Отримано',
+    'ReceivedPostomat': 'Отримано з поштомату',
+    'Received': 'Отримано',
     'Delivered': 'Доставлено',
-    
-    // ✅ СПЕЦІАЛЬНІ СТАТУСИ
+    'CargoDelivered': 'Доставлено',
+
+    // ── Повернення ──
+    'ReturnCreated': 'Оформлено повернення',
+    'ReturnDelivered': 'Повернення доставлено',
     'Return': 'Повернення',
-    'Returned': 'Повернуто'
 };
 
-// ✅ ТОЧНІ назви локацій з сайту Nova Poshta
+// ─────────────────────────────────────────────────────────────
+// eventType які означають ДОСТАВЛЕНО (фінальний успішний статус)
+// Використовується для маркера "Доставлено" і розрахунку строків.
+// ─────────────────────────────────────────────────────────────
+const DELIVERED_EVENT_TYPES = new Set([
+    'ReceivedWarehouse',
+    'ReceivedPostomat',
+    'Received',
+    'Delivered',
+    'CargoDelivered',
+]);
+
+// statusCode Nova Poshta які означають доставлено (додаткова перевірка)
+const DELIVERED_STATUS_CODES = new Set(['9', '10', '11']);
+
+// ─────────────────────────────────────────────────────────────
+// FALLBACK: старий текстовий переклад для невідомих eventType
+// ─────────────────────────────────────────────────────────────
+const EXACT_TRANSLATIONS = {
+    'Registered and being prepared': 'Відправник оформив посилку',
+    'Accepted at branch': 'Прийняли у відділенні',
+    'Accepted at pickup point': 'Прийнято у пункті прийому',
+    'Left branch': 'Виїхала з відділення',
+    'Left the terminal': 'Виїхала з терміналу',
+    'Arrived at terminal': 'Прибула до терміналу',
+    'Arrived at the terminal': 'Прибула до терміналу',
+    'Delivered': 'Доставлено',
+    'Received': 'Отримано',
+};
+
 const LOCATION_TERMS = {
     'parcel locker': 'поштомат',
-    'depot': 'депо', 
+    'sorting center': 'сортувальний термінал',
+    'address depot': 'депо',
+    'depot': 'депо',
     'terminal': 'термінал',
     'branch': 'відділення',
     'pickup point': 'пункт прийому',
-    'address depot': 'депо',
     'KIT': 'КІТ',
     'warehouse': 'склад',
-    
-    // ✅ МІСТА - як на сайті
     'Kyiv': 'Київ',
-    'Kiev': 'Київ', 
+    'Kiev': 'Київ',
     'Lutsk': 'Луцьк',
     'Chernihiv': 'Чернігів',
     'Lviv': 'Львів',
@@ -61,92 +111,78 @@ const LOCATION_TERMS = {
     'Kharkiv': 'Харків',
     'Odesa': 'Одеса',
     'Sumy': 'Суми',
-    'urban villagе Sad': 'Сад' // ✅ ВИПРАВЛЕНО: коротко як на сайті
 };
 
+// ─────────────────────────────────────────────────────────────
+// ОСНОВНА ФУНКЦІЯ: переклад по eventType з fallback на текст
+// ─────────────────────────────────────────────────────────────
 /**
- * Перекладає статус Nova Poshta ТОЧНО як на офіційному сайті
- * @param {string} englishStatus - Статус англійською
- * @returns {string} Переклад українською
+ * @param {string} originalStatus - текст статусу від API (може бути англ/укр)
+ * @param {string} eventType - машинний код події (напр. 'ReceivedWarehouse')
+ * @returns {string} український статус
  */
-function translateStatus(englishStatus) {
-    if (!englishStatus || typeof englishStatus !== 'string') {
-        return englishStatus || 'Невідомий статус';
+function translateStatus(originalStatus, eventType) {
+    // 1. Пріоритет — маппінг по eventType (надійний)
+    if (eventType && EVENT_TYPE_TRANSLATIONS[eventType]) {
+        return EVENT_TYPE_TRANSLATIONS[eventType];
     }
 
-    // Спочатку шукаємо точний переклад
-    if (EXACT_TRANSLATIONS[englishStatus]) {
-        return EXACT_TRANSLATIONS[englishStatus];
+    // 2. Fallback — точний текстовий переклад
+    if (originalStatus && EXACT_TRANSLATIONS[originalStatus]) {
+        return EXACT_TRANSLATIONS[originalStatus];
     }
 
-    // ✅ PATTERN-BASED переклади в порядку пріоритету
-    let translated = englishStatus;
+    // 3. Fallback — заміна англійських термінів локацій у тексті
+    if (originalStatus && typeof originalStatus === 'string') {
+        let translated = originalStatus;
+        Object.entries(LOCATION_TERMS).forEach(([en, ua]) => {
+            translated = translated.replace(new RegExp(en, 'gi'), ua);
+        });
+        // прибираємо типові англійські дієслова що лишились
+        translated = translated
+            .replace(/^Received at /i, 'Отримано в ')
+            .replace(/^Arrived at /i, 'Прибула до ')
+            .replace(/^Left /i, 'Виїхала з ')
+            .replace(/^Departed /i, 'Виїхала з ');
+        return translated;
+    }
 
-    translated = translated
-        // ✅ МАЙБУТНІ ПОДІЇ (найвищий пріоритет)
-        .replace(/^Will arrive at (.+)$/g, 'Прибуде до $1')
-        .replace(/^Will leave from (.+)$/g, 'Виїде з $1')
-        
-        // ✅ ПОТОЧНІ/МИНУЛІ ПОДІЇ  
-        .replace(/^Leaving the (.+)$/g, 'Виїхала з $1') // ✅ КЛЮЧОВЕ ВИПРАВЛЕННЯ
-        .replace(/^Left the (.+)$/g, 'Виїхала з $1')
-        .replace(/^Left (.+)$/g, 'Виїхала з $1')
-        
-        // Arrived patterns
-        .replace(/^Arrived at the (.+)$/g, 'Прибула до $1')
-        .replace(/^Arrived at (.+)$/g, 'Прибула до $1')
-        
-        // Delivered patterns
-        .replace(/^Delivered at (.+)$/g, 'Доставлено до $1')
-        
-        // Accepted patterns  
-        .replace(/^Accepted at (.+)$/g, 'Прийняли у $1')
-        
-        // Return patterns
-        .replace(/^Return$/g, 'Повернення');
+    return originalStatus || 'Статус оновлюється';
+}
 
-    // ✅ ЗАМІНА локацій та термінів
-    Object.entries(LOCATION_TERMS).forEach(([english, ukrainian]) => {
-        // Глобальна заміна для всіх входжень
-        translated = translated.replace(new RegExp(english, 'gi'), ukrainian);
+/**
+ * @param {string} originalLocation
+ * @returns {string}
+ */
+function translateLocation(originalLocation) {
+    if (!originalLocation || typeof originalLocation !== 'string') {
+        return originalLocation || '';
+    }
+    let translated = originalLocation;
+    Object.entries(LOCATION_TERMS).forEach(([en, ua]) => {
+        translated = translated.replace(new RegExp(en, 'gi'), ua);
     });
-
     return translated;
 }
 
 /**
- * Перекладає локацію точно як на сайті Nova Poshta
- * @param {string} englishLocation - Локація англійською
- * @returns {string} Переклад українською
+ * Чи є подія доставкою (фінальний успішний статус)
+ * @param {string} eventType
+ * @param {string} statusCode
+ * @returns {boolean}
  */
-function translateLocation(englishLocation) {
-    if (!englishLocation || typeof englishLocation !== 'string') {
-        return englishLocation || 'Невідоме місце';
-    }
-
-    let translated = englishLocation;
-
-    // Замінюємо терміни та назви міст
-    Object.entries(LOCATION_TERMS).forEach(([english, ukrainian]) => {
-        translated = translated.replace(new RegExp(english, 'gi'), ukrainian);
-    });
-
-    return translated;
-}
-
-/**
- * Додає новий переклад до словника
- * @param {string} english - Англійський термін
- * @param {string} ukrainian - Український переклад
- */
-function addTranslation(english, ukrainian) {
-    EXACT_TRANSLATIONS[english] = ukrainian;
+function isDeliveredEvent(eventType, statusCode) {
+    if (eventType && DELIVERED_EVENT_TYPES.has(eventType)) return true;
+    if (statusCode && DELIVERED_STATUS_CODES.has(String(statusCode))) return true;
+    return false;
 }
 
 module.exports = {
     translateStatus,
     translateLocation,
-    addTranslation,
-    EXACT_TRANSLATIONS,
-    LOCATION_TERMS
+    isDeliveredEvent,
+    EVENT_TYPE_TRANSLATIONS,
+    DELIVERED_EVENT_TYPES,
+    DELIVERED_STATUS_CODES,
+    LOCATION_TERMS,
 };
