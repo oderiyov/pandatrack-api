@@ -1,5 +1,5 @@
 # PandaTrack API Dockerfile with Playwright Support
-FROM node:20-bookworm
+FROM node:22-bookworm
 
 # Встановлюємо робочу директорію
 WORKDIR /app
