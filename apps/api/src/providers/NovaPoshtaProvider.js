@@ -1,6 +1,6 @@
 // apps/api/src/providers/NovaPoshtaProvider.js - ВИПРАВЛЕНА ВЕРСІЯ
 const BaseProvider = require('./BaseProvider');
-const { translateStatus, translateLocation } = require('../utils/novaPoshtaTranslations');
+const { translateStatus, translateLocation, isDeliveredEvent } = require('../utils/novaPoshtaTranslations');
 
 class NovaPoshtaProvider extends BaseProvider {
     constructor(config) {
@@ -196,11 +196,12 @@ class NovaPoshtaProvider extends BaseProvider {
 
                 const originalStatus = event.eventName || event.event || 'Unknown Event';
                 const originalLocation = this.buildLocationFromEvent(event);
+                const translated = translateStatus(originalStatus, event.event);
 
                 events.push({
                     date: this.parseISODate(event.date),
-                    status: translateStatus(originalStatus),
-                    description: translateStatus(originalStatus),
+                    status: translated,
+                    description: translated,
                     location: translateLocation(originalLocation),
                     statusCode: event.code,
                     eventType: event.event,
@@ -216,11 +217,12 @@ class NovaPoshtaProvider extends BaseProvider {
 
                 const originalStatus = event.eventName || event.event || 'Unknown Event';
                 const originalLocation = this.buildLocationFromEvent(event);
+                const translated = translateStatus(originalStatus, event.event);
 
                 events.push({
                     date: this.parseISODate(event.date),
-                    status: translateStatus(originalStatus),
-                    description: translateStatus(originalStatus),
+                    status: translated,
+                    description: translated,
                     location: translateLocation(originalLocation),
                     statusCode: event.code,
                     eventType: event.event,
