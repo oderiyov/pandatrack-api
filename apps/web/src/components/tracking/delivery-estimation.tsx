@@ -119,22 +119,27 @@ export default function DeliveryEstimation({ trackingData, isDelivered }: Delive
   }
 
   if (isDelivered) {
-    return (
-      <div className="bg-green-50 border border-green-200 rounded-lg p-6">
-        <div className="flex items-center space-x-3">
-          <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-          <div>
-            <h3 className="text-lg font-semibold text-green-900">
-              Посилка доставлена за {trackingData.daysInTransit} днів
-            </h3>
-            <p className="text-green-700">
-              Доставлено {formatUkrainianDate(trackingData.events[0]?.date)}
-            </p>
+      // Знаходимо подію доставки — з найпізнішою датою, а не events[0]
+      const deliveryEvent = [...(trackingData.events || [])]
+        .filter(e => e?.date && !isNaN(new Date(e.date).getTime()))
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
+
+      return (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-6">
+          <div className="flex items-center space-x-3">
+            <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+            <div>
+              <h3 className="text-lg font-semibold text-green-900">
+                Посилка доставлена за {trackingData.daysInTransit} днів
+              </h3>
+              <p className="text-green-700">
+                Доставлено {deliveryEvent ? formatUkrainianDate(deliveryEvent.date) : ''}
+              </p>
+            </div>
           </div>
         </div>
-      </div>
-    )
-  }
+      )
+    }
 
   // In transit estimation
   const isDelayed = (trackingData.daysInTransit || 0) > estimation.max

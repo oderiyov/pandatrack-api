@@ -208,9 +208,8 @@ export default function TrackingTimeline({ events, isDelivered, carrier }: Track
                     </div>
                   )}
                   
-                  {/* Метка "Зараз тут" тільки для неДоставлених */}
-                  {isCurrent && !mainText.toLowerCase().includes('доставлено') && 
-                   !mainText.toLowerCase().includes('видана') && (
+                  {/* Метка "Зараз тут" — тільки якщо посилка ще НЕ доставлена */}
+                  {isCurrent && !isDelivered && (
                     <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full font-medium">
                       Зараз тут
                     </span>
