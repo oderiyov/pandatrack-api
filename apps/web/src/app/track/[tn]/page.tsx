@@ -23,6 +23,8 @@ interface TrackingEvent {
   location?: string
   statusCode?: string
   displayDate?: string
+  eventStatus?: 'future' | 'now' | 'passed'
+  eventType?: string
 }
 
 interface TrackingData {
@@ -275,7 +277,9 @@ export default function TrackingPage() {
           status: event.status,
           description: description || event.status,
           location: event.location,
-          statusCode: event.statusCode
+          statusCode: event.statusCode,
+          eventStatus: (event as TrackingEvent).eventStatus,
+          eventType: (event as TrackingEvent).eventType
         }
       }).filter(event => {
         const testDate = new Date(event.date)

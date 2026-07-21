@@ -13,9 +13,14 @@ const EVENT_TYPE_TRANSLATIONS = {
     'CreatedByRecipient': 'Відправник оформив посилку',
     'OrderCreated': 'Відправник оформив посилку',
     'ExpectedArrivalOnTheWarehouse': 'Очікується прибуття у відділення',
+    'CreateID': 'Відправник оформив посилку',
 
     // ── Прийняття ──
     'ArrivalSenderWarehouse': 'Прийняли у відділенні',
+    'ArrivalSenderPostomat': 'Прийнято в поштоматі',
+    'Departure': 'Виїхала',
+    'ArrivalSenderCityDeliveryService': 'Прибула до депо',
+    'DepartureSenderCityDeliveryService': 'Виїхала з депо',
     'AcceptedAtBranch': 'Прийняли у відділенні',
     'ReceivedFromSender': 'Прийняли у відправника',
 

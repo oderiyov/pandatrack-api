@@ -33,13 +33,11 @@ export default function TrackingTimeline({ events, isDelivered, carrier }: Track
 
   // ✅ ДОДАНО: Фільтрація future подій як у конкурентів
   const realEvents = events.filter(event => {
-    // Убираем события с eventStatus = 'future'
+    // Ховаємо майбутні події (прогноз) — по eventStatus від API
     if (event.eventStatus === 'future') return false
     
-    // Убираем события которые начинаются с "Will" або "Прибуде"
-    if (event.status.toLowerCase().includes('will ')) return false
-    if (event.status.toLowerCase().includes('прибуде')) return false
-    
+    // ...і по eventType який закінчується на "Future" (надійніше за текст)
+    if (event.eventType && event.eventType.endsWith('Future')) return false
     return true
   })
 
