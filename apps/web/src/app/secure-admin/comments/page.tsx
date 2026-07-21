@@ -1,10 +1,10 @@
-// src/app/secure-admin/comments/page.tsx v3.2 - ВИПРАВЛЕНИЙ ПОВНИЙ ФАЙЛ
-// fix
+// src/app/secure-admin/comments/page.tsx v4.0 - РЕАЛЬНА АВТОРИЗАЦІЯ
+// Секрет вводиться адміном, звіряється на бекенді (ADMIN_SECRET), надсилається як Bearer.
 
 'use client';
 /* eslint-disable react/no-unescaped-entities */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 interface Comment {
   id: string;
@@ -36,60 +36,104 @@ interface AdminStats {
 type TabType = 'PENDING' | 'ALL' | 'APPROVED' | 'FLAGGED';
 type SortBy = 'created_at' | 'spam_score' | 'comment_type';
 
-const API_BASE = process.env.NODE_ENV === 'production' 
-  ? 'https://api.pandatrack.com.ua/comments' 
+const API_BASE = process.env.NODE_ENV === 'production'
+  ? 'https://api.pandatrack.com.ua/comments'
   : 'http://localhost:3003';
 
 export default function AdminCommentsPage() {
-  // Authentication
-  const [password, setPassword] = useState('');
+  // Authentication — тепер зберігаємо сам секрет
+  const [secretInput, setSecretInput] = useState('');
+  const [adminSecret, setAdminSecret] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [attempts, setAttempts] = useState(0);
-  
+  const [authError, setAuthError] = useState('');
+
   // Data states
   const [allComments, setAllComments] = useState<Comment[]>([]);
   const [filteredComments, setFilteredComments] = useState<Comment[]>([]);
   const [stats, setStats] = useState<AdminStats | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [processing, setProcessing] = useState<string[]>([]);
-  
+
   // UI states
   const [activeTab, setActiveTab] = useState<TabType>('PENDING');
   const [sortBy, setSortBy] = useState<SortBy>('created_at');
   const [selectedComments, setSelectedComments] = useState<string[]>([]);
   const [showHelp, setShowHelp] = useState(false);
 
-  const correctPassword = 'PandaTrack2024Admin!';
-  const maxAttempts = 3;
+  // Helper — заголовки з реальним токеном
+  const authHeaders = useCallback((extra: Record<string, string> = {}) => ({
+    'Authorization': `Bearer ${adminSecret ?? ''}`,
+    'Accept': 'application/json',
+    ...extra,
+  }), [adminSecret]);
 
-  // Authentication logic
+  // Відновлення сесії з localStorage (зберігаємо секрет)
   useEffect(() => {
-    const savedAuth = localStorage.getItem('admin_session');
-    const savedTime = localStorage.getItem('admin_session_time');
-    
-    if (savedAuth && savedTime) {
-      const sessionTime = parseInt(savedTime);
-      const now = Date.now();
-      if (now - sessionTime < 8 * 60 * 60 * 1000) {
+    const saved = localStorage.getItem('admin_secret');
+    const savedTime = localStorage.getItem('admin_secret_time');
+    if (saved && savedTime) {
+      const age = Date.now() - parseInt(savedTime);
+      if (age < 8 * 60 * 60 * 1000) {
+        setAdminSecret(saved);
         setIsAuthenticated(true);
       } else {
-        localStorage.removeItem('admin_session');
-        localStorage.removeItem('admin_session_time');
+        localStorage.removeItem('admin_secret');
+        localStorage.removeItem('admin_secret_time');
       }
     }
   }, []);
 
+  const loadAllComments = useCallback(async () => {
+    if (!adminSecret) return;
+    try {
+      setLoading(true);
+      const response = await fetch(`${API_BASE}/api/admin/comments/all?limit=100`, {
+        headers: authHeaders(),
+      });
+      if (response.status === 401) {
+        handleLogout();
+        setAuthError('Сесія недійсна. Увійдіть знову.');
+        return;
+      }
+      if (response.ok) {
+        const data = await response.json();
+        setAllComments(data.comments || []);
+      } else {
+        console.error('Failed to load comments:', response.statusText);
+      }
+    } catch (error) {
+      console.error('Помилка завантаження коментарів:', error);
+    } finally {
+      setLoading(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [adminSecret, authHeaders]);
+
+  const loadStats = useCallback(async () => {
+    if (!adminSecret) return;
+    try {
+      const response = await fetch(`${API_BASE}/api/admin/stats`, {
+        headers: authHeaders(),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setStats(data);
+      }
+    } catch {
+      console.error('Помилка завантаження статистики');
+    }
+  }, [adminSecret, authHeaders]);
+
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && adminSecret) {
       loadAllComments();
       loadStats();
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, adminSecret, loadAllComments, loadStats]);
 
   // Filter comments based on active tab
   useEffect(() => {
     let filtered = [...allComments];
-    
     switch (activeTab) {
       case 'PENDING':
         filtered = filtered.filter(c => !c.approved);
@@ -102,11 +146,8 @@ export default function AdminCommentsPage() {
         break;
       case 'ALL':
       default:
-        // Показуємо всі коментарі
         break;
     }
-    
-    // Apply sorting
     filtered.sort((a, b) => {
       switch (sortBy) {
         case 'spam_score':
@@ -118,7 +159,6 @@ export default function AdminCommentsPage() {
           return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       }
     });
-    
     setFilteredComments(filtered);
   }, [allComments, activeTab, sortBy]);
 
@@ -126,119 +166,64 @@ export default function AdminCommentsPage() {
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
       if (!isAuthenticated) return;
-      
       if (e.ctrlKey && !e.shiftKey) {
-        switch(e.key) {
-          case 'a': // Ctrl+A - Select all visible
-            e.preventDefault();
-            setSelectedComments(filteredComments.map(c => c.id));
-            break;
-          case 'r': // Ctrl+R - Refresh
-            e.preventDefault();
-            loadAllComments();
-            break;
-          case '1': // Ctrl+1 - Pending tab
-            e.preventDefault();
-            setActiveTab('PENDING');
-            break;
-          case '2': // Ctrl+2 - All tab
-            e.preventDefault();
-            setActiveTab('ALL');
-            break;
-          case '3': // Ctrl+3 - Approved tab
-            e.preventDefault();
-            setActiveTab('APPROVED');
-            break;
-          case '4': // Ctrl+4 - Flagged tab
-            e.preventDefault();
-            setActiveTab('FLAGGED');
-            break;
-          case 'h': // Ctrl+H - Toggle help
-            e.preventDefault();
-            setShowHelp(prev => !prev);
-            break;
+        switch (e.key) {
+          case 'a': e.preventDefault(); setSelectedComments(filteredComments.map(c => c.id)); break;
+          case 'r': e.preventDefault(); loadAllComments(); break;
+          case '1': e.preventDefault(); setActiveTab('PENDING'); break;
+          case '2': e.preventDefault(); setActiveTab('ALL'); break;
+          case '3': e.preventDefault(); setActiveTab('APPROVED'); break;
+          case '4': e.preventDefault(); setActiveTab('FLAGGED'); break;
+          case 'h': e.preventDefault(); setShowHelp(prev => !prev); break;
         }
       }
-      
-      // Escape - Clear selection
-      if (e.key === 'Escape') {
-        setSelectedComments([]);
-      }
+      if (e.key === 'Escape') setSelectedComments([]);
     };
-    
     document.addEventListener('keydown', handleKeyPress);
     return () => document.removeEventListener('keydown', handleKeyPress);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredComments, isAuthenticated]);
 
-  const handlePasswordSubmit = (e: React.FormEvent) => {
+  // Логін — перевіряємо секрет РЕАЛЬНИМ запитом до бекенду
+  const handleSecretSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (attempts >= maxAttempts) {
-      alert('Перевищено кількість спроб. Перезавантажте сторінку.');
-      return;
-    }
+    setAuthError('');
+    if (!secretInput.trim()) return;
 
-    if (password === correctPassword) {
-      setIsAuthenticated(true);
-      localStorage.setItem('admin_session', 'true');
-      localStorage.setItem('admin_session_time', Date.now().toString());
-      setPassword('');
-      setAttempts(0);
-    } else {
-      setAttempts(prev => prev + 1);
-      setPassword('');
-      alert(`Невірний пароль. Залишилось спроб: ${maxAttempts - attempts - 1}`);
+    try {
+      const response = await fetch(`${API_BASE}/api/admin/stats`, {
+        headers: {
+          'Authorization': `Bearer ${secretInput}`,
+          'Accept': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        // Секрет валідний
+        setAdminSecret(secretInput);
+        setIsAuthenticated(true);
+        localStorage.setItem('admin_secret', secretInput);
+        localStorage.setItem('admin_secret_time', Date.now().toString());
+        setSecretInput('');
+      } else if (response.status === 401) {
+        setAuthError('Невірний секрет доступу');
+        setSecretInput('');
+      } else {
+        setAuthError(`Помилка сервера: ${response.status}`);
+      }
+    } catch {
+      setAuthError('Не вдалося зʼєднатися з сервером');
     }
   };
 
   const handleLogout = () => {
     setIsAuthenticated(false);
-    localStorage.removeItem('admin_session');
-    localStorage.removeItem('admin_session_time');
+    setAdminSecret(null);
+    localStorage.removeItem('admin_secret');
+    localStorage.removeItem('admin_secret_time');
     setAllComments([]);
     setStats(null);
     setSelectedComments([]);
-  };
-
-  const loadAllComments = async () => {
-    try {
-      setLoading(true);
-      const response = await fetch(`${API_BASE}/api/admin/comments/all?limit=100`, {
-        headers: {
-          'Authorization': `Bearer fake_token`,
-          'Accept': 'application/json',
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setAllComments(data.comments || []);
-      } else {
-        console.error('Failed to load comments:', response.statusText);
-      }
-    } catch (error) {
-      console.error('Помилка завантаження коментарів:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadStats = async () => {
-    try {
-      const response = await fetch(`${API_BASE}/api/admin/stats`, {
-        headers: {
-          'Authorization': `Bearer fake_token`,
-          'Accept': 'application/json',
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setStats(data);
-      }
-    } catch {
-      console.error('Помилка завантаження статистики');
-    }
   };
 
   const approveComment = async (commentId: string) => {
@@ -246,20 +231,13 @@ export default function AdminCommentsPage() {
     try {
       const response = await fetch(`${API_BASE}/api/admin/comments/${commentId}/approve`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer fake_token`,
-          'Accept': 'application/json',
-        },
+        headers: authHeaders(),
       });
-
       if (response.ok) {
-        // Оновлюємо локальний стан
-        setAllComments(prev => 
-          prev.map(c => 
-            c.id === commentId 
-              ? { ...c, approved: true, approved_at: new Date().toISOString() }
-              : c
-          )
+        setAllComments(prev =>
+          prev.map(c => c.id === commentId
+            ? { ...c, approved: true, approved_at: new Date().toISOString() }
+            : c)
         );
         setSelectedComments(prev => prev.filter(id => id !== commentId));
         loadStats();
@@ -275,17 +253,12 @@ export default function AdminCommentsPage() {
 
   const deleteComment = async (commentId: string) => {
     if (!confirm('Ви впевнені? Коментар буде видалено назавжди.')) return;
-  
     setProcessing(prev => [...prev, commentId]);
     try {
       const response = await fetch(`${API_BASE}/api/admin/comments/${commentId}/delete`, {
         method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer fake_token`,
-          'Accept': 'application/json',
-        },
+        headers: authHeaders(),
       });
-
       if (response.ok) {
         setAllComments(prev => prev.filter(c => c.id !== commentId));
         setSelectedComments(prev => prev.filter(id => id !== commentId));
@@ -302,27 +275,18 @@ export default function AdminCommentsPage() {
 
   const bulkApprove = async (commentIds: string[]) => {
     if (commentIds.length === 0) return;
-
     try {
       const response = await fetch(`${API_BASE}/api/admin/comments/bulk-approve`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer fake_token`,
-          'Accept': 'application/json',
-        },
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ commentIds }),
       });
-
       if (response.ok) {
         const data = await response.json();
-        // Оновлюємо локальний стан
-        setAllComments(prev => 
-          prev.map(c => 
-            commentIds.includes(c.id) 
-              ? { ...c, approved: true, approved_at: new Date().toISOString() }
-              : c
-          )
+        setAllComments(prev =>
+          prev.map(c => commentIds.includes(c.id)
+            ? { ...c, approved: true, approved_at: new Date().toISOString() }
+            : c)
         );
         setSelectedComments([]);
         loadStats();
@@ -336,31 +300,24 @@ export default function AdminCommentsPage() {
   const resolveFlaggedComment = async (commentId: string, action: 'approve' | 'delete') => {
     const comment = allComments.find(c => c.id === commentId);
     if (!comment) return;
-
-    const confirmMsg = action === 'delete' 
+    const confirmMsg = action === 'delete'
       ? `Видалити коментар зі скаргою '${comment.flagged_reason}'?`
       : `Схвалити коментар попри скаргу '${comment.flagged_reason}'?`;
-      
     if (!confirm(confirmMsg)) return;
 
     if (action === 'delete') {
       await deleteComment(commentId);
     } else {
       await approveComment(commentId);
-      // Також очищаємо flag
-      setAllComments(prev => 
-        prev.map(c => 
-          c.id === commentId 
-            ? { ...c, flagged: false, flagged_reason: undefined }
-            : c
-        )
+      setAllComments(prev =>
+        prev.map(c => c.id === commentId
+          ? { ...c, flagged: false, flagged_reason: undefined }
+          : c)
       );
     }
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString('uk-UA');
-  };
+  const formatDate = (dateString: string) => new Date(dateString).toLocaleString('uk-UA');
 
   const getSpamScoreColor = (score: number) => {
     if (score < 0.3) return 'text-green-600 bg-green-50';
@@ -378,14 +335,12 @@ export default function AdminCommentsPage() {
     }
   };
 
-  const getTabCounts = () => {
-    return {
-      PENDING: allComments.filter(c => !c.approved).length,
-      ALL: allComments.length,
-      APPROVED: allComments.filter(c => c.approved && !c.flagged).length,
-      FLAGGED: allComments.filter(c => c.flagged).length
-    };
-  };
+  const getTabCounts = () => ({
+    PENDING: allComments.filter(c => !c.approved).length,
+    ALL: allComments.length,
+    APPROVED: allComments.filter(c => c.approved && !c.flagged).length,
+    FLAGGED: allComments.filter(c => c.flagged).length
+  });
 
   // Login form
   if (!isAuthenticated) {
@@ -393,33 +348,30 @@ export default function AdminCommentsPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="max-w-md w-full bg-white rounded-lg shadow-md p-6">
           <h1 className="text-2xl font-bold text-center mb-6">Адмін панель PandaTrack</h1>
-          <form onSubmit={handlePasswordSubmit}>
+          <form onSubmit={handleSecretSubmit}>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Пароль адміністратора
+                  Секрет доступу
                 </label>
                 <input
                   type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  value={secretInput}
+                  onChange={(e) => setSecretInput(e.target.value)}
                   required
+                  autoComplete="off"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Введіть пароль"
-                  disabled={attempts >= maxAttempts}
+                  placeholder="Введіть секрет доступу"
                 />
               </div>
               <button
                 type="submit"
-                disabled={attempts >= maxAttempts}
-                className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors disabled:bg-gray-400"
+                className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors"
               >
-                {attempts >= maxAttempts ? 'Заблоковано' : 'Увійти'}
+                Увійти
               </button>
-              {attempts > 0 && (
-                <p className="text-red-600 text-sm text-center">
-                  Спроб залишилось: {maxAttempts - attempts}
-                </p>
+              {authError && (
+                <p className="text-red-600 text-sm text-center">{authError}</p>
               )}
             </div>
           </form>
@@ -458,7 +410,6 @@ export default function AdminCommentsPage() {
         </div>
       </header>
 
-      {/* Help overlay */}
       {showHelp && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
@@ -483,7 +434,6 @@ export default function AdminCommentsPage() {
       )}
 
       <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-        {/* Statistics */}
         {stats && (
           <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
             <div className="bg-white p-6 rounded-lg shadow">
@@ -509,10 +459,8 @@ export default function AdminCommentsPage() {
           </div>
         )}
 
-        {/* Tab navigation */}
         <div className="bg-white rounded-lg shadow mb-6">
           <div className="p-6">
-            {/* Tab buttons */}
             <div className="flex flex-wrap gap-2 mb-4">
               {[
                 { key: 'PENDING', label: 'На модерації', count: tabCounts.PENDING },
@@ -534,7 +482,6 @@ export default function AdminCommentsPage() {
               ))}
             </div>
 
-            {/* Sort and bulk actions */}
             <div className="flex justify-between items-center">
               <div className="flex items-center space-x-4">
                 <select
@@ -546,7 +493,6 @@ export default function AdminCommentsPage() {
                   <option value="spam_score">За spam score</option>
                   <option value="comment_type">За типом</option>
                 </select>
-                
                 {selectedComments.length > 0 && (
                   <span className="text-sm text-gray-600">
                     Вибрано: {selectedComments.length}
@@ -563,7 +509,6 @@ export default function AdminCommentsPage() {
                     Схвалити вибрані
                   </button>
                 )}
-                
                 {selectedComments.length > 0 && (
                   <button
                     onClick={() => setSelectedComments([])}
@@ -572,7 +517,6 @@ export default function AdminCommentsPage() {
                     Очистити
                   </button>
                 )}
-                
                 <button
                   onClick={loadAllComments}
                   className="bg-gray-600 text-white px-4 py-2 rounded text-sm hover:bg-gray-700"
@@ -584,7 +528,6 @@ export default function AdminCommentsPage() {
           </div>
         </div>
 
-        {/* Comments list */}
         <div className="bg-white shadow rounded-lg">
           <div className="px-6 py-4 border-b border-gray-200">
             <h2 className="text-lg font-medium">
@@ -609,7 +552,6 @@ export default function AdminCommentsPage() {
               {filteredComments.map((comment) => (
                 <div key={comment.id} className="p-6">
                   <div className="flex items-start space-x-4">
-                    {/* Checkbox для вибору */}
                     <input
                       type="checkbox"
                       checked={selectedComments.includes(comment.id)}
@@ -622,9 +564,8 @@ export default function AdminCommentsPage() {
                       }}
                       className="mt-1"
                     />
-                    
+
                     <div className="flex-1">
-                      {/* Заголовок коментаря */}
                       <div className="flex justify-between items-start mb-3">
                         <div>
                           <div className="flex items-center space-x-2 mb-2">
@@ -657,14 +598,12 @@ export default function AdminCommentsPage() {
                         </div>
                       </div>
 
-                      {/* Текст коментаря */}
                       <div className="mb-4 bg-gray-50 rounded-lg p-3">
                         <p className="text-gray-800 whitespace-pre-wrap text-sm">
                           {comment.content}
                         </p>
                       </div>
 
-                      {/* Скарга (якщо є) */}
                       {comment.flagged && comment.flagged_reason && (
                         <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-3">
                           <p className="text-sm font-medium text-red-800 mb-1">Причина скарги:</p>
@@ -672,7 +611,6 @@ export default function AdminCommentsPage() {
                         </div>
                       )}
 
-                      {/* Дії */}
                       <div className="flex space-x-2">
                         {!comment.approved && (
                           <button
@@ -683,7 +621,7 @@ export default function AdminCommentsPage() {
                             {processing.includes(comment.id) ? 'Обробка...' : 'Схвалити'}
                           </button>
                         )}
-                        
+
                         {comment.flagged && (
                           <>
                             <button
@@ -702,7 +640,7 @@ export default function AdminCommentsPage() {
                             </button>
                           </>
                         )}
-                        
+
                         <button
                           onClick={() => deleteComment(comment.id)}
                           disabled={processing.includes(comment.id)}
