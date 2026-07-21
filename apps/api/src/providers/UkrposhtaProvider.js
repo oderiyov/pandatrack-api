@@ -27,8 +27,8 @@ class UkrposhtaProvider extends BaseProvider {
 
         // ВИПРАВЛЕНО: Правильний порядок стратегій - повна історія спочатку
         const strategies = [
-            () => this.tryFullEndpoint(trackingNumber),      // 1. /statuses - ПОВНА ІСТОРІЯ
-            () => this.tryFullEndpointUA(trackingNumber),    // 2. /statuses українською 
+            () => this.tryFullEndpointUA(trackingNumber),      // 1. /statuses українською - РІДНІ укр. назви локацій
+            () => this.tryFullEndpoint(trackingNumber),    // 2. /statuses англійською - fallback з перекладом
             () => this.tryLastEndpoint(trackingNumber),      // 3. /statuses/last - fallback
             () => this.tryWithoutLang(trackingNumber),       // 4. без lang параметра
             () => this.tryBulkEndpoint([trackingNumber])     // 5. POST запит
