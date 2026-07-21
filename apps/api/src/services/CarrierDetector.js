@@ -97,8 +97,6 @@ class CarrierDetector {
             'meest': [
                 // Міжнародні CV formats
                 { pattern: /^CV\d{9}(US|CA|PL|UA|GB|DE|FR|IT|ES|NL|BE|AT|CZ)$/i, confidence: 'high', stage: 'international' },
-                { pattern: /^RK\d{9}[A-Z]{2}$/i, confidence: 'high', stage: 'international' },
-                { pattern: /^RB\d{9}[A-Z]{2}$/i, confidence: 'high', stage: 'international' },
                 
                 // Внутрішні формати
                 { pattern: /^719-\d{7}$/, confidence: 'high', stage: 'domestic' },

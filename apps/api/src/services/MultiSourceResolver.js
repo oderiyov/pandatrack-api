@@ -404,11 +404,13 @@ class MultiSourceResolver {
             )
             .sort((a, b) => new Date(a.date) - new Date(b.date));
 
-        // Видаляємо дублікати
+        // Видаляємо дублікати — подія унікальна за датою + статусом + statusCode.
+        // НЕ схлопуємо події з однаковою датою але різним статусом (буває у міжнародних)
         return allEvents.filter((event, index, arr) => {
             return index === arr.findIndex(e => 
-                Math.abs(new Date(e.date) - new Date(event.date)) < 60000 && // В межах хвилини
-                this.normalizeStatus(e.status) === this.normalizeStatus(event.status)
+                new Date(e.date).getTime() === new Date(event.date).getTime() &&
+                this.normalizeStatus(e.status) === this.normalizeStatus(event.status) &&
+                (e.statusCode || '') === (event.statusCode || '')
             );
         });
     }
