@@ -213,7 +213,17 @@ class CarrierDetector {
             }
         }
 
-        return sources;
+        // Дедуплікація джерел по code — один перевізник = одне джерело
+        // (перевізник може матчитись кількома власними патернами + international)
+        const uniqueSources = [];
+        const seenCodes = new Set();
+        for (const source of sources) {
+            if (!seenCodes.has(source.code)) {
+                seenCodes.add(source.code);
+                uniqueSources.push(source)
+            }
+        }
+        return uniqueSources;        
     }
 
     getConfidenceScore(confidence) {
