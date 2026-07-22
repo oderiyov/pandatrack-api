@@ -5,9 +5,14 @@ export default function robots(): MetadataRoute.Robots {
     rules: [
       {
         userAgent: '*',
-        disallow: '/',        // ЗАБОРОНИТИ все
+        allow: '/',
+        disallow: [
+          '/track/',          // сторінки результатів трекінгу (noindex, дублікати, приватність)
+          '/secure-admin/',   // адмінка
+          '/api/',            // API endpoints
+        ],
       },
     ],
-    sitemap: '',             // Прибрати sitemap
+    sitemap: 'https://pandatrack.com.ua/sitemap.xml',
   }
 }
