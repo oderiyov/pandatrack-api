@@ -8,196 +8,212 @@ import { Footer } from '@/components/footer'
 import { PandaTrackComments } from '@/components/comments/pandatrack-comments'
 
 export const metadata: Metadata = {
-  title: 'Укрпошта відстеження посилок за трек номером | PandaTrack',
-  description: 'Відстежити посилку Укрпошта за номером. Національна поштова служба України для внутрішніх та міжнародних відправлень.',
-  keywords: 'укрпошта відстеження, ukrposhta tracking, національна пошта україни',
+  title: 'Укрпошта відстежити посилку за номером — трекінг Укрпошти онлайн',
+  description: 'Відстеження посилок Укрпошти за номером накладної онлайн. Введіть 13-значний трек-номер і дізнайтесь де ваша посилка. Швидко, безкоштовно, українською.',
+  keywords: ['укрпошта відстежити', 'відстеження посилки укрпошта', 'укрпошта трекінг', 'відстежити посилку укрпошта за номером', 'укрпошта відстеження посилок'],
+  alternates: {
+    canonical: '/couriers/ukrposhta',
+  },
   openGraph: {
-    title: 'Укрпошта відстеження посилок | PandaTrack',
-    description: 'Відстежити посилку Укрпошта за трек номером. Актуальна інформація про статус доставки.',
+    title: 'Укрпошта відстежити посилку за номером — трекінг Укрпошти',
+    description: 'Відстеження посилок Укрпошти за номером накладної онлайн. Швидко та безкоштовно.',
+    url: 'https://pandatrack.com.ua/couriers/ukrposhta',
     type: 'website',
     locale: 'uk_UA',
-  }
+  },
+}
+
+// FAQ дані — на основі реальних пошукових запитів користувачів
+const faqItems = [
+  {
+    question: 'Як відстежити посилку Укрпошти за номером?',
+    answer: 'Введіть 13-значний трек-номер у поле відстеження вгорі сторінки та натисніть «Відстежити». За кілька секунд ви побачите поточний статус і весь шлях посилки — від приймання до вручення.',
+  },
+  {
+    question: 'Скільки цифр у трек-номері Укрпошти?',
+    answer: 'Внутрішні відправлення Укрпошти мають номер із 13 цифр (наприклад, 0500123456789). Міжнародні відправлення можуть мати формат із літер і цифр — наприклад RA123456789UA або RK123456789LV.',
+  },
+  {
+    question: 'Чи можна відстежити посилку Укрпошти за номером телефону?',
+    answer: 'Ні, Укрпошта не дозволяє відстежувати відправлення за номером телефону. Пошук доступний лише за трек-номером із чека або підтвердження замовлення. За номером телефону можна звернутися лише на гарячу лінію Укрпошти 0 800 300 545.',
+  },
+  {
+    question: 'Чи можна знайти посилку Укрпошти за прізвищем?',
+    answer: 'Ні, відстеження за прізвищем отримувача чи відправника недоступне. Укрпошта щодня обробляє тисячі відправлень, тому єдиний спосіб пошуку — унікальний трек-номер.',
+  },
+  {
+    question: 'Скільки йде посилка Укрпоштою по Україні?',
+    answer: 'Терміни залежать від регіону: по місту — 3-4 дні, по області — до 5 днів, по Україні — до 14 днів. Міжнародні відправлення залежать від місцевої пошти країни призначення.',
+  },
+  {
+    question: 'Скільки зберігається посилка у відділенні Укрпошти?',
+    answer: 'Посилка безкоштовно зберігається у відділенні протягом 5 робочих днів. Далі може нараховуватися плата за зберігання. Радимо забирати відправлення одразу після отримання повідомлення.',
+  },
+  {
+    question: 'Чому статус посилки Укрпошти довго не оновлюється?',
+    answer: 'Причини бувають різні: вихідні дні, митні процедури для міжнародних відправлень, технічні затримки. Для міжнародних посилок Укрпошта бачить рух тільки до передачі місцевій пошті іншої країни.',
+  },
+]
+
+// JSON-LD structured data для FAQ (Google rich snippets)
+const faqSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: faqItems.map((item) => ({
+    '@type': 'Question',
+    name: item.question,
+    acceptedAnswer: {
+      '@type': 'Answer',
+      text: item.answer,
+    },
+  })),
+}
+
+// Breadcrumb schema
+const breadcrumbSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'BreadcrumbList',
+  itemListElement: [
+    { '@type': 'ListItem', position: 1, name: 'Головна', item: 'https://pandatrack.com.ua' },
+    { '@type': 'ListItem', position: 2, name: 'Перевізники', item: 'https://pandatrack.com.ua/couriers' },
+    { '@type': 'ListItem', position: 3, name: 'Укрпошта', item: 'https://pandatrack.com.ua/couriers/ukrposhta' },
+  ],
 }
 
 export default function UkrposhtaPage() {
   return (
-    <div className="min-h-screen bg-[#f5f5f5] text-[#333037] font-sans">
+    <div className="min-h-screen bg-[#f5f5f5]">
+      {/* JSON-LD structured data */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
+      />
+
       <Header />
-      
-      {/* Carrier Info Block */}
-      <section className="bg-[#f0e5d9] py-12 border-b border-gray-200">
-        <div className="container mx-auto px-4">
-          <div className="max-w-4xl mx-auto">
-            <div className="flex items-start space-x-6 mb-8">
-              <div className="flex-shrink-0">
-                <Image
-                  src="/logos/ukrposhta.svg"
-                  alt="Укрпошта логотип"
-                  width={64}
-                  height={64}
-                  className="rounded-lg"
-                  priority
-                />
-              </div>
-              <div className="flex-1">
-                <h2 className="text-3xl font-bold text-[#333037] mb-2">Укрпошта</h2>
-                <p className="text-lg text-[#333037]/70 mb-4">Національна поштова служба України</p>
-                <div className="text-sm text-[#333037]/70 space-y-1">
-                  <p>Відгуки • 0800-300-545 • <a href="https://ukrposhta.ua" target="_blank" rel="noopener" className="text-blue-600 hover:underline">ukrposhta.ua</a></p>
-                </div>
-              </div>
-            </div>
-            
-            <TrackingForm 
-              placeholder="Введіть трек номер (наприклад: 0501635744099)"
-            />
-            
-            <div className="mt-4 text-sm text-[#333037]/70 text-center">
-              <p>Приклади номерів: 0501635744099 (внутрішні), XX051147539UA (міжнародні)</p>
-            </div>
-          </div>
-        </div>
-      </section>
 
-      {/* Main Content */}
-      <main className="bg-[#f5f5f5] py-12">
-        <div className="container mx-auto px-4">
-          <div className="max-w-4xl mx-auto">
-            
-            <h1 className="text-3xl md:text-4xl font-bold mb-8 text-[#333037]">
-              Укрпошта - відстежити посилку
+      <main className="max-w-4xl mx-auto px-4 py-8">
+        {/* Breadcrumbs */}
+        <nav className="text-sm text-[#333037]/60 mb-6" aria-label="Хлібні крихти">
+          <Link href="/" className="hover:text-[#333037]">Головна</Link>
+          {' / '}
+          <Link href="/couriers" className="hover:text-[#333037]">Перевізники</Link>
+          {' / '}
+          <span className="text-[#333037]">Укрпошта</span>
+        </nav>
+
+        {/* H1 + intro */}
+        <div className="flex items-center gap-4 mb-6">
+          <Image
+            src="/logos/ukrposhta.svg"
+            alt="Укрпошта логотип"
+            width={56}
+            height={56}
+            className="rounded"
+          />
+          <div>
+            <h1 className="text-3xl font-bold text-[#333037]">
+              Відстеження посилок Укрпошти
             </h1>
-
-            {/* How to Track */}
-            <div className="mb-12">
-              <div className="bg-white rounded-lg shadow-sm p-8">
-                <p className="text-[#333037]/80 leading-relaxed mb-6">
-                  Для відстеження Укрпошти потрібен трек номер (0501635744099 - для відправлень по Україні, 
-                  та XX051147539UA - для міжнародних посилок), знайти його можна в накладній, якщо ви робили 
-                  замовлення в інтернет магазині, то шукайте трек номер на сторінці замовлення або на вашій 
-                  електронній пошті. Якщо ви не можете знайти інформацію про відстеження Укрпошти, зверніться 
-                  до продавця або в інтернет-магазин для отримання додаткової інформації про посилку.
-                </p>
-              </div>
-            </div>
-
-            {/* How to Track Section */}
-            <div className="mb-12">
-              <div className="bg-[#eaf0f5] rounded-lg p-8">
-                <h2 className="text-2xl font-bold mb-6">Як відстежити посилку Укрпошти?</h2>
-                <p className="text-[#333037]/80 leading-relaxed">
-                  Відстеження Укрпошти дозволяє дізнатися місцезнаходження чи статус будь-якої посилки, яка була 
-                  відправлена Україною чи за кордон. Щоб відстежити посилку Укрпошти, вам просто потрібно зайти 
-                  на наш сайт, перейти в розділ відстеження, а потім ви побачите поле пошуку, де потрібно ввести 
-                  номер відстеження вашої посилки. Введіть 13-значний трек номер та натисніть кнопку «Відстежити». 
-                  Через кілька секунд ви побачите на своєму екрані місцезнаходження чи останній статус вашої посилки.
-                </p>
-              </div>
-            </div>
-
-            {/* Delivery Terms */}
-            <div className="mb-12">
-              <div className="bg-white rounded-lg shadow-sm p-8">
-                <h2 className="text-2xl font-bold mb-6">Терміни доставки Укрпошти</h2>
-                <p className="text-[#333037]/80 leading-relaxed mb-6">
-                  Терміни доставки Укрпошти в Україні залежать від регіону та від того, живете ви у селі чи місті. 
-                  По Україні - 14 днів, по області - 5 днів, а по місту 3-4 дні. За межами України терміни доставки 
-                  залежать від місцевої служби доставки, тому що Укрпошта бачить вашу посилку тільки до митниці, 
-                  перш ніж передати її місцевій поштовій службі в іншій країні.
-                </p>
-                
-                <div className="bg-[#f5f5f5] rounded-lg p-6">
-                  <h3 className="text-lg font-semibold mb-4">Середній час доставки з Китаю</h3>
-                  <p className="text-[#333037]/80">
-                    Середній час доставки посилок з китаю з магазинів 
-                    <Link href="/stores/aliexpress" className="text-blue-600 hover:underline mx-1">AliExpress</Link> 
-                    та Joom в 2024 - 20-40 днів.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Storage Terms */}
-            <div className="mb-12">
-              <div className="bg-[#eaf0f5] rounded-lg p-8">
-                <h2 className="text-2xl font-bold mb-6">Скільки Укрпошта зберігає посилку?</h2>
-                <p className="text-[#333037]/80 leading-relaxed">
-                  Час, протягом якого Укрпошта зберігатиме вашу посилку, залежатиме від типу посилки та кількості 
-                  вільного місця у поштовому відділенні для зберігання, тому найкраще зателефонувати до місцевого 
-                  поштового відділення Укрпошти для отримання додаткової інформації (зазвичай це 30 днів). Якщо ви 
-                  не можете забрати посилку або Укрпошта не може її вам доставити, то потрібно буде заплатити за 
-                  відправку посилки назад.
-                </p>
-              </div>
-            </div>
-
-            {/* About Ukrposhta */}
-            <div className="mb-12">
-              <div className="bg-white rounded-lg shadow-sm p-8">
-                <h2 className="text-2xl font-bold mb-6">Про Укрпошту</h2>
-                <p className="text-[#333037]/80 leading-relaxed mb-6">
-                  Укрпошта - єдина державна компанія, яка приймає, сортує, перевозить, доставляє, організовує, 
-                  аналізує та задовольняє усі потреби української пошти. Вона також відома як головна поштова 
-                  служба країни. На даний момент компанія має більше 10 тисяч поштових відділень в Україні, 
-                  що дозволяє їй працювати ефективно та безпечно по всій країні.
-                </p>
-                
-                <p className="text-[#333037]/80 leading-relaxed">
-                  Понад 70 000 співробітників підготовлені та навчені задовольняти будь-які потреби клієнтів, 
-                  з добротою та повагою. Бізнес зосереджений на поштових послугах, логістиці, фінансах і комерції. 
-                  Укрпошта надає понад 50 різноманітних послуг для фізичних осіб та підприємств.
-                </p>
-              </div>
-            </div>
-
-            {/* Contact Information */}
-            <div className="mb-12">
-              <div className="bg-[#eaf0f5] rounded-lg p-8">
-                <h2 className="text-2xl font-bold mb-6">Контактна інформація</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <h3 className="font-semibold mb-3">Основні контакти</h3>
-                    <div className="space-y-2 text-[#333037]/80">
-                      <p><strong>Сайт:</strong> <a href="https://ukrposhta.ua" target="_blank" rel="noopener" className="text-blue-600 hover:underline">ukrposhta.ua</a></p>
-                      <p><strong>Телефон:</strong> 0800-300-545</p>
-                      <p><strong>Email:</strong> ukrposhta@ukrposhta.ua</p>
-                    </div>
-                  </div>
-                  <div>
-                    <h3 className="font-semibold mb-3">Головний офіс</h3>
-                    <p className="text-[#333037]/80">Київ, вул. Хрещатик-22</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Search Section */}
-            <div className="mb-12">
-              <div className="bg-white rounded-lg shadow-sm p-8 text-center">
-                <h2 className="text-2xl font-bold mb-6">УкрПошта - пошук посилок та відправлень</h2>
-                <p className="text-[#333037]/80 leading-relaxed">
-                  В коментарях ви можете запитати про відстеження посилки УкрПошта.
-                </p>
-              </div>
-            </div>
-
+            <p className="text-[#333037]/70">
+              Введіть трек-номер і дізнайтесь де ваша посилка
+            </p>
           </div>
         </div>
+
+        {/* Tracking form — робочий компонент */}
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
+          <TrackingForm
+            placeholder="Введіть 13-значний трек-номер Укрпошти"
+          />
+        </div>
+
+        {/* Інфо-контент */}
+        <article className="bg-white rounded-lg shadow-sm p-6 mb-8 prose prose-sm max-w-none">
+          <h2 className="text-2xl font-bold text-[#333037] mb-4">
+            Як відстежити посилку Укрпошти за номером
+          </h2>
+          <p className="text-[#333037]/80 mb-4">
+            Щоб відстежити відправлення Укрпошти, введіть трек-номер у поле вище та
+            натисніть «Відстежити». PandaTrack покаже актуальний статус посилки українською —
+            від приймання у відділенні до вручення одержувачу. Сервіс працює безкоштовно
+            та не потребує реєстрації.
+          </p>
+          <p className="text-[#333037]/80 mb-4">
+            Трек-номер внутрішніх відправлень Укрпошти складається з <strong>13 цифр</strong>
+            {' '}(наприклад, 0500123456789). Ви знайдете його на чеку, який видають при
+            відправленні, або в підтвердженні замовлення з інтернет-магазину.
+          </p>
+
+          <h2 className="text-2xl font-bold text-[#333037] mt-8 mb-4">
+            Скільки йде посилка Укрпоштою
+          </h2>
+          <p className="text-[#333037]/80 mb-4">
+            Терміни доставки Укрпошти залежать від відстані та населеного пункту:
+          </p>
+          <ul className="list-disc pl-6 text-[#333037]/80 mb-4 space-y-1">
+            <li>по місту — 3-4 дні;</li>
+            <li>по області — до 5 днів;</li>
+            <li>по Україні — до 14 днів.</li>
+          </ul>
+          <p className="text-[#333037]/80 mb-4">
+            Для міжнародних відправлень Укрпошта відстежує рух посилки лише до передачі
+            місцевій поштовій службі країни призначення. Далі статус оновлює пошта тієї країни.
+          </p>
+
+          <h2 className="text-2xl font-bold text-[#333037] mt-8 mb-4">
+            Як отримати посилку
+          </h2>
+          <p className="text-[#333037]/80 mb-4">
+            Коли посилка прибуває у ваше відділення, ви отримуєте повідомлення (SMS або в
+            застосунку). Для отримання потрібен документ, що посвідчує особу, та трек-номер
+            або номер повідомлення. Посилка безкоштовно зберігається у відділенні
+            <strong> 5 робочих днів</strong>, далі може нараховуватися плата за зберігання.
+          </p>
+        </article>
+
+        {/* FAQ — видима частина (та сама що в Schema) */}
+        <section className="bg-white rounded-lg shadow-sm p-6 mb-8">
+          <h2 className="text-2xl font-bold text-[#333037] mb-6">
+            Питання та відповіді
+          </h2>
+          <div className="space-y-4">
+            {faqItems.map((item, index) => (
+              <details
+                key={index}
+                className="border border-gray-200 rounded-lg p-4"
+                {...(index === 0 ? { open: true } : {})}
+              >
+                <summary className="font-semibold text-[#333037] cursor-pointer">
+                  {item.question}
+                </summary>
+                <p className="text-[#333037]/80 mt-3">
+                  {item.answer}
+                </p>
+              </details>
+            ))}
+          </div>
+        </section>
+
+        {/* Перелінковка на інших перевізників */}
+        <section className="bg-white rounded-lg shadow-sm p-6 mb-8">
+          <h2 className="text-xl font-bold text-[#333037] mb-4">
+            Відстеження інших перевізників
+          </h2>
+          <div className="flex flex-wrap gap-3">
+            <Link href="/couriers/nova-poshta" className="text-blue-600 hover:underline">Нова Пошта</Link>
+            <Link href="/couriers/meest-express" className="text-blue-600 hover:underline">Meest</Link>
+            <Link href="/couriers/dhl" className="text-blue-600 hover:underline">DHL</Link>
+            <Link href="/couriers/sat" className="text-blue-600 hover:underline">SAT</Link>
+            <Link href="/couriers/delivery-auto" className="text-blue-600 hover:underline">Delivery Auto</Link>
+          </div>
+        </section>
+
+        <PandaTrackComments pageId="courier-ukrposhta" />
       </main>
-
-      {/* Comments Section */}
-      <section className="bg-[#f5f5f5] py-12">
-        <div className="container mx-auto px-4">
-          <div className="max-w-4xl mx-auto">
-            <PandaTrackComments
-              pageId="homepage"
-              title=""
-              showStats={false}
-              showInfo={false}
-            />
-          </div>
-        </div>
-      </section>
 
       <Footer />
     </div>
